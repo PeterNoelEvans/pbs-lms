@@ -1,0 +1,57 @@
+.students-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 20px;
+    padding: 20px 0;
+}
+
+.student-card {
+    background-color: white;
+    padding: 15px;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    text-align: center;
+}
+
+.student-card img {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin-bottom: 10px;
+}
+
+.student-card h3 {
+    margin-bottom: 10px;
+    color: #333;
+}
+
+.view-portfolio {
+    display: inline-block;
+    padding: 8px 15px;
+    background-color: #4CAF50;
+    color: white;
+    text-decoration: none;
+    border-radius: 4px;
+}
+
+.view-portfolio:hover {
+    background-color: #45a049;
+}
+
+.rating-container {
+    margin-top: 10px;
+}
+
+.rating-button {
+    margin: 5px;
+    padding: 5px 10px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.rating-button.so-so { background-color: #ffd700; }
+.rating-button.good { background-color: #90EE90; }
+.rating-button.great { background-color: #87CEEB; }
+.rating-button.fantastic { background-color: #FF69B4; } 

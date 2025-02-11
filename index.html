@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fourth Grade Portfolio Access</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Welcome to Fourth Grade Portfolios</h1>
+        <div class="login-form">
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="parentName">Parent's Name:</label>
+                    <input type="text" id="parentName" required>
+                </div>
+                <div class="form-group">
+                    <label for="studentNickname">Student's Nickname:</label>
+                    <input type="text" id="studentNickname" required>
+                </div>
+                <div class="form-group">
+                    <label for="classSelect">Select Class:</label>
+                    <select id="classSelect" required>
+                        <option value="">Choose a class</option>
+                        <option value="4-1">Grade 4/1</option>
+                        <option value="4-2">Grade 4/2</option>
+                    </select>
+                </div>
+                <button type="submit">Enter</button>
+            </form>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html> 
