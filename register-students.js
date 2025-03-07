@@ -2,6 +2,32 @@ const fetch = require('node-fetch');
 
 const BASE_URL = 'https://codinghtml-presentation.onrender.com';
 
+// Function to clear all users
+async function clearAllUsers() {
+    try {
+        // First get all users
+        const response = await fetch(`${BASE_URL}/admin/users`);
+        const users = await response.json();
+        
+        console.log('Clearing existing users...');
+        
+        // Delete each user
+        for (const user of users) {
+            const deleteResponse = await fetch(`${BASE_URL}/admin/users/${user.id}`, {
+                method: 'DELETE'
+            });
+            if (deleteResponse.ok) {
+                console.log(`Deleted user: ${user.username}`);
+            }
+            await wait(500); // Wait between deletions
+        }
+        
+        console.log('All users cleared');
+    } catch (error) {
+        console.error('Error clearing users:', error);
+    }
+}
+
 const students41 = [
     { username: 'Peter41', password: 'Peter2025AA', portfolio_path: '/portfolios/P4-1/Peter/Peter.html' },
     { username: 'Peta', password: 'Peta2025A', portfolio_path: '/portfolios/P4-1/Peta/Peta.html' },
@@ -123,6 +149,9 @@ async function registerParent(student) {
 // Main function to register all students and their parents
 async function registerAll() {
     console.log('Starting registration process...');
+    
+    // First clear all existing users
+    await clearAllUsers();
     
     // Register Class 4/1 students and their parents
     console.log('\nRegistering Class 4/1 students and parents...');
