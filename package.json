@@ -12,6 +12,7 @@
     "express-session": "^1.17.3",
     "bcryptjs": "^2.4.3",
     "sqlite3": "^5.1.7",
-    "node-fetch": "^2.6.1"
+    "node-fetch": "^2.6.1",
+    "connect-sqlite3": "^0.9.13"
   }
 }

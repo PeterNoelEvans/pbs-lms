@@ -1,10 +1,14 @@
 const express = require('express');
 const path = require('path');
 const session = require('express-session');
+const SQLiteStore = require('connect-sqlite3')(session);
 const bcrypt = require('bcryptjs');
 const sqlite3 = require('sqlite3').verbose();
 const app = express();
-const port = process.env.PORT || 3002;
+
+// Use environment variables or defaults
+const port = process.env.PORT || 10000;
+const isProduction = process.env.NODE_ENV === 'production';
 
 // Create SQLite database
 const db = new sqlite3.Database('users.db');
@@ -23,12 +27,32 @@ db.serialize(() => {
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Session configuration
 app.use(session({
-    secret: 'your-secret-key',
+    store: new SQLiteStore({
+        db: 'sessions.db',
+        concurrentDB: true
+    }),
+    secret: process.env.SESSION_SECRET || 'your-secret-key',
     resave: false,
     saveUninitialized: false,
-    cookie: { secure: process.env.NODE_ENV === 'production' }
+    cookie: { 
+        secure: isProduction,
+        httpOnly: true,
+        maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    }
 }));
+
+// Security headers
+app.use((req, res, next) => {
+    res.set({
+        'X-Content-Type-Options': 'nosniff',
+        'X-Frame-Options': 'DENY',
+        'X-XSS-Protection': '1; mode=block'
+    });
+    next();
+});
 
 // Serve static files from the current directory
 app.use(express.static(__dirname));
@@ -267,5 +291,9 @@ app.get('/logout', (req, res) => {
 
 app.listen(port, () => {
     console.log(`Server running on port ${port}`);
-    console.log(`Local network access: http://<your-computer-ip>:${port}`);
+    if (isProduction) {
+        console.log('Running in production mode');
+    } else {
+        console.log(`Local access: http://localhost:${port}`);
+    }
 }); 
