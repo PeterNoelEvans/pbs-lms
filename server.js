@@ -35,15 +35,26 @@ app.use(session({
         concurrentDB: true
     }),
     secret: process.env.SESSION_SECRET || 'your-secret-key',
-    resave: false,
+    resave: true,
     saveUninitialized: false,
     cookie: { 
         secure: false,
         httpOnly: true,
         maxAge: 24 * 60 * 60 * 1000,
-        sameSite: 'lax'
+        sameSite: 'lax',
+        path: '/'
     }
 }));
+
+// Debug middleware to log session
+app.use((req, res, next) => {
+    console.log('====================');
+    console.log('Session Debug:');
+    console.log('Session ID:', req.sessionID);
+    console.log('Session:', req.session);
+    console.log('====================');
+    next();
+});
 
 // Security headers
 app.use((req, res, next) => {
@@ -124,7 +135,8 @@ app.post('/login', async (req, res) => {
     console.log('====================');
     console.log('LOGIN ATTEMPT START');
     console.log('Username:', username);
-    console.log('Request body:', req.body);
+    console.log('Session ID:', req.sessionID);
+    console.log('Current Session:', req.session);
     
     db.get('SELECT * FROM users WHERE username = ?', [username], async (err, user) => {
         if (err) {
@@ -144,14 +156,31 @@ app.post('/login', async (req, res) => {
         console.log('Password validation result:', validPassword);
         
         if (validPassword) {
-            req.session.user = { 
-                id: user.id, 
-                username: user.username, 
-                portfolio_path: user.portfolio_path 
-            };
-            console.log('Session created:', req.session);
-            console.log('LOGIN SUCCESS - Redirecting to dashboard');
-            res.redirect('/dashboard');
+            req.session.regenerate((err) => {
+                if (err) {
+                    console.error('Session regeneration error:', err);
+                    res.status(500).json({ error: 'Session error' });
+                    return;
+                }
+                
+                req.session.user = { 
+                    id: user.id, 
+                    username: user.username, 
+                    portfolio_path: user.portfolio_path 
+                };
+                
+                req.session.save((err) => {
+                    if (err) {
+                        console.error('Session save error:', err);
+                        res.status(500).json({ error: 'Session error' });
+                        return;
+                    }
+                    
+                    console.log('Session after login:', req.session);
+                    console.log('LOGIN SUCCESS - Redirecting to dashboard');
+                    res.redirect('/dashboard');
+                });
+            });
         } else {
             console.log('INVALID PASSWORD');
             res.status(401).json({ error: 'Invalid credentials' });
