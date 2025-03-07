@@ -170,17 +170,6 @@ app.post('/login', async (req, res) => {
             return res.status(401).json({ error: 'Invalid credentials' });
         }
 
-        // Clear existing session
-        await new Promise((resolve) => req.session.destroy(resolve));
-
-        // Create new session
-        req.session = await new Promise((resolve, reject) => {
-            req.sessionStore.generate(req, (err, session) => {
-                if (err) reject(err);
-                else resolve(session);
-            });
-        });
-
         // Set user data in session
         req.session.user = {
             id: user.id,
@@ -191,15 +180,19 @@ app.post('/login', async (req, res) => {
         // Save session
         await new Promise((resolve, reject) => {
             req.session.save((err) => {
-                if (err) reject(err);
-                else resolve();
+                if (err) {
+                    console.error('Session save error:', err);
+                    reject(err);
+                } else {
+                    resolve();
+                }
             });
         });
 
         console.log('Login successful');
-        console.log('New session:', req.session);
-        console.log('Redirecting to dashboard');
+        console.log('Session after login:', req.session);
         
+        // Redirect to dashboard after successful login
         res.redirect('/dashboard');
     } catch (error) {
         console.error('Login error:', error);
