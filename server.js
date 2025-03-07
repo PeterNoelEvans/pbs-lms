@@ -1,7 +1,7 @@
 const express = require('express');
 const path = require('path');
 const app = express();
-const port = 3001;  // You can change this port number
+const port = process.env.PORT || 3002;  // Use Render's PORT or fallback to 3002
 
 // Serve static files from the current directory
 app.use(express.static(__dirname));
@@ -12,6 +12,6 @@ app.get('*', (req, res) => {
 });
 
 app.listen(port, () => {
-    console.log(`Server running at http://localhost:${port}`);
+    console.log(`Server running on port ${port}`);
     console.log(`Local network access: http://<your-computer-ip>:${port}`);
 }); 
