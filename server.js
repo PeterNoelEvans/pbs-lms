@@ -32,13 +32,15 @@ app.use(express.urlencoded({ extended: true }));
 app.use(session({
     store: new SQLiteStore({
         db: 'sessions.db',
-        concurrentDB: true
+        concurrentDB: true,
+        table: 'sessions'
     }),
+    name: 'sessionId',
     secret: process.env.SESSION_SECRET || 'your-secret-key',
     resave: true,
     saveUninitialized: false,
     cookie: { 
-        secure: false,
+        secure: isProduction,  // Only use secure cookies in production
         httpOnly: true,
         maxAge: 24 * 60 * 60 * 1000,
         sameSite: 'lax',
@@ -46,13 +48,16 @@ app.use(session({
     }
 }));
 
-// Debug middleware to log session
+// Debug middleware to log session and request details
 app.use((req, res, next) => {
-    console.log('====================');
-    console.log('Session Debug:');
+    console.log('\n=== Request Debug Info ===');
+    console.log('URL:', req.url);
+    console.log('Method:', req.method);
+    console.log('Headers:', req.headers);
+    console.log('Cookies:', req.cookies);
     console.log('Session ID:', req.sessionID);
     console.log('Session:', req.session);
-    console.log('====================');
+    console.log('=========================\n');
     next();
 });
 
@@ -131,13 +136,19 @@ app.post('/register', async (req, res) => {
 });
 
 app.post('/login', async (req, res) => {
+    console.log('\n=== Login Attempt ===');
+    console.log('Body:', req.body);
+    console.log('Session before login:', req.session);
+
     const { username, password } = req.body;
-    console.log('====================');
-    console.log('LOGIN ATTEMPT START');
-    console.log('Username:', username);
-    console.log('Session ID:', req.sessionID);
     
+    if (!username || !password) {
+        console.log('Missing credentials');
+        return res.status(400).json({ error: 'Username and password are required' });
+    }
+
     try {
+        // Find user in database
         const user = await new Promise((resolve, reject) => {
             db.get('SELECT * FROM users WHERE username = ?', [username], (err, row) => {
                 if (err) reject(err);
@@ -146,48 +157,53 @@ app.post('/login', async (req, res) => {
         });
 
         if (!user) {
-            console.log('USER NOT FOUND IN DATABASE');
+            console.log('User not found:', username);
             return res.status(401).json({ error: 'Invalid credentials' });
         }
 
-        console.log('User found:', { id: user.id, username: user.username });
+        // Verify password
         const validPassword = await bcrypt.compare(password, user.password);
-        console.log('Password valid:', validPassword);
+        console.log('Password validation result:', validPassword);
 
         if (!validPassword) {
-            console.log('INVALID PASSWORD');
+            console.log('Invalid password for user:', username);
             return res.status(401).json({ error: 'Invalid credentials' });
         }
 
+        // Clear existing session
+        await new Promise((resolve) => req.session.destroy(resolve));
+
         // Create new session
-        req.session.regenerate(function(err) {
-            if (err) {
-                console.error('Session regeneration error:', err);
-                return res.status(500).json({ error: 'Session error' });
-            }
-
-            // Store user data in session
-            req.session.user = {
-                id: user.id,
-                username: user.username,
-                portfolio_path: user.portfolio_path
-            };
-
-            // Save session
-            req.session.save(function(err) {
-                if (err) {
-                    console.error('Session save error:', err);
-                    return res.status(500).json({ error: 'Session error' });
-                }
-
-                console.log('Session created successfully:', req.session);
-                console.log('LOGIN SUCCESS - Redirecting to dashboard');
-                res.redirect('/dashboard');
+        req.session = await new Promise((resolve, reject) => {
+            req.sessionStore.generate(req, (err, session) => {
+                if (err) reject(err);
+                else resolve(session);
             });
         });
+
+        // Set user data in session
+        req.session.user = {
+            id: user.id,
+            username: user.username,
+            portfolio_path: user.portfolio_path
+        };
+
+        // Save session
+        await new Promise((resolve, reject) => {
+            req.session.save((err) => {
+                if (err) reject(err);
+                else resolve();
+            });
+        });
+
+        console.log('Login successful');
+        console.log('New session:', req.session);
+        console.log('Redirecting to dashboard');
+        
+        res.redirect('/dashboard');
     } catch (error) {
         console.error('Login error:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(500).json({ error: 'Internal server error during login' });
     }
 });
 

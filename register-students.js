@@ -155,13 +155,15 @@ async function registerParent(student) {
 }
 
 // Main function to register all students and their parents
-async function registerAll() {
+async function registerAll(shouldClear = false) {
     console.log('Starting registration process...');
     
-    // First clear all existing users
-    await clearAllUsers();
+    // Only clear if explicitly requested
+    if (shouldClear) {
+        await clearAllUsers();
+    }
     
-    // Register Class 4/1 students and their parents
+    // Register Class 4/1 students and parents
     console.log('\nRegistering Class 4/1 students and parents...');
     for (const student of students41) {
         const studentSuccess = await registerStudent(student);
@@ -172,7 +174,7 @@ async function registerAll() {
         await wait(1000); // Wait 1 second before next registration
     }
     
-    // Register Class 4/2 students and their parents
+    // Register Class 4/2 students and parents
     console.log('\nRegistering Class 4/2 students and parents...');
     for (const student of students42) {
         const studentSuccess = await registerStudent(student);
@@ -186,5 +188,5 @@ async function registerAll() {
     console.log('\nRegistration process completed!');
 }
 
-// Run the registration process
-registerAll().catch(console.error); 
+// Run the registration process without clearing
+registerAll(false).catch(console.error); 
