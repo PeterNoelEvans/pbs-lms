@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - User Management</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            padding: 10px;
+            border: 1px solid #ddd;
+            text-align: left;
+        }
+        th {
+            background-color: #f5f5f5;
+        }
+        .delete-btn {
+            background-color: #f44336;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        .delete-btn:hover {
+            background-color: #d32f2f;
+        }
+        .status {
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+        }
+        .status-public {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .status-private {
+            background-color: #f44336;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <h1>User Management</h1>
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Username</th>
+                <th>Portfolio Path</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody id="usersList">
+            <!-- Users will be loaded here -->
+        </tbody>
+    </table>
+
+    <script>
+        async function loadUsers() {
+            try {
+                const response = await fetch('/admin/users');
+                const users = await response.json();
+                const tbody = document.getElementById('usersList');
+                tbody.innerHTML = '';
+
+                users.forEach(user => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${user.id}</td>
+                        <td>${user.username}</td>
+                        <td>${user.portfolio_path}</td>
+                        <td><span class="status ${user.is_public ? 'status-public' : 'status-private'}">
+                            ${user.is_public ? 'Public' : 'Private'}
+                        </span></td>
+                        <td>
+                            <button class="delete-btn" onclick="deleteUser(${user.id})">Delete</button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } catch (error) {
+                console.error('Error loading users:', error);
+            }
+        }
+
+        async function deleteUser(id) {
+            if (!confirm('Are you sure you want to delete this user?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/admin/users/${id}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    loadUsers(); // Reload the list
+                } else {
+                    alert('Failed to delete user');
+                }
+            } catch (error) {
+                console.error('Error deleting user:', error);
+                alert('Error deleting user');
+            }
+        }
+
+        // Load users when page loads
+        document.addEventListener('DOMContentLoaded', loadUsers);
+    </script>
+</body>
+</html> 

@@ -6,111 +6,192 @@
     <title>Grade 4/2 Portfolios</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="class-styles.css">
+    <style>
+        .nav-bar {
+            background-color: #333;
+            padding: 10px 20px;
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .nav-bar a {
+            color: white;
+            text-decoration: none;
+            margin-left: 20px;
+        }
+        .private-portfolio {
+            opacity: 0.5;
+        }
+        .portfolio-status {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 5px 10px;
+            border-radius: 3px;
+            font-size: 12px;
+            background-color: rgba(0, 0, 0, 0.7);
+        }
+        .status-public {
+            color: #4CAF50;
+        }
+        .status-private {
+            color: #f44336;
+        }
+        .student-card {
+            position: relative;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            text-align: center;
+            transition: transform 0.2s;
+        }
+        .student-card:hover {
+            transform: translateY(-5px);
+        }
+        .student-card img {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            margin-bottom: 10px;
+            object-fit: cover;
+        }
+        .students-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 20px;
+            padding: 20px;
+        }
+        .view-portfolio {
+            display: inline-block;
+            padding: 8px 16px;
+            background-color: #4CAF50;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+        .view-portfolio:hover {
+            background-color: #45a049;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+    </style>
 </head>
 <body>
+    <div class="nav-bar">
+        <div>Grade 4/2 Student Portfolios</div>
+        <div id="authLinks">
+            <a href="/login.html">Login</a>
+        </div>
+    </div>
     <div class="container">
         <h1>Grade 4/2 Student Portfolios</h1>
         <div class="students-grid">
-            <!-- First Student Card -->
-            <div class="student-card" data-student-id="Tonmali">
-                <img src="portfolios/Tonmali/profile.png" alt="Tonmali">
-                <h3>Tonmali</h3>
-                <a href="portfolios/Tonmali/Tonmali.html" class="view-portfolio">View Portfolio</a>
-            </div>
-            
-            <!-- Second Student Card -->
-            <div class="student-card" data-student-id="Pi">
-                <img src="portfolios/Pi/profile.png" alt="Pi">
-                <h3>Piyush</h3>
-                <a href="portfolios/Pi/Pi.html" class="view-portfolio">View Portfolio</a>
-            </div>
-
-            <!-- third Student Card -->
-            <div class="student-card" data-student-id="Darin">
-                <img src="portfolios/Darin/profile.png" alt="Darin">
-                <h3>Darin</h3>
-                <a href="portfolios/Darin/Darin.html" class="view-portfolio">View Portfolio</a>
-            </div>
-
-            <!-- fourth Student Card -->
-            <div class="student-card" data-student-id="Ounjai">
-                <img src="portfolios/Ounjai/profile.png" alt="Ounjai">
-                <h3>Ounjai</h3>
-                <a href="portfolios/Ounjai/Ounjai.html" class="view-portfolio">View Portfolio</a>
-            </div>
-            
-            <!-- fifth Student Card -->
-            <div class="student-card" data-student-id="Peso">
-                <img src="portfolios/Peso/profile.png" alt="Peso">
-                <h3>Peso</h3>
-                <a href="portfolios/Peso/Peso.html" class="view-portfolio">View Portfolio</a>
-            </div>
-
-            <!-- sixth Student Card -->
-            <div class="student-card" data-student-id="Paul">
-                <img src="portfolios/Paul/profile.png" alt="Paul">
-                <h3>Paul</h3>
-                <a href="portfolios/Paul/Paul.html" class="view-portfolio">View Portfolio</a>
-            </div>
-            <!-- seventh Student Card -->
-            <div class="student-card" data-student-id="Poonpoon">
-                <img src="portfolios/Poonpoon/profile.png" alt="Poonpoon">
-                <h3>Poonpoon</h3>
-                <a href="portfolios/Poonpoon/Poonpoon.html" class="view-portfolio">View Portfolio</a>
-            </div>
-            
-            <!-- eighth Student Card -->
-            <div class="student-card" data-student-id="Trin">
-                <img src="portfolios/Trin/profile.png" alt="Trin">
-                <h3>Trin</h3>
-                <a href="portfolios/Trin/Trin.html" class="view-portfolio">View Portfolio</a>
-            </div>
-
-            <!-- ninth Student Card -->
-            <div class="student-card" data-student-id="Perth">
-                <img src="portfolios/Perth/profile.png" alt="Perth">
-                <h3>Perth</h3>
-                <a href="portfolios/Perth/Perth.html" class="view-portfolio">View Portfolio</a>
-            </div>
-            
-            <!-- tenth Student Card -->
-            <div class="student-card" data-student-id="Pleng">
-                <img src="portfolios/Pleng/profile.png" alt="Pleng">
-                <h3>Pleng</h3>
-                <a href="portfolios/Pleng/Pleng.html" class="view-portfolio">View Portfolio</a>
-            </div>
-
-            <!-- eleventh Student Card -->
-            <div class="student-card" data-student-id="Sky">
-                <img src="portfolios/Sky/profile.png" alt="Sky">
-                <h3>Sky</h3>
-                <a href="portfolios/Sky/Sky.html" class="view-portfolio">View Portfolio</a>
-            </div>
-
-            <!-- twelfth Student Card -->
-            <div class="student-card" data-student-id="Jdi">
-                <img src="portfolios/Jdi/profile.png" alt="Jdi">
-                <h3>Jdi</h3>
-                <a href="portfolios/Jdi/Jdi.html" class="view-portfolio">View Portfolio</a>
-            </div>
-            
-            <!-- thirteenth Student Card -->
-            <div class="student-card" data-student-id="Zeno">
-                <img src="portfolios/Zeno/profile.png" alt="Zeno">
-                <h3>Zeno</h3>
-                <a href="portfolios/Zeno/Zeno.html" class="view-portfolio">View Portfolio</a>
-            </div>
-
-            <!-- fourteenth Student Card -->
-            <div class="student-card" data-student-id="Chapter">
-                <img src="portfolios/Chapter/profile.png" alt="Chapter">
-                <h3>Chapter</h3>
-                <a href="portfolios/Chapter/Chapter.html" class="view-portfolio">View Portfolio</a>
-            </div>
-
-            </div>      
+            <!-- Student cards will be populated here -->
         </div>
     </div>
-    <script src="class-script.js"></script>
+
+    <script>
+        // Function to update authentication links
+        async function updateAuthStatus() {
+            const authLinks = document.getElementById('authLinks');
+            try {
+                const response = await fetch('/check-auth');
+                const data = await response.json();
+                if (data.authenticated) {
+                    authLinks.innerHTML = `
+                        <span style="color: white; margin-right: 15px;">Welcome, ${data.username}</span>
+                        <a href="/dashboard">Dashboard</a>
+                        <a href="/logout">Logout</a>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error checking auth status:', error);
+            }
+        }
+
+        // Function to create student cards
+        async function createStudentCards() {
+            const students = [
+                { id: 'Tonmali', name: 'Tonmali', path: '/portfolios/P4-2/Tonmali/Tonmali.html', image: '/portfolios/P4-2/Tonmali/images/Tonmali.png' },
+                { id: 'Pi', name: 'Piyush', path: '/portfolios/P4-2/Pi/Pi.html', image: '/portfolios/P4-2/Pi/images/Pi.png' },
+                { id: 'Darin', name: 'Darin', path: '/portfolios/P4-2/Darin/Darin.html', image: '/portfolios/P4-2/Darin/images/Darin.png' },
+                { id: 'Ounjai', name: 'Ounjai', path: '/portfolios/P4-2/Ounjai/Ounjai.html', image: '/portfolios/P4-2/Ounjai/images/Ounjai.png' },
+                { id: 'Peso', name: 'Peso', path: '/portfolios/P4-2/Peso/Peso.html', image: '/portfolios/P4-2/Peso/images/Peso.png' },
+                { id: 'Paul', name: 'Paul', path: '/portfolios/P4-2/Paul/Paul.html', image: '/portfolios/P4-2/Paul/images/Paul.png' },
+                { id: 'PoonPoon', name: 'PoonPoon', path: '/portfolios/P4-2/PoonPoon/PoonPoon.html', image: '/portfolios/P4-2/PoonPoon/images/PoonPoon.jpg' },
+                { id: 'Trin', name: 'Trin', path: '/portfolios/P4-2/Trin/Trin.html', image: '/portfolios/P4-2/Trin/images/Trin.png' },
+                { id: 'Perth', name: 'Perth', path: '/portfolios/P4-2/Perth/Perth.html', image: '/portfolios/P4-2/Perth/images/Perth.png' },
+                { id: 'Pleng', name: 'Pleng', path: '/portfolios/P4-2/Pleng/Pleng.html', image: '/portfolios/P4-2/Pleng/images/Pleng.png' },
+                { id: 'Sky', name: 'Sky', path: '/portfolios/P4-2/Sky/Sky.html', image: '/portfolios/P4-2/Sky/images/Sky.jpg' },
+                { id: 'Jdi', name: 'Jdi', path: '/portfolios/P4-2/Jdi/Jdi.html', image: '/portfolios/P4-2/Jdi/images/Jdi.png' },
+                { id: 'Zeno', name: 'Zeno', path: '/portfolios/P4-2/Zeno/Zeno.html', image: '/portfolios/P4-2/Zeno/images/Zeno.jpg' },
+                { id: 'Peter', name: 'Peter', path: '/portfolios/P4-2/Peter/Peter.html', image: '/portfolios/P4-2/Peter/images/Peter.jpg' }
+            ];
+
+            const grid = document.querySelector('.students-grid');
+            grid.innerHTML = ''; // Clear existing cards
+            
+            // Get current user's authentication status
+            const authResponse = await fetch('/check-auth');
+            const authData = await authResponse.json();
+            
+            for (const student of students) {
+                try {
+                    let hasAccess = false; // Default to false
+                    
+                    // Check access for this portfolio
+                    const response = await fetch(`/check-access${student.path}`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        hasAccess = data.hasAccess;
+                        
+                        // If authenticated, user should always have access to their own portfolio
+                        if (authData.authenticated && authData.username === student.id) {
+                            hasAccess = true;
+                        }
+                    }
+                    
+                    const card = document.createElement('div');
+                    card.className = `student-card${hasAccess ? '' : ' private-portfolio'}`;
+                    card.setAttribute('data-student-id', student.id);
+                    
+                    const imageUrl = student.image;
+                    // Using a data URL for the fallback image instead of external placeholder
+                    const fallbackImage = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDEwMCAxMDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjEwMCIgaGVpZ2h0PSIxMDAiIGZpbGw9IiNlZWUiLz48dGV4dCB4PSI1MCIgeT0iNTAiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPk5vIEltYWdlPC90ZXh0Pjwvc3ZnPg==';
+                    
+                    card.innerHTML = `
+                        <img src="${imageUrl}" alt="${student.name}" onerror="this.src='${fallbackImage}'">
+                        <h3>${student.name}</h3>
+                        <a href="${student.path}" class="view-portfolio" ${!hasAccess ? 'onclick="return false"' : ''}>
+                            View Portfolio
+                        </a>
+                        <div class="portfolio-status ${hasAccess ? 'status-public' : 'status-private'}">
+                            ${hasAccess ? 'Public' : 'Private'}
+                        </div>
+                    `;
+                    
+                    grid.appendChild(card);
+                } catch (error) {
+                    console.error(`Error checking access for ${student.name}:`, error);
+                }
+            }
+        }
+
+        // Initialize the page
+        document.addEventListener('DOMContentLoaded', () => {
+            updateAuthStatus();
+            createStudentCards();
+        });
+    </script>
 </body>
 </html> 

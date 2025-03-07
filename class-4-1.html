@@ -6,83 +6,184 @@
     <title>Grade 4/1 Portfolios</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="class-styles.css">
+    <style>
+        .nav-bar {
+            background-color: #333;
+            padding: 10px 20px;
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .nav-bar a {
+            color: white;
+            text-decoration: none;
+            margin-left: 20px;
+        }
+        .private-portfolio {
+            opacity: 0.5;
+        }
+        .portfolio-status {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 5px 10px;
+            border-radius: 3px;
+            font-size: 12px;
+            background-color: rgba(0, 0, 0, 0.7);
+        }
+        .status-public {
+            color: #4CAF50;
+        }
+        .status-private {
+            color: #f44336;
+        }
+        .student-card {
+            position: relative;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            text-align: center;
+            transition: transform 0.2s;
+        }
+        .student-card:hover {
+            transform: translateY(-5px);
+        }
+        .student-card img {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            margin-bottom: 10px;
+            object-fit: cover;
+        }
+        .students-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 20px;
+            padding: 20px;
+        }
+        .view-portfolio {
+            display: inline-block;
+            padding: 8px 16px;
+            background-color: #4CAF50;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
+        .view-portfolio:hover {
+            background-color: #45a049;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+    </style>
 </head>
 <body>
+    <div class="nav-bar">
+        <div>Grade 4/1 Student Portfolios</div>
+        <div id="authLinks">
+            <a href="/login.html">Login</a>
+        </div>
+    </div>
     <div class="container">
         <h1>Grade 4/1 Student Portfolios</h1>
         <div class="students-grid">
-            <!-- First Student Card -->
-            <div class="student-card" data-student-id="bonus">
-                <img src="portfolios/P4-1/images/profile.png" alt="bonus">
-                <h3>Bonus</h3>
-                <a href="portfolios/P4-1/bonus/bonus.html" class="view-portfolio">View Portfolio</a>
-            </div>
-
-
-			
-			            <!-- third Student Card -->
-            <div class="student-card" data-student-id="Nicha">
-                <img src="portfolios/P4-1/nicha/images/profile.png" alt="Nicha">
-                <h3>Nicha</h3>
-                <a href="portfolios/P4-1/nicha/index.html" class="view-portfolio">View Portfolio</a>
-            </div>
-			
-				<!-- fourth Student Card -->
-            <div class="student-card" data-student-id="Copter">
-                <img src="portfolios/P4-1/copter/images/profile.png" alt="Copter">
-                <h3>Copter</h3>
-                <a href="portfolios/P4-1/copter/copter.html" class="view-portfolio">View Portfolio</a>
-            </div>
-			
-				<!-- fifth Student Card -->
-            <div class="student-card" data-student-id="Khun">
-                <img src="portfolios/P4-1/Khun/images/profile.png" alt="Khun">
-                <h3>Khun</h3>
-                <a href="portfolios/P4-1/Khun/khun.html" class="view-portfolio">View Portfolio</a>
-            </div>
-			
-				<!-- sixth Student Card -->
-            <div class="student-card" data-student-id="Kod">
-                <img src="portfolios/P4-1/Kod/images/profile.png" alt="Kod">
-                <h3>Kod</h3>
-                <a href="portfolios/P4-1/Kod/kod.html" class="view-portfolio">View Portfolio</a>
-            </div>
-			
-				<!-- seventh Student Card -->
-            <div class="student-card" data-student-id="Phupha">
-                <img src="portfolios/P4-1/Phupha/images/profile.png" alt="Phupha">
-                <h3>Phupha</h3>
-                <a href="portfolios/P4-1/Phupha/phupha.html" class="view-portfolio">View Portfolio</a>
-            </div>
-			
-				<!-- eighth Student Card -->
-            <div class="student-card" data-student-id="tar+jiajia">
-                <img src="portfolios/P4-1/tar+jiajia/images/profile.png" alt="tar+jiajia">
-                <h3>Tar and JiaJia</h3>
-                <a href="portfolios/P4-1/tar+jiajia/tarjia.html" class="view-portfolio">View Portfolio</a>
-            </div>
-			
-				<!-- nineth Student Card -->
-            <div class="student-card" data-student-id="tar">
-                <img src="portfolios/P4-1/tar+jiajia/images/profile.png" alt="tar">
-                <h3>Tar</h3>
-                <a href="portfolios/P4-1/tar+jiajia/tar.html" class="view-portfolio">View Portfolio</a>
-            </div>
-
-				<!-- tenth Student Card -->
-            <div class="student-card" data-student-id="jiajia">
-                <img src="portfolios/P4-1/tar+jiajia/images/profile.png" alt="jiajia">
-                <h3>Jiajia</h3>
-                <a href="portfolios/P4-1/tar+jiajia/jiajia.html" class="view-portfolio">View Portfolio</a>
-            </div>						
-				<!-- eleventh Student Card -->
-            <div class="student-card" data-student-id="tigger">
-                <img src="portfolios/P4-1/tigger/images/profile.png" alt="tigger">
-                <h3>Tigger</h3>
-                <a href="portfolios/P4-1/tigger/tigger.html" class="view-portfolio">View Portfolio</a>
-            </div>				
+            <!-- Student cards will be populated here -->
         </div>
     </div>
-    <script src="class-script.js"></script>
+
+    <script>
+        // Function to update authentication links
+        async function updateAuthStatus() {
+            const authLinks = document.getElementById('authLinks');
+            try {
+                const response = await fetch('/check-auth');
+                const data = await response.json();
+                if (data.authenticated) {
+                    authLinks.innerHTML = `
+                        <span style="color: white; margin-right: 15px;">Welcome, ${data.username}</span>
+                        <a href="/dashboard">Dashboard</a>
+                        <a href="/logout">Logout</a>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error checking auth status:', error);
+            }
+        }
+
+        // Function to create student cards
+        async function createStudentCards() {
+            const students = [
+                { id: 'Bonus', name: 'Bonus', path: '/portfolios/P4-1/Bonus/Bonus.html', image: '/portfolios/P4-1/Bonus/images/Bonus.png' },
+                { id: 'Nicha', name: 'Nicha', path: '/portfolios/P4-1/Nicha/index.html', image: '/portfolios/P4-1/Nicha/images/Nicha.png' },
+                { id: 'Copter', name: 'Copter', path: '/portfolios/P4-1/Copter/Copter.html', image: '/portfolios/P4-1/Copter/images/Copter.png' },
+                { id: 'Khun', name: 'Khun', path: '/portfolios/P4-1/Khun/Khun.html', image: '/portfolios/P4-1/Khun/images/Khun.png' },
+                { id: 'Kod', name: 'Kod', path: '/portfolios/P4-1/Kod/Kod.html', image: '/portfolios/P4-1/Kod/images/Kod.png' },
+                { id: 'Phupha', name: 'Phupha', path: '/portfolios/P4-1/Phupha/Phupha.html', image: '/portfolios/P4-1/Phupha/images/Phupha.png' },
+                { id: 'Tar+Jiajia', name: 'Tar and JiaJia', path: '/portfolios/P4-1/Tar+Jiajia/Tarjia.html', image: '/portfolios/P4-1/Tar+Jiajia/images/Tarjia.png' },
+                { id: 'Tar', name: 'Tar', path: '/portfolios/P4-1/Tar+Jiajia/Tar.html', image: '/portfolios/P4-1/Tar+Jiajia/images/Tar.png' },
+                { id: 'Jiajia', name: 'Jiajia', path: '/portfolios/P4-1/Tar+Jiajia/Jiajia.html', image: '/portfolios/P4-1/Tar+Jiajia/images/Jiajia.png' },
+                { id: 'Tigger', name: 'Tigger', path: '/portfolios/P4-1/Tigger/Tigger.html', image: '/portfolios/P4-1/Tigger/images/Tigger.png' },
+                { id: 'Peter', name: 'Peter', path: '/portfolios/P4-1/Peter/Peter.html', image: '/portfolios/P4-1/Peter/images/Peter.png' }
+            ];
+
+            const grid = document.querySelector('.students-grid');
+            grid.innerHTML = ''; // Clear existing cards
+            
+            // Get current user's authentication status
+            const authResponse = await fetch('/check-auth');
+            const authData = await authResponse.json();
+            
+            for (const student of students) {
+                try {
+                    let hasAccess = true; // Default to true
+                    
+                    // Only check access if there's a registered user for this portfolio
+                    const response = await fetch(`/check-access${student.path}`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        hasAccess = data.hasAccess;
+                    }
+                    
+                    const card = document.createElement('div');
+                    card.className = `student-card${hasAccess ? '' : ' private-portfolio'}`;
+                    card.setAttribute('data-student-id', student.id);
+                    
+                    const imageUrl = student.image;
+                    // Using a data URL for the fallback image instead of external placeholder
+                    const fallbackImage = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDEwMCAxMDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjEwMCIgaGVpZ2h0PSIxMDAiIGZpbGw9IiNlZWUiLz48dGV4dCB4PSI1MCIgeT0iNTAiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPk5vIEltYWdlPC90ZXh0Pjwvc3ZnPg==';
+                    
+                    card.innerHTML = `
+                        <img src="${imageUrl}" alt="${student.name}" onerror="this.src='${fallbackImage}'">
+                        <h3>${student.name}</h3>
+                        <a href="${student.path}" class="view-portfolio" ${!hasAccess ? 'onclick="return false"' : ''}>
+                            View Portfolio
+                        </a>
+                        <div class="portfolio-status ${hasAccess ? 'status-public' : 'status-private'}">
+                            ${hasAccess ? 'Public' : 'Private'}
+                        </div>
+                    `;
+                    
+                    grid.appendChild(card);
+                } catch (error) {
+                    console.error(`Error checking access for ${student.name}:`, error);
+                }
+            }
+        }
+
+        // Initialize the page
+        document.addEventListener('DOMContentLoaded', () => {
+            updateAuthStatus();
+            createStudentCards();
+        });
+    </script>
 </body>
 </html> 

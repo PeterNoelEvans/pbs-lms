@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login/Register - Student Portfolios</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .auth-container {
+            max-width: 400px;
+            margin: 50px auto;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .btn {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+            margin-bottom: 10px;
+        }
+        .btn:hover {
+            background-color: #45a049;
+        }
+        .toggle-forms {
+            text-align: center;
+            margin-top: 15px;
+        }
+        .error-message {
+            color: #f44336;
+            margin-top: 10px;
+            display: none;
+        }
+        .form-group optgroup {
+            font-weight: bold;
+        }
+        .nav-buttons {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .nav-buttons .btn {
+            display: inline-block;
+            width: auto;
+            margin: 0 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="nav-buttons">
+        <a href="/" class="btn">Home</a>
+        <a href="/class-4-1.html" class="btn">Grade 4/1</a>
+        <a href="/class-4-2.html" class="btn">Grade 4/2</a>
+    </div>
+
+    <div class="auth-container">
+        <div id="loginForm">
+            <h2>Login</h2>
+            <form id="loginFormElement">
+                <div class="form-group">
+                    <label for="loginUsername">Username:</label>
+                    <input type="text" id="loginUsername" name="username" required>
+                </div>
+                <div class="form-group">
+                    <label for="loginPassword">Password:</label>
+                    <input type="password" id="loginPassword" name="password" required>
+                </div>
+                <button type="submit" class="btn">Login</button>
+                <div id="loginError" class="error-message"></div>
+            </form>
+            <div class="toggle-forms">
+                <button onclick="toggleForms()" class="btn">Register Instead</button>
+            </div>
+        </div>
+
+        <div id="registerForm" style="display: none;">
+            <h2>Register</h2>
+            <form id="registerFormElement">
+                <div class="form-group">
+                    <label for="registerUsername">Username:</label>
+                    <input type="text" id="registerUsername" name="username" required>
+                    <small style="color: #666; display: block; margin-top: 5px;">
+                        For students: Use your given username (e.g., Peter41)<br>
+                        For parents: Use format "parent-" + child's username (e.g., parent-peter41)
+                    </small>
+                </div>
+                <div class="form-group">
+                    <label for="registerPassword">Password:</label>
+                    <input type="password" id="registerPassword" name="password" required>
+                </div>
+                <div class="form-group">
+                    <label for="portfolioPath">Portfolio Path:</label>
+                    <select id="portfolioPath" name="portfolio_path" required>
+                        <option value="">Select your portfolio</option>
+                        <optgroup label="Grade 4/1">
+                            <option value="/portfolios/P4-1/Peter/Peter.html">Peter</option>
+                            <option value="/portfolios/P4-1/Peta/Peta.html">Peta</option>
+                            <option value="/portfolios/P4-1/Uda/Uda.html">Uda</option>
+                            <option value="/portfolios/P4-1/Tar/Tar.html">Tar</option>
+                            <option value="/portfolios/P4-1/Jaijai/Jaijai.html">Jaijai</option>
+                            <option value="/portfolios/P4-1/Nava/Nava.html">Nava</option>
+                            <option value="/portfolios/P4-1/Bonus/Bonus.html">Bonus</option>
+                            <option value="/portfolios/P4-1/Nicha/Nicha.html">Nicha</option>
+                            <option value="/portfolios/P4-1/Tigger/Tigger.html">Tigger</option>
+                            <option value="/portfolios/P4-1/Uno/Uno.html">Uno</option>
+                            <option value="/portfolios/P4-1/Namoun/Namoun.html">Namoun</option>
+                            <option value="/portfolios/P4-1/Copter/Copter.html">Copter</option>
+                            <option value="/portfolios/P4-1/Phupha/Phupha.html">Phupha</option>
+                            <option value="/portfolios/P4-1/Teen/Teen.html">Teen</option>
+                            <option value="/portfolios/P4-1/Kod/Kod.html">Kod</option>
+                            <option value="/portfolios/P4-1/Earth/Earth.html">Earth</option>
+                        </optgroup>
+                        <optgroup label="Grade 4/2">
+                            <option value="/portfolios/P4-2/Peter/Peter.html">Peter</option>
+                            <option value="/portfolios/P4-2/Chapter/Chapter.html">Chapter</option>
+                            <option value="/portfolios/P4-2/Zeno/Zeno.html">Zeno</option>
+                            <option value="/portfolios/P4-2/Jdi/Jdi.html">Jdi</option>
+                            <option value="/portfolios/P4-2/Sky/Sky.html">Sky</option>
+                            <option value="/portfolios/P4-2/Perth/Perth.html">Perth</option>
+                            <option value="/portfolios/P4-2/Tin/Tin.html">Tin</option>
+                            <option value="/portfolios/P4-2/Poonpoon/Poonpoon.html">Poonpoon</option>
+                            <option value="/portfolios/P4-2/Paul/Paul.html">Paul</option>
+                            <option value="/portfolios/P4-2/Peso/Peso.html">Peso</option>
+                            <option value="/portfolios/P4-2/Ounjai/Ounjai.html">Ounjai</option>
+                            <option value="/portfolios/P4-2/Darin/Darin.html">Darin</option>
+                            <option value="/portfolios/P4-2/Harber/Harber.html">Harber</option>
+                            <option value="/portfolios/P4-2/Pleng/Pleng.html">Pleng</option>
+                            <option value="/portfolios/P4-2/Tonmali/Tonmali.html">Tonmali</option>
+                        </optgroup>
+                    </select>
+                </div>
+                <button type="submit" class="btn">Register</button>
+                <div id="registerError" class="error-message"></div>
+            </form>
+            <div class="toggle-forms">
+                <button onclick="toggleForms()" class="btn">Login Instead</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function toggleForms() {
+            const loginForm = document.getElementById('loginForm');
+            const registerForm = document.getElementById('registerForm');
+            if (loginForm.style.display === 'none') {
+                loginForm.style.display = 'block';
+                registerForm.style.display = 'none';
+            } else {
+                loginForm.style.display = 'none';
+                registerForm.style.display = 'block';
+            }
+        }
+
+        document.getElementById('loginFormElement').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const errorDiv = document.getElementById('loginError');
+            
+            try {
+                const response = await fetch('/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(Object.fromEntries(formData)),
+                });
+                
+                if (response.ok) {
+                    window.location.href = '/dashboard';
+                } else {
+                    const data = await response.json();
+                    errorDiv.textContent = data.error || 'Login failed';
+                    errorDiv.style.display = 'block';
+                }
+            } catch (error) {
+                errorDiv.textContent = 'An error occurred during login';
+                errorDiv.style.display = 'block';
+            }
+        });
+
+        document.getElementById('registerFormElement').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const errorDiv = document.getElementById('registerError');
+            
+            try {
+                const response = await fetch('/register', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(Object.fromEntries(formData)),
+                });
+                
+                if (response.ok) {
+                    window.location.href = '/login.html';
+                } else {
+                    const data = await response.json();
+                    errorDiv.textContent = data.error || 'Registration failed';
+                    errorDiv.style.display = 'block';
+                }
+            } catch (error) {
+                errorDiv.textContent = 'An error occurred during registration';
+                errorDiv.style.display = 'block';
+            }
+        });
+    </script>
+</body>
+</html> 

@@ -1,16 +1,17 @@
 {
-  "name": "coding-presentation",
+  "name": "student-registration",
   "version": "1.0.0",
-  "main": "class-script.js",
+  "description": "Script to register students and parents",
+  "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js"
+    "start": "node server.js",
+    "register": "node register-students.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
   "dependencies": {
-    "express": "^4.21.2"
+    "express": "^4.18.2",
+    "express-session": "^1.17.3",
+    "bcryptjs": "^2.4.3",
+    "sqlite3": "^5.1.7",
+    "node-fetch": "^2.6.1"
   }
 }
