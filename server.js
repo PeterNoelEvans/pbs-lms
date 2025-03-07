@@ -40,13 +40,30 @@ app.use(session({
     resave: true,
     saveUninitialized: false,
     cookie: { 
-        secure: isProduction,  // Only use secure cookies in production
+        secure: true,  // Required for HTTPS
         httpOnly: true,
         maxAge: 24 * 60 * 60 * 1000,
-        sameSite: 'lax',
+        sameSite: 'none',  // Required for cross-site cookies
         path: '/'
     }
 }));
+
+// Add trust proxy setting for Render
+app.set('trust proxy', 1);
+
+// CORS configuration for Render
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', 'https://codinghtml-presentation.onrender.com');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
+    
+    // Handle preflight requests
+    if (req.method === 'OPTIONS') {
+        return res.sendStatus(200);
+    }
+    next();
+});
 
 // Debug middleware to log session and request details
 app.use((req, res, next) => {

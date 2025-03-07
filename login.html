@@ -175,12 +175,20 @@
             errorDiv.textContent = 'Attempting to log in...';
             
             try {
+                const credentials = {
+                    username: formData.get('username'),
+                    password: formData.get('password')
+                };
+                
+                console.log('Sending login request with:', { username: credentials.username, password: '***' });
+                
                 const response = await fetch('/login', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify(Object.fromEntries(formData)),
+                    body: JSON.stringify(credentials),
+                    credentials: 'include',
                     redirect: 'follow'
                 });
                 
