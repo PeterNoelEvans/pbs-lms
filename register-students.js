@@ -1,5 +1,7 @@
 const fetch = require('node-fetch');
 
+const BASE_URL = 'https://codinghtml-presentation.onrender.com';
+
 const students41 = [
     { username: 'Peter41', password: 'Peter2025AA', portfolio_path: '/portfolios/P4-1/Peter/Peter.html' },
     { username: 'Peta', password: 'Peta2025A', portfolio_path: '/portfolios/P4-1/Peta/Peta.html' },
@@ -43,7 +45,7 @@ const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 // Function to register a student
 async function registerStudent(student) {
     try {
-        const response = await fetch('http://localhost:3002/register', {
+        const response = await fetch(`${BASE_URL}/register`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -88,7 +90,7 @@ async function registerParent(student) {
     };
 
     try {
-        const response = await fetch('http://localhost:3002/register', {
+        const response = await fetch(`${BASE_URL}/register`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
