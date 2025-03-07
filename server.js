@@ -38,9 +38,10 @@ app.use(session({
     resave: false,
     saveUninitialized: false,
     cookie: { 
-        secure: isProduction,
+        secure: false,
         httpOnly: true,
-        maxAge: 24 * 60 * 60 * 1000 // 24 hours
+        maxAge: 24 * 60 * 60 * 1000,
+        sameSite: 'lax'
     }
 }));
 
@@ -66,8 +67,18 @@ const requireAuth = (req, res, next) => {
     }
 };
 
+// Admin middleware
+const requireAdmin = (req, res, next) => {
+    const adminToken = req.headers['admin-token'];
+    if (adminToken === process.env.ADMIN_TOKEN || adminToken === 'your-secret-admin-token') {
+        next();
+    } else {
+        res.status(403).json({ error: 'Unauthorized' });
+    }
+};
+
 // Admin route to view users
-app.get('/admin/users', (req, res) => {
+app.get('/admin/users', requireAdmin, (req, res) => {
     db.all('SELECT id, username, portfolio_path, is_public FROM users', [], (err, rows) => {
         if (err) {
             res.status(500).json({ error: 'Database error' });
@@ -78,7 +89,7 @@ app.get('/admin/users', (req, res) => {
 });
 
 // Admin route to delete user
-app.delete('/admin/users/:id', (req, res) => {
+app.delete('/admin/users/:id', requireAdmin, (req, res) => {
     const userId = req.params.id;
     db.run('DELETE FROM users WHERE id = ?', [userId], (err) => {
         if (err) {
@@ -110,11 +121,34 @@ app.post('/register', async (req, res) => {
 
 app.post('/login', async (req, res) => {
     const { username, password } = req.body;
+    console.log('Login attempt for:', username);
+    
     db.get('SELECT * FROM users WHERE username = ?', [username], async (err, user) => {
-        if (user && await bcrypt.compare(password, user.password)) {
-            req.session.user = { id: user.id, username: user.username, portfolio_path: user.portfolio_path };
+        if (err) {
+            console.error('Database error:', err);
+            res.status(500).json({ error: 'Database error' });
+            return;
+        }
+        
+        if (!user) {
+            console.log('User not found:', username);
+            res.status(401).json({ error: 'Invalid credentials' });
+            return;
+        }
+        
+        const validPassword = await bcrypt.compare(password, user.password);
+        console.log('Password valid:', validPassword);
+        
+        if (validPassword) {
+            req.session.user = { 
+                id: user.id, 
+                username: user.username, 
+                portfolio_path: user.portfolio_path 
+            };
+            console.log('Session created for:', username);
             res.redirect('/dashboard');
         } else {
+            console.log('Invalid password for:', username);
             res.status(401).json({ error: 'Invalid credentials' });
         }
     });

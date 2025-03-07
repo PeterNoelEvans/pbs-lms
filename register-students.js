@@ -1,12 +1,17 @@
 const fetch = require('node-fetch');
 
 const BASE_URL = 'https://codinghtml-presentation.onrender.com';
+const ADMIN_TOKEN = 'your-secret-admin-token';
 
 // Function to clear all users
 async function clearAllUsers() {
     try {
         // First get all users
-        const response = await fetch(`${BASE_URL}/admin/users`);
+        const response = await fetch(`${BASE_URL}/admin/users`, {
+            headers: {
+                'admin-token': ADMIN_TOKEN
+            }
+        });
         const users = await response.json();
         
         console.log('Clearing existing users...');
@@ -14,7 +19,10 @@ async function clearAllUsers() {
         // Delete each user
         for (const user of users) {
             const deleteResponse = await fetch(`${BASE_URL}/admin/users/${user.id}`, {
-                method: 'DELETE'
+                method: 'DELETE',
+                headers: {
+                    'admin-token': ADMIN_TOKEN
+                }
             });
             if (deleteResponse.ok) {
                 console.log(`Deleted user: ${user.username}`);
