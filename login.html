@@ -171,25 +171,54 @@
             e.preventDefault();
             const formData = new FormData(e.target);
             const errorDiv = document.getElementById('loginError');
+            errorDiv.style.display = 'none';
+            
+            const credentials = Object.fromEntries(formData);
+            console.log('Attempting login with:', { username: credentials.username });
             
             try {
+                console.log('Sending login request...');
                 const response = await fetch('/login', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify(Object.fromEntries(formData)),
+                    body: JSON.stringify(credentials),
                 });
                 
-                if (response.ok) {
-                    window.location.href = '/dashboard';
-                } else {
+                console.log('Login response:', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    redirected: response.redirected,
+                    url: response.url
+                });
+                
+                const contentType = response.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
                     const data = await response.json();
-                    errorDiv.textContent = data.error || 'Login failed';
+                    console.log('Response data:', data);
+                    if (!response.ok) {
+                        errorDiv.textContent = data.error || 'Login failed';
+                        errorDiv.style.display = 'block';
+                        return;
+                    }
+                }
+                
+                if (response.ok) {
+                    if (response.redirected) {
+                        console.log('Login successful, redirecting to:', response.url);
+                        window.location.href = response.url;
+                    } else {
+                        console.log('Login successful, redirecting to dashboard');
+                        window.location.href = '/dashboard';
+                    }
+                } else {
+                    errorDiv.textContent = 'Login failed. Please check your credentials.';
                     errorDiv.style.display = 'block';
                 }
             } catch (error) {
-                errorDiv.textContent = 'An error occurred during login';
+                console.error('Login error:', error);
+                errorDiv.textContent = 'An error occurred during login. Please try again.';
                 errorDiv.style.display = 'block';
             }
         });

@@ -121,23 +121,27 @@ app.post('/register', async (req, res) => {
 
 app.post('/login', async (req, res) => {
     const { username, password } = req.body;
-    console.log('Login attempt for:', username);
+    console.log('====================');
+    console.log('LOGIN ATTEMPT START');
+    console.log('Username:', username);
+    console.log('Request body:', req.body);
     
     db.get('SELECT * FROM users WHERE username = ?', [username], async (err, user) => {
         if (err) {
-            console.error('Database error:', err);
+            console.error('DATABASE ERROR:', err);
             res.status(500).json({ error: 'Database error' });
             return;
         }
         
         if (!user) {
-            console.log('User not found:', username);
+            console.log('USER NOT FOUND IN DATABASE');
             res.status(401).json({ error: 'Invalid credentials' });
             return;
         }
         
+        console.log('User found in database:', { id: user.id, username: user.username });
         const validPassword = await bcrypt.compare(password, user.password);
-        console.log('Password valid:', validPassword);
+        console.log('Password validation result:', validPassword);
         
         if (validPassword) {
             req.session.user = { 
@@ -145,12 +149,15 @@ app.post('/login', async (req, res) => {
                 username: user.username, 
                 portfolio_path: user.portfolio_path 
             };
-            console.log('Session created for:', username);
+            console.log('Session created:', req.session);
+            console.log('LOGIN SUCCESS - Redirecting to dashboard');
             res.redirect('/dashboard');
         } else {
-            console.log('Invalid password for:', username);
+            console.log('INVALID PASSWORD');
             res.status(401).json({ error: 'Invalid credentials' });
         }
+        console.log('LOGIN ATTEMPT END');
+        console.log('====================');
     });
 });
 
