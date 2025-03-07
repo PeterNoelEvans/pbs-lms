@@ -136,58 +136,59 @@ app.post('/login', async (req, res) => {
     console.log('LOGIN ATTEMPT START');
     console.log('Username:', username);
     console.log('Session ID:', req.sessionID);
-    console.log('Current Session:', req.session);
     
-    db.get('SELECT * FROM users WHERE username = ?', [username], async (err, user) => {
-        if (err) {
-            console.error('DATABASE ERROR:', err);
-            res.status(500).json({ error: 'Database error' });
-            return;
-        }
-        
+    try {
+        const user = await new Promise((resolve, reject) => {
+            db.get('SELECT * FROM users WHERE username = ?', [username], (err, row) => {
+                if (err) reject(err);
+                else resolve(row);
+            });
+        });
+
         if (!user) {
             console.log('USER NOT FOUND IN DATABASE');
-            res.status(401).json({ error: 'Invalid credentials' });
-            return;
+            return res.status(401).json({ error: 'Invalid credentials' });
         }
-        
-        console.log('User found in database:', { id: user.id, username: user.username });
+
+        console.log('User found:', { id: user.id, username: user.username });
         const validPassword = await bcrypt.compare(password, user.password);
-        console.log('Password validation result:', validPassword);
-        
-        if (validPassword) {
-            req.session.regenerate((err) => {
-                if (err) {
-                    console.error('Session regeneration error:', err);
-                    res.status(500).json({ error: 'Session error' });
-                    return;
-                }
-                
-                req.session.user = { 
-                    id: user.id, 
-                    username: user.username, 
-                    portfolio_path: user.portfolio_path 
-                };
-                
-                req.session.save((err) => {
-                    if (err) {
-                        console.error('Session save error:', err);
-                        res.status(500).json({ error: 'Session error' });
-                        return;
-                    }
-                    
-                    console.log('Session after login:', req.session);
-                    console.log('LOGIN SUCCESS - Redirecting to dashboard');
-                    res.redirect('/dashboard');
-                });
-            });
-        } else {
+        console.log('Password valid:', validPassword);
+
+        if (!validPassword) {
             console.log('INVALID PASSWORD');
-            res.status(401).json({ error: 'Invalid credentials' });
+            return res.status(401).json({ error: 'Invalid credentials' });
         }
-        console.log('LOGIN ATTEMPT END');
-        console.log('====================');
-    });
+
+        // Create new session
+        req.session.regenerate(function(err) {
+            if (err) {
+                console.error('Session regeneration error:', err);
+                return res.status(500).json({ error: 'Session error' });
+            }
+
+            // Store user data in session
+            req.session.user = {
+                id: user.id,
+                username: user.username,
+                portfolio_path: user.portfolio_path
+            };
+
+            // Save session
+            req.session.save(function(err) {
+                if (err) {
+                    console.error('Session save error:', err);
+                    return res.status(500).json({ error: 'Session error' });
+                }
+
+                console.log('Session created successfully:', req.session);
+                console.log('LOGIN SUCCESS - Redirecting to dashboard');
+                res.redirect('/dashboard');
+            });
+        });
+    } catch (error) {
+        console.error('Login error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
 });
 
 app.post('/toggle-privacy', requireAuth, (req, res) => {
@@ -283,6 +284,12 @@ app.get('/dashboard', requireAuth, (req, res) => {
 
 // Protected portfolio access
 app.get('/portfolios/*', async (req, res, next) => {
+    // Allow direct access to images
+    if (req.path.includes('/images/')) {
+        next();
+        return;
+    }
+
     const portfolioPath = req.path;
     db.get('SELECT is_public, username FROM users WHERE portfolio_path = ?',
         [portfolioPath],
