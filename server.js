@@ -137,13 +137,16 @@ app.post('/register', async (req, res) => {
 
 app.post('/login', async (req, res) => {
     console.log('\n=== Login Attempt ===');
-    console.log('Body:', req.body);
+    console.log('Raw request body:', req.body);
+    console.log('Content-Type:', req.headers['content-type']);
     console.log('Session before login:', req.session);
 
     const { username, password } = req.body;
     
     if (!username || !password) {
         console.log('Missing credentials');
+        console.log('Username provided:', !!username);
+        console.log('Password provided:', !!password);
         return res.status(400).json({ error: 'Username and password are required' });
     }
 
@@ -151,8 +154,13 @@ app.post('/login', async (req, res) => {
         // Find user in database
         const user = await new Promise((resolve, reject) => {
             db.get('SELECT * FROM users WHERE username = ?', [username], (err, row) => {
-                if (err) reject(err);
-                else resolve(row);
+                if (err) {
+                    console.error('Database error:', err);
+                    reject(err);
+                } else {
+                    console.log('Database query result:', row ? 'User found' : 'User not found');
+                    resolve(row);
+                }
             });
         });
 
@@ -170,29 +178,41 @@ app.post('/login', async (req, res) => {
             return res.status(401).json({ error: 'Invalid credentials' });
         }
 
-        // Set user data in session
-        req.session.user = {
-            id: user.id,
-            username: user.username,
-            portfolio_path: user.portfolio_path
+        // Clear any existing session data
+        await new Promise((resolve) => {
+            if (req.session) {
+                req.session.destroy(() => resolve());
+            } else {
+                resolve();
+            }
+        });
+
+        // Create new session
+        req.session = {
+            user: {
+                id: user.id,
+                username: user.username,
+                portfolio_path: user.portfolio_path
+            }
         };
 
-        // Save session
+        // Save session explicitly
         await new Promise((resolve, reject) => {
             req.session.save((err) => {
                 if (err) {
                     console.error('Session save error:', err);
                     reject(err);
                 } else {
+                    console.log('Session saved successfully');
                     resolve();
                 }
             });
         });
 
         console.log('Login successful');
-        console.log('Session after login:', req.session);
+        console.log('Final session state:', req.session);
         
-        // Redirect to dashboard after successful login
+        // Send redirect response
         res.redirect('/dashboard');
     } catch (error) {
         console.error('Login error:', error);
