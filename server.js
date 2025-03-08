@@ -43,7 +43,10 @@ app.use((req, res, next) => {
         res.header('Access-Control-Allow-Credentials', 'true');
         res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
         res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
-        res.header('Access-Control-Expose-Headers', '*');
+        res.header('Access-Control-Expose-Headers', 'set-cookie');
+        res.header('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.header('Pragma', 'no-cache');
+        res.header('Expires', '0');
     }
     
     if (req.method === 'OPTIONS') {
@@ -62,16 +65,13 @@ app.use(session({
     name: 'sessionId',
     secret: process.env.SESSION_SECRET || 'your-secret-key',
     resave: true,
-    saveUninitialized: false,
+    saveUninitialized: true,
     rolling: true,
-    proxy: true,
     cookie: { 
         secure: true,
         httpOnly: true,
         maxAge: 24 * 60 * 60 * 1000,
-        sameSite: 'none',
-        path: '/',
-        domain: '.onrender.com'
+        sameSite: 'none'
     }
 }));
 

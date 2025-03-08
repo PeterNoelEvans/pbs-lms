@@ -168,6 +168,7 @@
             const username = document.getElementById('loginUsername').value;
             const password = document.getElementById('loginPassword').value;
             const errorDiv = document.getElementById('loginError');
+            errorDiv.style.display = 'none';
             
             console.log('Attempting login for:', username);
             
@@ -175,28 +176,39 @@
                 const response = await fetch('/login', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        'Cache-Control': 'no-cache'
                     },
                     body: JSON.stringify({ username, password }),
                     credentials: 'include'
                 });
                 
                 console.log('Response status:', response.status);
-                console.log('Response headers:', Object.fromEntries(response.headers));
+                const contentType = response.headers.get('content-type');
+                console.log('Content-Type:', contentType);
                 
-                const data = await response.json();
-                console.log('Response data:', data);
-                
-                if (data.success) {
-                    console.log('Login successful, redirecting to:', data.redirect);
-                    window.location.href = data.redirect;
+                if (contentType && contentType.includes('application/json')) {
+                    const data = await response.json();
+                    console.log('Response data:', data);
+                    
+                    if (data.success) {
+                        console.log('Login successful, redirecting to:', data.redirect);
+                        window.location.replace(data.redirect);
+                    } else {
+                        errorDiv.textContent = data.error || 'Login failed';
+                        errorDiv.style.display = 'block';
+                    }
+                } else if (response.redirected) {
+                    console.log('Redirect detected, going to:', response.url);
+                    window.location.replace(response.url);
                 } else {
-                    errorDiv.textContent = data.error || 'Login failed';
+                    console.log('Unexpected response type');
+                    errorDiv.textContent = 'Unexpected response from server';
                     errorDiv.style.display = 'block';
                 }
             } catch (error) {
                 console.error('Login error:', error);
-                errorDiv.textContent = 'An error occurred during login';
+                errorDiv.textContent = 'An error occurred during login. Please try again.';
                 errorDiv.style.display = 'block';
             }
         });
