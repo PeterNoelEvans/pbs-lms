@@ -53,7 +53,15 @@ app.set('trust proxy', 1);
 
 // CORS configuration for Render
 app.use((req, res, next) => {
-    // Remove CORS headers since we're serving from the same domain
+    res.header('Access-Control-Allow-Origin', 'https://codinghtml-presentation.onrender.com');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
+    
+    // Handle preflight requests
+    if (req.method === 'OPTIONS') {
+        return res.sendStatus(200);
+    }
     next();
 });
 
@@ -326,8 +334,8 @@ app.post('/login', async (req, res) => {
         console.log('Login successful');
         console.log('Final session state:', req.session);
 
-        // Send redirect response
-        res.redirect('/dashboard');
+        // Send success response with redirect
+        res.json({ success: true, redirect: '/dashboard' });
     } catch (error) {
         console.error('Login error:', error);
         res.status(500).json({ error: 'Internal server error during login' });
