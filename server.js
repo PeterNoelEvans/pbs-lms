@@ -48,8 +48,9 @@ app.use(session({
         secure: false,
         httpOnly: true,
         maxAge: 24 * 60 * 60 * 1000,
-        sameSite: 'lax',
-        path: '/'
+        sameSite: 'none',
+        path: '/',
+        domain: '.onrender.com'
     }
 }));
 
@@ -58,18 +59,23 @@ app.set('trust proxy', 1);
 
 // CORS configuration for Render
 app.use((req, res, next) => {
-    const origin = req.headers.origin;
-    if (origin === 'https://codinghtml-presentation.onrender.com') {
-        res.header('Access-Control-Allow-Origin', origin);
-    }
+    res.header('Access-Control-Allow-Origin', 'https://codinghtml-presentation.onrender.com');
     res.header('Access-Control-Allow-Credentials', 'true');
-    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Cookie');
     res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
+    res.header('Access-Control-Expose-Headers', 'Set-Cookie');
     
     // Handle preflight requests
     if (req.method === 'OPTIONS') {
         return res.sendStatus(200);
     }
+
+    // Debug logging for cookies and headers
+    console.log('\n=== Request Headers ===');
+    console.log('Origin:', req.headers.origin);
+    console.log('Cookie:', req.headers.cookie);
+    console.log('======================\n');
+
     next();
 });
 
@@ -323,18 +329,17 @@ app.post('/login', async (req, res) => {
             return res.status(401).json({ error: 'Invalid credentials' });
         }
 
-        // Clear any existing session
-        if (req.session) {
-            await new Promise(resolve => req.session.destroy(resolve));
+        // Initialize session if it doesn't exist
+        if (!req.session) {
+            console.log('Creating new session');
+            req.session = {};
         }
 
-        // Create new session
-        req.session = {
-            user: {
-                id: user.id,
-                username: user.username,
-                portfolio_path: user.portfolio_path
-            }
+        // Set session data
+        req.session.user = {
+            id: user.id,
+            username: user.username,
+            portfolio_path: user.portfolio_path
         };
 
         // Save session explicitly
@@ -352,12 +357,20 @@ app.post('/login', async (req, res) => {
 
         console.log('Login successful');
         console.log('Final session state:', req.session);
+        console.log('Session ID:', req.sessionID);
+        console.log('Response headers:', res.getHeaders());
 
-        // Always return JSON response
+        // Set additional headers for session handling
+        res.header('Cache-Control', 'no-cache, private, no-store, must-revalidate');
+        res.header('Expires', '-1');
+        res.header('Pragma', 'no-cache');
+
+        // Send success response
         res.json({
             success: true,
             message: 'Login successful',
-            redirect: '/dashboard'
+            redirect: '/dashboard',
+            sessionId: req.sessionID // Include session ID for debugging
         });
     } catch (error) {
         console.error('Login error:', error);
