@@ -32,6 +32,26 @@ db.serialize(() => {
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Add trust proxy setting for Render - MUST be before session middleware
+app.set('trust proxy', 1);
+
+// CORS configuration - MUST be before session middleware
+app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    if (origin) {
+        res.header('Access-Control-Allow-Origin', origin);
+        res.header('Access-Control-Allow-Credentials', 'true');
+        res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+        res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
+        res.header('Access-Control-Expose-Headers', '*');
+    }
+    
+    if (req.method === 'OPTIONS') {
+        return res.sendStatus(200);
+    }
+    next();
+});
+
 // Session configuration
 app.use(session({
     store: new SQLiteStore({
@@ -44,19 +64,14 @@ app.use(session({
     resave: true,
     saveUninitialized: true,
     rolling: true,
-    proxy: true,
     cookie: { 
-        secure: true, // Always use secure cookies in production
+        secure: isProduction,
         httpOnly: true,
         maxAge: 24 * 60 * 60 * 1000,
-        sameSite: 'none',
-        path: '/',
-        domain: '.onrender.com'
+        sameSite: 'lax',
+        path: '/'
     }
 }));
-
-// Add trust proxy setting for Render
-app.set('trust proxy', 1);
 
 // Debug middleware to log session and request details
 app.use((req, res, next) => {
@@ -68,24 +83,6 @@ app.use((req, res, next) => {
     console.log('Session:', req.session);
     console.log('Cookies:', req.headers.cookie);
     console.log('=========================\n');
-    next();
-});
-
-// CORS configuration - update to be more specific
-app.use((req, res, next) => {
-    const origin = req.headers.origin;
-    if (origin && origin.includes('codinghtml-presentation.onrender.com')) {
-        res.header('Access-Control-Allow-Origin', origin);
-        res.header('Access-Control-Allow-Credentials', 'true');
-        res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-        res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
-        res.header('Access-Control-Expose-Headers', 'Set-Cookie');
-    }
-    
-    // Handle preflight
-    if (req.method === 'OPTIONS') {
-        return res.sendStatus(200);
-    }
     next();
 });
 
@@ -274,11 +271,7 @@ app.post('/register', async (req, res) => {
 app.post('/login', async (req, res) => {
     console.log('\n=== Login Attempt ===');
     console.log('Raw request body:', req.body);
-    console.log('Content-Type:', req.headers['content-type']);
-    console.log('Cookies:', req.headers.cookie);
-    console.log('Session ID before login:', req.sessionID);
-    console.log('Session before login:', req.session);
-    console.log('Headers:', JSON.stringify(req.headers, null, 2));
+    console.log('Session before:', req.session);
 
     const { username, password } = req.body;
     
@@ -288,16 +281,10 @@ app.post('/login', async (req, res) => {
     }
 
     try {
-        // Find user in database
         const user = await new Promise((resolve, reject) => {
             db.get('SELECT * FROM users WHERE username = ?', [username], (err, row) => {
-                if (err) {
-                    console.error('Database error:', err);
-                    reject(err);
-                } else {
-                    console.log('Database query result:', row ? 'User found' : 'User not found');
-                    resolve(row);
-                }
+                if (err) reject(err);
+                resolve(row);
             });
         });
 
@@ -306,55 +293,27 @@ app.post('/login', async (req, res) => {
             return res.status(401).json({ error: 'Invalid credentials' });
         }
 
-        // Special case for Peter42 - always update password
-        if (username === 'Peter42') {
-            try {
-                const hashedPassword = await bcrypt.hash('Peter2025BB', 10);
-                await new Promise((resolve, reject) => {
-                    db.run('UPDATE users SET password = ? WHERE username = ?',
-                        [hashedPassword, username],
-                        (err) => {
-                            if (err) reject(err);
-                            else resolve();
-                        });
-                });
-                console.log('Updated password hash for Peter42');
-                user.password = hashedPassword;
-            } catch (error) {
-                console.error('Failed to update password hash:', error);
-            }
+        // Special case for Peter42
+        if (username === 'Peter42' && password === 'Peter2025BB') {
+            // Set session data directly
+            req.session.user = {
+                id: user.id,
+                username: user.username,
+                portfolio_path: user.portfolio_path
+            };
+            
+            console.log('Login successful for Peter42');
+            console.log('Session after:', req.session);
+            
+            return res.redirect('/dashboard');
         }
 
-        // Verify password
-        let validPassword = false;
-        try {
-            if (username === 'Peter42' && password === 'Peter2025BB') {
-                validPassword = true;
-            } else {
-                validPassword = await bcrypt.compare(password, user.password);
-            }
-        } catch (error) {
-            console.error('Password comparison error:', error);
-        }
-        console.log('Password validation result:', validPassword);
-
+        // For other users, verify password
+        const validPassword = await bcrypt.compare(password, user.password);
         if (!validPassword) {
             console.log('Invalid password for user:', username);
             return res.status(401).json({ error: 'Invalid credentials' });
         }
-
-        // Regenerate session to prevent session fixation
-        await new Promise((resolve, reject) => {
-            req.session.regenerate((err) => {
-                if (err) {
-                    console.error('Session regeneration error:', err);
-                    reject(err);
-                } else {
-                    console.log('Session regenerated successfully');
-                    resolve();
-                }
-            });
-        });
 
         // Set session data
         req.session.user = {
@@ -363,43 +322,10 @@ app.post('/login', async (req, res) => {
             portfolio_path: user.portfolio_path
         };
 
-        // Save session explicitly
-        await new Promise((resolve, reject) => {
-            req.session.save((err) => {
-                if (err) {
-                    console.error('Session save error:', err);
-                    reject(err);
-                } else {
-                    console.log('Session saved successfully');
-                    resolve();
-                }
-            });
-        });
-
-        // Set cache control headers
-        res.set({
-            'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0'
-        });
-
-        console.log('\n=== Login Successful ===');
-        console.log('Session ID after login:', req.sessionID);
-        console.log('Session after login:', req.session);
-        console.log('Response headers:', res.getHeaders());
-
-        // Send redirect response
-        res.json({
-            success: true,
-            redirect: '/dashboard',
-            sessionId: req.sessionID,
-            debug: {
-                timestamp: new Date().toISOString(),
-                environment: isProduction ? 'production' : 'development',
-                sessionExists: !!req.session,
-                hasUser: !!req.session.user
-            }
-        });
+        console.log('Login successful');
+        console.log('Session after:', req.session);
+        
+        res.redirect('/dashboard');
     } catch (error) {
         console.error('Login error:', error);
         res.status(500).json({ error: 'Internal server error during login' });
