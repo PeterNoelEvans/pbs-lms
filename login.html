@@ -72,7 +72,7 @@
     <div class="auth-container">
         <div id="loginForm">
             <h2>Login</h2>
-            <form id="loginFormElement">
+            <form id="loginFormElement" method="POST" action="/login">
                 <div class="form-group">
                     <label for="loginUsername">Username:</label>
                     <input type="text" id="loginUsername" name="username" required autocomplete="username">
@@ -177,13 +177,24 @@
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Cache-Control': 'no-cache'
+                        'Cache-Control': 'no-cache',
+                        'Pragma': 'no-cache'
                     },
                     body: JSON.stringify({ username, password }),
-                    credentials: 'include'
+                    credentials: 'include',
+                    cache: 'no-cache',
+                    redirect: 'follow'
                 });
                 
                 console.log('Response status:', response.status);
+                console.log('Response headers:', Object.fromEntries(response.headers));
+                
+                if (response.redirected) {
+                    console.log('Redirect detected, going to:', response.url);
+                    window.location.replace(response.url);
+                    return;
+                }
+                
                 const contentType = response.headers.get('content-type');
                 console.log('Content-Type:', contentType);
                 
@@ -193,14 +204,13 @@
                     
                     if (data.success) {
                         console.log('Login successful, redirecting to:', data.redirect);
-                        window.location.replace(data.redirect);
+                        setTimeout(() => {
+                            window.location.replace(data.redirect);
+                        }, 100);
                     } else {
                         errorDiv.textContent = data.error || 'Login failed';
                         errorDiv.style.display = 'block';
                     }
-                } else if (response.redirected) {
-                    console.log('Redirect detected, going to:', response.url);
-                    window.location.replace(response.url);
                 } else {
                     console.log('Unexpected response type');
                     errorDiv.textContent = 'Unexpected response from server';

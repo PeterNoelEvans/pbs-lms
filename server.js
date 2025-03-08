@@ -274,6 +274,7 @@ app.post('/login', async (req, res) => {
     console.log('\n=== Login Attempt ===');
     console.log('Raw request body:', req.body);
     console.log('Session before:', req.session);
+    console.log('Headers:', req.headers);
 
     const { username, password } = req.body;
     
@@ -297,6 +298,18 @@ app.post('/login', async (req, res) => {
 
         // Special case for Peter42
         if (username === 'Peter42' && password === 'Peter2025BB') {
+            // Regenerate session
+            await new Promise((resolve, reject) => {
+                req.session.regenerate((err) => {
+                    if (err) {
+                        console.error('Session regeneration error:', err);
+                        reject(err);
+                    } else {
+                        resolve();
+                    }
+                });
+            });
+
             // Set session data
             req.session.user = {
                 id: user.id,
@@ -321,12 +334,8 @@ app.post('/login', async (req, res) => {
             console.log('Session after:', req.session);
             console.log('Session ID:', req.sessionID);
             
-            // Send JSON response with redirect
-            return res.json({
-                success: true,
-                redirect: '/dashboard',
-                sessionId: req.sessionID
-            });
+            // Send direct redirect
+            return res.redirect('/dashboard');
         }
 
         // For other users, verify password
@@ -335,6 +344,18 @@ app.post('/login', async (req, res) => {
             console.log('Invalid password for user:', username);
             return res.status(401).json({ error: 'Invalid credentials' });
         }
+
+        // Regenerate session
+        await new Promise((resolve, reject) => {
+            req.session.regenerate((err) => {
+                if (err) {
+                    console.error('Session regeneration error:', err);
+                    reject(err);
+                } else {
+                    resolve();
+                }
+            });
+        });
 
         // Set session data
         req.session.user = {
@@ -360,12 +381,8 @@ app.post('/login', async (req, res) => {
         console.log('Session after:', req.session);
         console.log('Session ID:', req.sessionID);
         
-        // Send JSON response with redirect
-        res.json({
-            success: true,
-            redirect: '/dashboard',
-            sessionId: req.sessionID
-        });
+        // Send direct redirect
+        res.redirect('/dashboard');
     } catch (error) {
         console.error('Login error:', error);
         res.status(500).json({ error: 'Internal server error during login' });
