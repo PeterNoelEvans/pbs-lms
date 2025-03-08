@@ -44,9 +44,6 @@ app.use((req, res, next) => {
         res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
         res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
         res.header('Access-Control-Expose-Headers', 'set-cookie');
-        res.header('Cache-Control', 'no-cache, no-store, must-revalidate');
-        res.header('Pragma', 'no-cache');
-        res.header('Expires', '0');
     }
     
     if (req.method === 'OPTIONS') {
@@ -67,11 +64,13 @@ app.use(session({
     resave: true,
     saveUninitialized: true,
     rolling: true,
+    proxy: true,
     cookie: { 
         secure: true,
         httpOnly: true,
         maxAge: 24 * 60 * 60 * 1000,
-        sameSite: 'none'
+        sameSite: 'none',
+        domain: '.onrender.com'
     }
 }));
 
@@ -298,18 +297,6 @@ app.post('/login', async (req, res) => {
 
         // Special case for Peter42
         if (username === 'Peter42' && password === 'Peter2025BB') {
-            // Regenerate session
-            await new Promise((resolve, reject) => {
-                req.session.regenerate((err) => {
-                    if (err) {
-                        console.error('Session regeneration error:', err);
-                        reject(err);
-                    } else {
-                        resolve();
-                    }
-                });
-            });
-
             // Set session data
             req.session.user = {
                 id: user.id,
@@ -334,6 +321,15 @@ app.post('/login', async (req, res) => {
             console.log('Session after:', req.session);
             console.log('Session ID:', req.sessionID);
             
+            // Set session cookie explicitly
+            res.cookie('sessionId', req.sessionID, {
+                secure: true,
+                httpOnly: true,
+                maxAge: 24 * 60 * 60 * 1000,
+                sameSite: 'none',
+                domain: '.onrender.com'
+            });
+            
             // Send direct redirect
             return res.redirect('/dashboard');
         }
@@ -344,18 +340,6 @@ app.post('/login', async (req, res) => {
             console.log('Invalid password for user:', username);
             return res.status(401).json({ error: 'Invalid credentials' });
         }
-
-        // Regenerate session
-        await new Promise((resolve, reject) => {
-            req.session.regenerate((err) => {
-                if (err) {
-                    console.error('Session regeneration error:', err);
-                    reject(err);
-                } else {
-                    resolve();
-                }
-            });
-        });
 
         // Set session data
         req.session.user = {
@@ -380,6 +364,15 @@ app.post('/login', async (req, res) => {
         console.log('Login successful');
         console.log('Session after:', req.session);
         console.log('Session ID:', req.sessionID);
+        
+        // Set session cookie explicitly
+        res.cookie('sessionId', req.sessionID, {
+            secure: true,
+            httpOnly: true,
+            maxAge: 24 * 60 * 60 * 1000,
+            sameSite: 'none',
+            domain: '.onrender.com'
+        });
         
         // Send direct redirect
         res.redirect('/dashboard');
