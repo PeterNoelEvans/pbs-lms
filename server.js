@@ -40,10 +40,10 @@ app.use(session({
     resave: true,
     saveUninitialized: false,
     cookie: { 
-        secure: true,  // Required for HTTPS
+        secure: true,
         httpOnly: true,
         maxAge: 24 * 60 * 60 * 1000,
-        sameSite: 'none',  // Required for cross-site cookies
+        sameSite: 'lax',
         path: '/'
     }
 }));
@@ -53,15 +53,7 @@ app.set('trust proxy', 1);
 
 // CORS configuration for Render
 app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', 'https://codinghtml-presentation.onrender.com');
-    res.header('Access-Control-Allow-Credentials', 'true');
-    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
-    
-    // Handle preflight requests
-    if (req.method === 'OPTIONS') {
-        return res.sendStatus(200);
-    }
+    // Remove CORS headers since we're serving from the same domain
     next();
 });
 
@@ -250,6 +242,7 @@ app.post('/login', async (req, res) => {
     console.log('\n=== Login Attempt ===');
     console.log('Raw request body:', req.body);
     console.log('Content-Type:', req.headers['content-type']);
+    console.log('Session before login:', req.session);
 
     const { username, password } = req.body;
     
@@ -317,11 +310,24 @@ app.post('/login', async (req, res) => {
             portfolio_path: user.portfolio_path
         };
 
-        console.log('Login successful');
-        console.log('Session data:', req.session);
+        // Save session explicitly
+        await new Promise((resolve, reject) => {
+            req.session.save((err) => {
+                if (err) {
+                    console.error('Session save error:', err);
+                    reject(err);
+                } else {
+                    console.log('Session saved successfully');
+                    resolve();
+                }
+            });
+        });
 
-        // Send success response with redirect
-        res.json({ success: true, redirect: '/dashboard' });
+        console.log('Login successful');
+        console.log('Final session state:', req.session);
+
+        // Send redirect response
+        res.redirect('/dashboard');
     } catch (error) {
         console.error('Login error:', error);
         res.status(500).json({ error: 'Internal server error during login' });
