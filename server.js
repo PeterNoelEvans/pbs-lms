@@ -44,12 +44,14 @@ app.use(session({
     resave: true,
     saveUninitialized: true,
     rolling: true,
+    proxy: true,
     cookie: { 
-        secure: isProduction,
+        secure: true, // Always use secure cookies in production
         httpOnly: true,
         maxAge: 24 * 60 * 60 * 1000,
         sameSite: 'none',
-        path: '/'
+        path: '/',
+        domain: '.onrender.com'
     }
 }));
 
@@ -69,18 +71,18 @@ app.use((req, res, next) => {
     next();
 });
 
-// CORS configuration
+// CORS configuration - update to be more specific
 app.use((req, res, next) => {
     const origin = req.headers.origin;
-    if (origin) {
+    if (origin && origin.includes('codinghtml-presentation.onrender.com')) {
         res.header('Access-Control-Allow-Origin', origin);
+        res.header('Access-Control-Allow-Credentials', 'true');
+        res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+        res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
+        res.header('Access-Control-Expose-Headers', 'Set-Cookie');
     }
     
-    res.header('Access-Control-Allow-Credentials', 'true');
-    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
-    res.header('Access-Control-Expose-Headers', 'Set-Cookie');
-    
+    // Handle preflight
     if (req.method === 'OPTIONS') {
         return res.sendStatus(200);
     }
@@ -341,6 +343,19 @@ app.post('/login', async (req, res) => {
             return res.status(401).json({ error: 'Invalid credentials' });
         }
 
+        // Regenerate session to prevent session fixation
+        await new Promise((resolve, reject) => {
+            req.session.regenerate((err) => {
+                if (err) {
+                    console.error('Session regeneration error:', err);
+                    reject(err);
+                } else {
+                    console.log('Session regenerated successfully');
+                    resolve();
+                }
+            });
+        });
+
         // Set session data
         req.session.user = {
             id: user.id,
@@ -361,20 +376,28 @@ app.post('/login', async (req, res) => {
             });
         });
 
-        // After successful login, log session state
+        // Set cache control headers
+        res.set({
+            'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+        });
+
         console.log('\n=== Login Successful ===');
         console.log('Session ID after login:', req.sessionID);
         console.log('Session after login:', req.session);
         console.log('Response headers:', res.getHeaders());
 
-        // Send success response with more debug info
+        // Send redirect response
         res.json({
             success: true,
             redirect: '/dashboard',
             sessionId: req.sessionID,
             debug: {
                 timestamp: new Date().toISOString(),
-                environment: isProduction ? 'production' : 'development'
+                environment: isProduction ? 'production' : 'development',
+                sessionExists: !!req.session,
+                hasUser: !!req.session.user
             }
         });
     } catch (error) {
@@ -573,6 +596,17 @@ app.get('/debug-session', (req, res) => {
         isProduction: isProduction,
         timestamp: new Date().toISOString()
     });
+});
+
+// Add session check middleware
+app.use((req, res, next) => {
+    console.log('\n=== Session Check ===');
+    console.log('URL:', req.url);
+    console.log('Session exists:', !!req.session);
+    console.log('Session ID:', req.sessionID);
+    console.log('User in session:', req.session?.user);
+    console.log('Cookies:', req.headers.cookie);
+    next();
 });
 
 app.listen(port, () => {
