@@ -273,7 +273,10 @@ app.post('/login', async (req, res) => {
     console.log('\n=== Login Attempt ===');
     console.log('Raw request body:', req.body);
     console.log('Content-Type:', req.headers['content-type']);
+    console.log('Cookies:', req.headers.cookie);
+    console.log('Session ID before login:', req.sessionID);
     console.log('Session before login:', req.session);
+    console.log('Headers:', JSON.stringify(req.headers, null, 2));
 
     const { username, password } = req.body;
     
@@ -358,15 +361,21 @@ app.post('/login', async (req, res) => {
             });
         });
 
-        console.log('Login successful');
-        console.log('Final session state:', req.session);
-        console.log('Session ID:', req.sessionID);
+        // After successful login, log session state
+        console.log('\n=== Login Successful ===');
+        console.log('Session ID after login:', req.sessionID);
+        console.log('Session after login:', req.session);
+        console.log('Response headers:', res.getHeaders());
 
-        // Send success response with redirect
+        // Send success response with more debug info
         res.json({
             success: true,
             redirect: '/dashboard',
-            sessionId: req.sessionID
+            sessionId: req.sessionID,
+            debug: {
+                timestamp: new Date().toISOString(),
+                environment: isProduction ? 'production' : 'development'
+            }
         });
     } catch (error) {
         console.error('Login error:', error);
@@ -547,6 +556,23 @@ app.get('/check-auth', (req, res) => {
 app.get('/logout', (req, res) => {
     req.session.destroy();
     res.redirect('/');
+});
+
+// Debug test endpoint
+app.get('/debug-session', (req, res) => {
+    console.log('\n=== Debug Session Info ===');
+    console.log('Session ID:', req.sessionID);
+    console.log('Session:', req.session);
+    console.log('Cookies:', req.headers.cookie);
+    console.log('Headers:', req.headers);
+    
+    res.json({
+        sessionId: req.sessionID,
+        session: req.session,
+        cookies: req.headers.cookie,
+        isProduction: isProduction,
+        timestamp: new Date().toISOString()
+    });
 });
 
 app.listen(port, () => {
