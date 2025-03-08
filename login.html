@@ -162,22 +162,14 @@
             }
         }
 
-        document.getElementById('loginFormElement').addEventListener('submit', async (e) => {
+        document.getElementById('loginFormElement').addEventListener('submit', async function(e) {
             e.preventDefault();
-            const formData = new FormData(e.target);
-            const errorDiv = document.getElementById('loginError');
-            errorDiv.style.display = 'none';
-
-            // Show attempting login message
-            errorDiv.textContent = 'Attempting to log in...';
-            errorDiv.style.display = 'block';
-
-            const credentials = {
-                username: formData.get('username'),
-                password: formData.get('password')
-            };
             
-            console.log('Sending login request with:', { username: credentials.username, password: '***' });
+            const username = document.getElementById('loginUsername').value;
+            const password = document.getElementById('loginPassword').value;
+            const errorDiv = document.getElementById('loginError');
+            
+            console.log('Attempting login for:', username);
             
             try {
                 const response = await fetch('/login', {
@@ -185,49 +177,26 @@
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify(credentials),
+                    body: JSON.stringify({ username, password }),
                     credentials: 'include'
                 });
-
+                
                 console.log('Response status:', response.status);
-                console.log('Response headers:', {
-                    'content-type': response.headers.get('content-type'),
-                    'set-cookie': response.headers.get('set-cookie')
-                });
-
-                const contentType = response.headers.get('content-type');
-                console.log('Response content type:', contentType);
-
-                if (contentType && contentType.includes('application/json')) {
-                    const data = await response.json();
-                    console.log('Response data:', data);
-                    
-                    if (response.ok) {
-                        errorDiv.textContent = 'Login successful, redirecting...';
-                        if (data.redirect) {
-                            console.log('Redirecting to:', data.redirect);
-                            window.location.href = data.redirect;
-                        } else {
-                            console.log('Redirecting to dashboard');
-                            window.location.href = '/dashboard';
-                        }
-                    } else {
-                        errorDiv.textContent = data.error || 'Login failed';
-                        errorDiv.style.display = 'block';
-                    }
+                console.log('Response headers:', Object.fromEntries(response.headers));
+                
+                const data = await response.json();
+                console.log('Response data:', data);
+                
+                if (data.success) {
+                    console.log('Login successful, redirecting to:', data.redirect);
+                    window.location.href = data.redirect;
                 } else {
-                    console.log('Response is not JSON');
-                    if (response.redirected) {
-                        console.log('Response is redirected to:', response.url);
-                        window.location.href = response.url;
-                    } else if (!response.ok) {
-                        errorDiv.textContent = 'Login failed';
-                        errorDiv.style.display = 'block';
-                    }
+                    errorDiv.textContent = data.error || 'Login failed';
+                    errorDiv.style.display = 'block';
                 }
             } catch (error) {
                 console.error('Login error:', error);
-                errorDiv.textContent = 'An error occurred during login: ' + error.message;
+                errorDiv.textContent = 'An error occurred during login';
                 errorDiv.style.display = 'block';
             }
         });

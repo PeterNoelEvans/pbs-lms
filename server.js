@@ -62,14 +62,16 @@ app.use(session({
     name: 'sessionId',
     secret: process.env.SESSION_SECRET || 'your-secret-key',
     resave: true,
-    saveUninitialized: true,
+    saveUninitialized: false,
     rolling: true,
+    proxy: true,
     cookie: { 
-        secure: isProduction,
+        secure: true,
         httpOnly: true,
         maxAge: 24 * 60 * 60 * 1000,
-        sameSite: 'lax',
-        path: '/'
+        sameSite: 'none',
+        path: '/',
+        domain: '.onrender.com'
     }
 }));
 
@@ -295,17 +297,36 @@ app.post('/login', async (req, res) => {
 
         // Special case for Peter42
         if (username === 'Peter42' && password === 'Peter2025BB') {
-            // Set session data directly
+            // Set session data
             req.session.user = {
                 id: user.id,
                 username: user.username,
                 portfolio_path: user.portfolio_path
             };
             
+            // Save session explicitly
+            await new Promise((resolve, reject) => {
+                req.session.save((err) => {
+                    if (err) {
+                        console.error('Session save error:', err);
+                        reject(err);
+                    } else {
+                        console.log('Session saved successfully');
+                        resolve();
+                    }
+                });
+            });
+            
             console.log('Login successful for Peter42');
             console.log('Session after:', req.session);
+            console.log('Session ID:', req.sessionID);
             
-            return res.redirect('/dashboard');
+            // Send JSON response with redirect
+            return res.json({
+                success: true,
+                redirect: '/dashboard',
+                sessionId: req.sessionID
+            });
         }
 
         // For other users, verify password
@@ -322,10 +343,29 @@ app.post('/login', async (req, res) => {
             portfolio_path: user.portfolio_path
         };
 
+        // Save session explicitly
+        await new Promise((resolve, reject) => {
+            req.session.save((err) => {
+                if (err) {
+                    console.error('Session save error:', err);
+                    reject(err);
+                } else {
+                    console.log('Session saved successfully');
+                    resolve();
+                }
+            });
+        });
+
         console.log('Login successful');
         console.log('Session after:', req.session);
+        console.log('Session ID:', req.sessionID);
         
-        res.redirect('/dashboard');
+        // Send JSON response with redirect
+        res.json({
+            success: true,
+            redirect: '/dashboard',
+            sessionId: req.sessionID
+        });
     } catch (error) {
         console.error('Login error:', error);
         res.status(500).json({ error: 'Internal server error during login' });
