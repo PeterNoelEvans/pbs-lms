@@ -1,5 +1,7 @@
 const sqlite3 = require('sqlite3').verbose();
-const db = new sqlite3.Database('users.db');
+const isProduction = process.env.NODE_ENV === 'production';
+const dbPath = isProduction ? '/opt/render/project/src/users.db' : 'users.db';
+const db = new sqlite3.Database(dbPath);
 
 // Show all users in the database
 db.all("SELECT username, portfolio_path FROM users", [], (err, rows) => {

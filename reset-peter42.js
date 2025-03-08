@@ -1,7 +1,10 @@
 const sqlite3 = require('sqlite3').verbose();
 const fetch = require('node-fetch');
 
-const db = new sqlite3.Database('users.db');
+const isProduction = process.env.NODE_ENV === 'production';
+const dbPath = isProduction ? '/opt/render/project/src/users.db' : 'users.db';
+const BASE_URL = isProduction ? 'https://codinghtml-presentation.onrender.com' : 'http://localhost:3002';
+const db = new sqlite3.Database(dbPath);
 
 // First check what users exist with similar names
 db.all("SELECT username, portfolio_path FROM users WHERE username LIKE ?", ['%Peter%'], (err, rows) => {
@@ -35,7 +38,7 @@ db.all("SELECT username, portfolio_path FROM users WHERE username LIKE ?", ['%Pe
             
             // Now register Peter42 again
             try {
-                const response = await fetch('http://localhost:3002/register', {
+                const response = await fetch(`${BASE_URL}/register`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',

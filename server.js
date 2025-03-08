@@ -10,8 +10,12 @@ const app = express();
 const port = process.env.PORT || 10000;
 const isProduction = process.env.NODE_ENV === 'production';
 
+// Set database paths based on environment
+const dbPath = isProduction ? '/opt/render/project/src/users.db' : 'users.db';
+const sessionDbPath = isProduction ? '/opt/render/project/src/sessions.db' : 'sessions.db';
+
 // Create SQLite database
-const db = new sqlite3.Database('users.db');
+const db = new sqlite3.Database(dbPath);
 
 // Create tables
 db.serialize(() => {
@@ -31,7 +35,7 @@ app.use(express.urlencoded({ extended: true }));
 // Session configuration
 app.use(session({
     store: new SQLiteStore({
-        db: 'sessions.db',
+        db: sessionDbPath,
         concurrentDB: true,
         table: 'sessions'
     }),
