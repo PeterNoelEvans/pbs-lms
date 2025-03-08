@@ -41,43 +41,20 @@ app.use(session({
     }),
     name: 'sessionId',
     secret: process.env.SESSION_SECRET || 'your-secret-key',
-    resave: false,
-    saveUninitialized: false,
+    resave: true,
+    saveUninitialized: true,
     rolling: true,
     cookie: { 
-        secure: false,
+        secure: isProduction,
         httpOnly: true,
         maxAge: 24 * 60 * 60 * 1000,
         sameSite: 'none',
-        path: '/',
-        domain: '.onrender.com'
+        path: '/'
     }
 }));
 
 // Add trust proxy setting for Render
 app.set('trust proxy', 1);
-
-// CORS configuration for Render
-app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', 'https://codinghtml-presentation.onrender.com');
-    res.header('Access-Control-Allow-Credentials', 'true');
-    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Cookie');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
-    res.header('Access-Control-Expose-Headers', 'Set-Cookie');
-    
-    // Handle preflight requests
-    if (req.method === 'OPTIONS') {
-        return res.sendStatus(200);
-    }
-
-    // Debug logging for cookies and headers
-    console.log('\n=== Request Headers ===');
-    console.log('Origin:', req.headers.origin);
-    console.log('Cookie:', req.headers.cookie);
-    console.log('======================\n');
-
-    next();
-});
 
 // Debug middleware to log session and request details
 app.use((req, res, next) => {
@@ -85,10 +62,28 @@ app.use((req, res, next) => {
     console.log('URL:', req.url);
     console.log('Method:', req.method);
     console.log('Headers:', req.headers);
-    console.log('Cookies:', req.cookies);
     console.log('Session ID:', req.sessionID);
     console.log('Session:', req.session);
+    console.log('Cookies:', req.headers.cookie);
     console.log('=========================\n');
+    next();
+});
+
+// CORS configuration
+app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    if (origin) {
+        res.header('Access-Control-Allow-Origin', origin);
+    }
+    
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
+    res.header('Access-Control-Expose-Headers', 'Set-Cookie');
+    
+    if (req.method === 'OPTIONS') {
+        return res.sendStatus(200);
+    }
     next();
 });
 
@@ -226,6 +221,20 @@ app.post('/admin/reset-password', requireAdmin, async (req, res) => {
     }
 });
 
+// Health check endpoint
+app.get('/health', (req, res) => {
+    console.log('Health check request received');
+    res.json({
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        environment: isProduction ? 'production' : 'development',
+        session: {
+            id: req.sessionID,
+            cookie: req.session?.cookie
+        }
+    });
+});
+
 // Routes
 app.post('/register', async (req, res) => {
     console.log('\n=== Registration Attempt ===');
@@ -329,12 +338,6 @@ app.post('/login', async (req, res) => {
             return res.status(401).json({ error: 'Invalid credentials' });
         }
 
-        // Initialize session if it doesn't exist
-        if (!req.session) {
-            console.log('Creating new session');
-            req.session = {};
-        }
-
         // Set session data
         req.session.user = {
             id: user.id,
@@ -358,19 +361,12 @@ app.post('/login', async (req, res) => {
         console.log('Login successful');
         console.log('Final session state:', req.session);
         console.log('Session ID:', req.sessionID);
-        console.log('Response headers:', res.getHeaders());
 
-        // Set additional headers for session handling
-        res.header('Cache-Control', 'no-cache, private, no-store, must-revalidate');
-        res.header('Expires', '-1');
-        res.header('Pragma', 'no-cache');
-
-        // Send success response
+        // Send success response with redirect
         res.json({
             success: true,
-            message: 'Login successful',
             redirect: '/dashboard',
-            sessionId: req.sessionID // Include session ID for debugging
+            sessionId: req.sessionID
         });
     } catch (error) {
         console.error('Login error:', error);

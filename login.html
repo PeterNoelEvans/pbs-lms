@@ -75,14 +75,14 @@
             <form id="loginFormElement">
                 <div class="form-group">
                     <label for="loginUsername">Username:</label>
-                    <input type="text" id="loginUsername" name="username" required autocomplete="username">
+                    <input type="text" id="loginUsername" name="username" required>
                 </div>
                 <div class="form-group">
                     <label for="loginPassword">Password:</label>
-                    <input type="password" id="loginPassword" name="password" required autocomplete="current-password">
+                    <input type="password" id="loginPassword" name="password" required>
                 </div>
                 <button type="submit" class="btn">Login</button>
-                <div id="loginError" class="error-message" style="display: block; margin: 10px 0; padding: 10px; background-color: #ffebee; border: 1px solid #ffcdd2;"></div>
+                <div id="loginError" class="error-message"></div>
             </form>
             <div class="toggle-forms">
                 <button onclick="toggleForms()" class="btn">Register Instead</button>
@@ -128,13 +128,6 @@
                         </optgroup>
                         <optgroup label="Grade 4/2">
                             <option value="/portfolios/P4-2/Peter/Peter.html">Peter</option>
-                            <option value="/portfolios/P4-2/Chapter/Chapter.html">Chapter</option>
-                            <option value="/portfolios/P4-2/Zeno/Zeno.html">Zeno</option>
-                            <option value="/portfolios/P4-2/Jdi/Jdi.html">Jdi</option>
-                            <option value="/portfolios/P4-2/Sky/Sky.html">Sky</option>
-                            <option value="/portfolios/P4-2/Perth/Perth.html">Perth</option>
-                            <option value="/portfolios/P4-2/Tin/Tin.html">Tin</option>
-                            <option value="/portfolios/P4-2/Poonpoon/Poonpoon.html">Poonpoon</option>
                             <option value="/portfolios/P4-2/Paul/Paul.html">Paul</option>
                             <option value="/portfolios/P4-2/Peso/Peso.html">Peso</option>
                             <option value="/portfolios/P4-2/Ounjai/Ounjai.html">Ounjai</option>
@@ -142,6 +135,8 @@
                             <option value="/portfolios/P4-2/Harber/Harber.html">Harber</option>
                             <option value="/portfolios/P4-2/Pleng/Pleng.html">Pleng</option>
                             <option value="/portfolios/P4-2/Tonmali/Tonmali.html">Tonmali</option>
+                            <option value="/portfolios/P4-2/Tin/Tin.html">Tin</option>
+                            <option value="/portfolios/P4-2/Poonpoon/Poonpoon.html">Poonpoon</option>
                         </optgroup>
                     </select>
                 </div>
@@ -171,37 +166,43 @@
             e.preventDefault();
             const formData = new FormData(e.target);
             const errorDiv = document.getElementById('loginError');
-            errorDiv.style.display = 'block';
-            errorDiv.textContent = 'Attempting to log in...';
-            
+            errorDiv.style.display = 'none';
+
             try {
-                const credentials = {
-                    username: formData.get('username'),
-                    password: formData.get('password')
-                };
-                
-                console.log('Sending login request with:', { username: credentials.username, password: '***' });
-                
                 const response = await fetch('/login', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify(credentials),
-                    credentials: 'include'
+                    body: JSON.stringify(Object.fromEntries(formData)),
+                    credentials: 'same-origin'
                 });
 
-                const data = await response.json();
-                
-                if (response.ok && data.success) {
-                    console.log('Login successful, redirecting to:', data.redirect);
-                    window.location.href = data.redirect;
+                const contentType = response.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                    const data = await response.json();
+                    if (response.ok) {
+                        if (data.redirect) {
+                            window.location.href = data.redirect;
+                        } else {
+                            window.location.href = '/dashboard';
+                        }
+                    } else {
+                        errorDiv.textContent = data.error || 'Login failed';
+                        errorDiv.style.display = 'block';
+                    }
                 } else {
-                    errorDiv.textContent = data.error || 'Login failed. Please check your credentials.';
+                    if (response.redirected) {
+                        window.location.href = response.url;
+                    } else if (!response.ok) {
+                        errorDiv.textContent = 'Login failed';
+                        errorDiv.style.display = 'block';
+                    }
                 }
             } catch (error) {
                 console.error('Login error:', error);
-                errorDiv.textContent = 'An error occurred during login. Please try again.';
+                errorDiv.textContent = 'An error occurred during login';
+                errorDiv.style.display = 'block';
             }
         });
 
@@ -209,7 +210,8 @@
             e.preventDefault();
             const formData = new FormData(e.target);
             const errorDiv = document.getElementById('registerError');
-            
+            errorDiv.style.display = 'none';
+
             try {
                 const response = await fetch('/register', {
                     method: 'POST',
@@ -217,20 +219,29 @@
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify(Object.fromEntries(formData)),
+                    credentials: 'same-origin'
                 });
-                
-                if (response.ok) {
-                    window.location.href = '/login.html';
+
+                if (response.redirected) {
+                    window.location.href = response.url;
                 } else {
                     const data = await response.json();
-                    errorDiv.textContent = data.error || 'Registration failed';
-                    errorDiv.style.display = 'block';
+                    if (!response.ok) {
+                        errorDiv.textContent = data.error || 'Registration failed';
+                        errorDiv.style.display = 'block';
+                    }
                 }
             } catch (error) {
+                console.error('Registration error:', error);
                 errorDiv.textContent = 'An error occurred during registration';
                 errorDiv.style.display = 'block';
             }
         });
+
+        // Check if we should show registration form based on URL
+        if (window.location.hash === '#register' || window.location.search.includes('register=true')) {
+            toggleForms();
+        }
     </script>
 </body>
 </html> 
