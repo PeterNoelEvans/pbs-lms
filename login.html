@@ -171,19 +171,32 @@
             errorDiv.style.display = 'none';
             
             console.log('Attempting login for:', username);
+            console.log('Request URL:', window.location.origin + '/login');
             
             try {
                 const response = await fetch('/login', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
                     },
-                    body: JSON.stringify({ username, password }),
-                    credentials: 'include'
+                    body: JSON.stringify({ 
+                        username: username, 
+                        password: password 
+                    }),
+                    credentials: 'include',
+                    mode: 'cors'
                 });
                 
                 console.log('Response status:', response.status);
                 console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const contentType = response.headers.get('content-type');
+                console.log('Content-Type:', contentType);
                 
                 const data = await response.json();
                 console.log('Response data:', data);

@@ -37,18 +37,26 @@ app.set('trust proxy', 1);
 
 // CORS configuration - MUST be before session middleware
 app.use((req, res, next) => {
-    const origin = req.headers.origin;
-    if (origin) {
-        res.header('Access-Control-Allow-Origin', origin);
-        res.header('Access-Control-Allow-Credentials', 'true');
-        res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-        res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
-        res.header('Access-Control-Expose-Headers', 'Set-Cookie');
+    console.log('\n=== CORS Debug ===');
+    console.log('Request URL:', req.url);
+    console.log('Request Method:', req.method);
+    console.log('Request Origin:', req.headers.origin);
+    console.log('Request Headers:', req.headers);
+
+    // Allow the specific origin during development
+    const origin = req.headers.origin || 'https://codinghtml-presentation.onrender.com';
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    res.header('Access-Control-Expose-Headers', 'Set-Cookie');
+    
+    // Handle preflight requests
+    if (req.method === 'OPTIONS') {
+        console.log('Handling OPTIONS preflight request');
+        return res.status(200).end();
     }
     
-    if (req.method === 'OPTIONS') {
-        return res.sendStatus(200);
-    }
     next();
 });
 
@@ -65,7 +73,8 @@ app.use(session({
     cookie: {
         secure: true,
         sameSite: 'none',
-        maxAge: 24 * 60 * 60 * 1000 // 24 hours
+        maxAge: 24 * 60 * 60 * 1000, // 24 hours
+        path: '/'
     }
 }));
 
