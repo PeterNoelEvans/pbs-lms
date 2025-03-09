@@ -762,4 +762,72 @@ app.get('/check-session', (req, res) => {
         authenticated: !!req.session?.user,
         user: req.session?.user
     });
+});
+
+// Add session test routes
+app.get('/test-session', async (req, res) => {
+    console.log('\n=== Testing Session ===');
+    console.log('Initial session state:', req.session);
+    
+    try {
+        // Test 1: Set a value
+        req.session.test = 'Session is working!';
+        req.session.timestamp = new Date().toISOString();
+        
+        // Test 2: Save explicitly
+        await new Promise((resolve, reject) => {
+            req.session.save((err) => {
+                if (err) {
+                    console.error('Session save error:', err);
+                    reject(err);
+                } else {
+                    console.log('Session saved successfully');
+                    resolve();
+                }
+            });
+        });
+
+        // Test 3: Verify Redis connection
+        const redisStatus = await redisClient.ping();
+        console.log('Redis ping response:', redisStatus);
+
+        // Test 4: Try to store and retrieve from Redis directly
+        const testKey = `test:${req.sessionID}`;
+        await redisClient.set(testKey, 'Direct Redis test');
+        const testValue = await redisClient.get(testKey);
+        
+        res.json({
+            message: 'Session tests completed',
+            sessionId: req.sessionID,
+            session: req.session,
+            redisConnection: redisStatus === 'PONG',
+            redisDirectTest: testValue === 'Direct Redis test',
+            cookies: req.headers.cookie
+        });
+    } catch (error) {
+        console.error('Session test error:', error);
+        res.status(500).json({
+            error: 'Session test failed',
+            details: error.message,
+            sessionId: req.sessionID,
+            session: req.session
+        });
+    }
+});
+
+// Add session verification route
+app.get('/verify-session', (req, res) => {
+    console.log('\n=== Verifying Session ===');
+    console.log('Session ID:', req.sessionID);
+    console.log('Session:', req.session);
+    console.log('Previous test value:', req.session.test);
+    console.log('Previous timestamp:', req.session.timestamp);
+    
+    res.json({
+        sessionExists: !!req.session,
+        sessionId: req.sessionID,
+        testValue: req.session.test,
+        timestamp: req.session.timestamp,
+        fullSession: req.session
+    });
 }); 
