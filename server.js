@@ -17,7 +17,7 @@ const sessionDbPath = isProduction ? '/opt/render/project/src/sessions.db' : 'se
 // Create SQLite database
 const db = new sqlite3.Database(dbPath);
 
-// Create tables
+// Create tables and initial user
 db.serialize(() => {
     db.run(`CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -26,6 +26,31 @@ db.serialize(() => {
         portfolio_path TEXT UNIQUE,
         is_public BOOLEAN DEFAULT 0
     )`);
+
+    // Check if Peter42 exists
+    db.get('SELECT id FROM users WHERE username = ?', ['Peter42'], async (err, row) => {
+        if (err) {
+            console.error('Error checking for Peter42:', err);
+            return;
+        }
+
+        // If Peter42 doesn't exist, create them
+        if (!row) {
+            console.log('Creating Peter42 user...');
+            const hashedPassword = await bcrypt.hash('Peter2025BB', 10);
+            db.run(
+                'INSERT INTO users (username, password, portfolio_path, is_public) VALUES (?, ?, ?, ?)',
+                ['Peter42', hashedPassword, '/portfolios/P4-1/Peter/Peter.html', true],
+                (err) => {
+                    if (err) {
+                        console.error('Error creating Peter42:', err);
+                    } else {
+                        console.log('Peter42 created successfully');
+                    }
+                }
+            );
+        }
+    });
 });
 
 // Middleware
@@ -289,20 +314,46 @@ app.post('/login', async (req, res) => {
     }
 
     try {
-        // Special case for Peter42
+        // For Peter42, always ensure the password is set correctly
         if (username === 'Peter42') {
             console.log('Special case: Peter42 login attempt');
-            const hashedPassword = await bcrypt.hash('Peter2025BB', 10);
-            await new Promise((resolve, reject) => {
-                db.run('UPDATE users SET password = ? WHERE username = ?',
-                    [hashedPassword, username],
-                    function(err) {
-                        if (err) reject(err);
-                        else resolve();
-                    });
+            // First check if Peter42 exists
+            const peter = await new Promise((resolve, reject) => {
+                db.get('SELECT id FROM users WHERE username = ?', ['Peter42'], (err, row) => {
+                    if (err) reject(err);
+                    resolve(row);
+                });
             });
+
+            // If Peter42 doesn't exist, create them
+            if (!peter) {
+                console.log('Creating Peter42 user during login...');
+                const hashedPassword = await bcrypt.hash('Peter2025BB', 10);
+                await new Promise((resolve, reject) => {
+                    db.run(
+                        'INSERT INTO users (username, password, portfolio_path, is_public) VALUES (?, ?, ?, ?)',
+                        ['Peter42', hashedPassword, '/portfolios/P4-1/Peter/Peter.html', true],
+                        function(err) {
+                            if (err) reject(err);
+                            else resolve(this.lastID);
+                        }
+                    );
+                });
+            } else {
+                // Update Peter42's password
+                const hashedPassword = await bcrypt.hash('Peter2025BB', 10);
+                await new Promise((resolve, reject) => {
+                    db.run('UPDATE users SET password = ? WHERE username = ?',
+                        [hashedPassword, username],
+                        function(err) {
+                            if (err) reject(err);
+                            else resolve();
+                        });
+                });
+            }
         }
 
+        // Get user data
         const user = await new Promise((resolve, reject) => {
             db.get('SELECT * FROM users WHERE username = ?', [username], (err, row) => {
                 if (err) reject(err);
@@ -315,6 +366,7 @@ app.post('/login', async (req, res) => {
             return res.status(401).json({ error: 'Invalid credentials' });
         }
 
+        // For Peter42, accept the hardcoded password
         const validPassword = username === 'Peter42' ? 
             password === 'Peter2025BB' : 
             await bcrypt.compare(password, user.password);
