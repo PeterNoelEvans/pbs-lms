@@ -179,30 +179,24 @@
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({ username, password }),
-                    credentials: 'include',
-                    redirect: 'follow'
+                    credentials: 'include'
                 });
                 
                 console.log('Response status:', response.status);
+                console.log('Response headers:', Object.fromEntries(response.headers.entries()));
                 
-                if (response.redirected) {
-                    console.log('Redirect detected, going to:', response.url);
-                    window.location.href = response.url;
+                const data = await response.json();
+                console.log('Response data:', data);
+                
+                if (data.success && data.redirect) {
+                    console.log('Login successful, redirecting to:', data.redirect);
+                    window.location.href = data.redirect;
                     return;
                 }
                 
-                const contentType = response.headers.get('content-type');
-                if (contentType && contentType.includes('application/json')) {
-                    const data = await response.json();
-                    console.log('Response data:', data);
-                    
-                    if (data.error) {
-                        errorDiv.textContent = data.error;
-                        errorDiv.style.display = 'block';
-                    }
-                } else {
-                    console.log('Unexpected response type');
-                    errorDiv.textContent = 'Unexpected response from server';
+                if (data.error) {
+                    console.error('Login error:', data.error);
+                    errorDiv.textContent = data.error;
                     errorDiv.style.display = 'block';
                 }
             } catch (error) {

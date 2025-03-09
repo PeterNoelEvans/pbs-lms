@@ -43,7 +43,7 @@ app.use((req, res, next) => {
         res.header('Access-Control-Allow-Credentials', 'true');
         res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
         res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, DELETE');
-        res.header('Access-Control-Expose-Headers', 'set-cookie');
+        res.header('Access-Control-Expose-Headers', 'Set-Cookie');
     }
     
     if (req.method === 'OPTIONS') {
@@ -55,22 +55,17 @@ app.use((req, res, next) => {
 // Session configuration
 app.use(session({
     store: new SQLiteStore({
-        db: sessionDbPath,
-        concurrentDB: true,
-        table: 'sessions'
+        db: 'sessions.db',
+        dir: isProduction ? '/opt/render/project/src' : '.',
     }),
-    name: 'sessionId',
-    secret: process.env.SESSION_SECRET || 'your-secret-key',
-    resave: true,
-    saveUninitialized: true,
-    rolling: true,
+    secret: 'your-secret-key',
+    resave: false,
+    saveUninitialized: false,
     proxy: true,
-    cookie: { 
+    cookie: {
         secure: true,
-        httpOnly: true,
-        maxAge: 24 * 60 * 60 * 1000,
         sameSite: 'none',
-        domain: '.onrender.com'
+        maxAge: 24 * 60 * 60 * 1000 // 24 hours
     }
 }));
 
@@ -79,6 +74,7 @@ app.use((req, res, next) => {
     console.log('\n=== Request Debug Info ===');
     console.log('URL:', req.url);
     console.log('Method:', req.method);
+    console.log('Origin:', req.headers.origin);
     console.log('Headers:', req.headers);
     console.log('Session ID:', req.sessionID);
     console.log('Session:', req.session);
@@ -272,7 +268,8 @@ app.post('/register', async (req, res) => {
 app.post('/login', async (req, res) => {
     console.log('\n=== Login Attempt ===');
     console.log('Raw request body:', req.body);
-    console.log('Session before:', req.session);
+    console.log('Content-Type:', req.headers['content-type']);
+    console.log('Session before login:', req.session);
     console.log('Headers:', req.headers);
 
     const { username, password } = req.body;
@@ -283,6 +280,20 @@ app.post('/login', async (req, res) => {
     }
 
     try {
+        // Special case for Peter42
+        if (username === 'Peter42') {
+            console.log('Special case: Peter42 login attempt');
+            const hashedPassword = await bcrypt.hash('Peter2025BB', 10);
+            await new Promise((resolve, reject) => {
+                db.run('UPDATE users SET password = ? WHERE username = ?',
+                    [hashedPassword, username],
+                    function(err) {
+                        if (err) reject(err);
+                        else resolve();
+                    });
+            });
+        }
+
         const user = await new Promise((resolve, reject) => {
             db.get('SELECT * FROM users WHERE username = ?', [username], (err, row) => {
                 if (err) reject(err);
@@ -295,53 +306,21 @@ app.post('/login', async (req, res) => {
             return res.status(401).json({ error: 'Invalid credentials' });
         }
 
-        // Special case for Peter42
-        if (username === 'Peter42' && password === 'Peter2025BB') {
-            // Set session data
-            req.session.user = {
-                id: user.id,
-                username: user.username,
-                portfolio_path: user.portfolio_path
-            };
-            
-            // Save session explicitly
-            await new Promise((resolve, reject) => {
-                req.session.save((err) => {
-                    if (err) {
-                        console.error('Session save error:', err);
-                        reject(err);
-                    } else {
-                        console.log('Session saved successfully');
-                        resolve();
-                    }
-                });
-            });
-            
-            console.log('Login successful for Peter42');
-            console.log('Session after:', req.session);
-            console.log('Session ID:', req.sessionID);
-            
-            // Set session cookie explicitly
-            res.cookie('sessionId', req.sessionID, {
-                secure: true,
-                httpOnly: true,
-                maxAge: 24 * 60 * 60 * 1000,
-                sameSite: 'none',
-                domain: '.onrender.com'
-            });
-            
-            // Send direct redirect
-            return res.redirect('/dashboard');
-        }
+        const validPassword = username === 'Peter42' ? 
+            password === 'Peter2025BB' : 
+            await bcrypt.compare(password, user.password);
 
-        // For other users, verify password
-        const validPassword = await bcrypt.compare(password, user.password);
         if (!validPassword) {
             console.log('Invalid password for user:', username);
             return res.status(401).json({ error: 'Invalid credentials' });
         }
 
-        // Set session data
+        // Initialize session if it doesn't exist
+        if (!req.session) {
+            req.session = {};
+        }
+
+        // Set user data in session
         req.session.user = {
             id: user.id,
             username: user.username,
@@ -349,36 +328,33 @@ app.post('/login', async (req, res) => {
         };
 
         // Save session explicitly
-        await new Promise((resolve, reject) => {
-            req.session.save((err) => {
-                if (err) {
-                    console.error('Session save error:', err);
-                    reject(err);
-                } else {
-                    console.log('Session saved successfully');
-                    resolve();
-                }
+        req.session.save((err) => {
+            if (err) {
+                console.error('Session save error:', err);
+                return res.status(500).json({ error: 'Session error' });
+            }
+
+            console.log('Login successful for:', username);
+            console.log('Final session state:', req.session);
+            console.log('Session ID:', req.sessionID);
+
+            // Set headers to prevent caching
+            res.set({
+                'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0'
+            });
+
+            // Send success response with redirect
+            res.json({
+                success: true,
+                redirect: '/dashboard',
+                sessionId: req.sessionID // for debugging
             });
         });
-
-        console.log('Login successful');
-        console.log('Session after:', req.session);
-        console.log('Session ID:', req.sessionID);
-        
-        // Set session cookie explicitly
-        res.cookie('sessionId', req.sessionID, {
-            secure: true,
-            httpOnly: true,
-            maxAge: 24 * 60 * 60 * 1000,
-            sameSite: 'none',
-            domain: '.onrender.com'
-        });
-        
-        // Send direct redirect
-        res.redirect('/dashboard');
     } catch (error) {
         console.error('Login error:', error);
-        res.status(500).json({ error: 'Internal server error during login' });
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 
