@@ -41,15 +41,24 @@ let redisStore;
 async function initializeApp() {
     console.log('Initializing application...');
     try {
-        // Initialize Redis client
+        // Initialize Redis client with better error handling
         console.log('Connecting to Redis...');
+        const redisUrl = process.env.REDIS_URL || 'redis://red-cv6hb9ij1k6c73e55rng:6379';
+        console.log('Using Redis URL:', redisUrl.replace(/:[^:]*@/, ':***@')); // Hide password in logs
+        
         redisClient = createClient({
-            url: 'redis://red-cv6hb9ij1k6c73e55rng:6379',
+            url: redisUrl,
             socket: {
                 reconnectStrategy: (retries) => {
                     console.log(`Redis reconnection attempt ${retries}`);
-                    return Math.min(retries * 100, 3000);
-                }
+                    if (retries > 10) {
+                        console.error('Max Redis reconnection attempts reached');
+                        return new Error('Max Redis reconnection attempts reached');
+                    }
+                    return Math.min(retries * 1000, 3000);
+                },
+                connectTimeout: 10000, // 10 seconds
+                keepAlive: 5000, // Send keepalive every 5 seconds
             }
         });
 
@@ -57,14 +66,36 @@ async function initializeApp() {
             console.error('Redis Client Error:', err);
         });
 
+        redisClient.on('connect', () => {
+            console.log('Redis client connecting...');
+        });
+
+        redisClient.on('ready', () => {
+            console.log('Redis client ready');
+        });
+
+        redisClient.on('end', () => {
+            console.log('Redis client connection ended');
+        });
+
         await redisClient.connect();
         console.log('Redis connected successfully');
 
-        // Create Redis store
+        // Test Redis connection immediately
+        try {
+            const pingResult = await redisClient.ping();
+            console.log('Redis PING result:', pingResult);
+        } catch (err) {
+            console.error('Redis PING failed:', err);
+            throw err;
+        }
+
+        // Create Redis store with error handling
         redisStore = new RedisStore({
             client: redisClient,
             prefix: 'sess:',
-            ttl: 24 * 60 * 60 // Session TTL in seconds (24 hours)
+            ttl: 24 * 60 * 60, // Session TTL in seconds (24 hours)
+            disableTouch: false
         });
         console.log('Redis store created');
 
@@ -299,6 +330,122 @@ async function initializeApp() {
             });
         });
 
+        // Admin routes
+        app.get('/admin/users', requireAdmin, (req, res) => {
+            console.log('\n=== Viewing All Users ===');
+            db.all('SELECT id, username, portfolio_path, is_public FROM users', [], (err, rows) => {
+                if (err) {
+                    console.error('Database error when viewing users:', err);
+                    res.status(500).json({ error: 'Database error' });
+                    return;
+                }
+                console.log('Users in database:', rows.length);
+                res.json(rows);
+            });
+        });
+
+        app.delete('/admin/users/:id', requireAdmin, (req, res) => {
+            const userId = req.params.id;
+            console.log('\n=== Delete User Attempt ===');
+            console.log('User ID:', userId);
+            console.log('IP:', req.ip);
+            
+            db.get('SELECT username FROM users WHERE id = ?', [userId], (err, user) => {
+                if (err) {
+                    console.error('Error getting user details:', err);
+                    res.status(500).json({ error: 'Database error' });
+                    return;
+                }
+                
+                if (!user) {
+                    console.log('User not found for deletion');
+                    res.status(404).json({ error: 'User not found' });
+                    return;
+                }
+
+                console.log('Deleting user:', user.username);
+                
+                db.run('DELETE FROM users WHERE id = ?', [userId], (err) => {
+                    if (err) {
+                        console.error('Failed to delete user:', err);
+                        res.status(500).json({ error: 'Failed to delete user' });
+                        return;
+                    }
+                    console.log('User successfully deleted');
+                    res.json({ success: true });
+                });
+            });
+        });
+
+        app.post('/admin/reset-password', requireAdmin, async (req, res) => {
+            console.log('Password reset attempt for:', req.body.username);
+            
+            if (!req.body.username || !req.body.password) {
+                return res.status(400).json({ error: 'Username and password are required' });
+            }
+
+            const { username, password } = req.body;
+            
+            try {
+                const user = await new Promise((resolve, reject) => {
+                    db.get('SELECT id FROM users WHERE username = ?', [username], (err, row) => {
+                        if (err) reject(err);
+                        resolve(row);
+                    });
+                });
+
+                if (!user) {
+                    console.log('User not found:', username);
+                    return res.status(404).json({ error: 'User not found' });
+                }
+
+                const hashedPassword = await bcrypt.hash(password, 10);
+                
+                await new Promise((resolve, reject) => {
+                    db.run('UPDATE users SET password = ? WHERE username = ?',
+                        [hashedPassword, username],
+                        function(err) {
+                            if (err) reject(err);
+                            else resolve(this);
+                        });
+                });
+
+                console.log('Password reset successful for:', username);
+                res.json({ success: true, message: 'Password reset successful' });
+            } catch (error) {
+                console.error('Password reset error:', error);
+                res.status(500).json({ error: 'Internal server error during password reset' });
+            }
+        });
+
+        // Health check endpoint
+        app.get('/health', async (req, res) => {
+            console.log('Health check request received');
+            
+            let redisStatus = 'unknown';
+            try {
+                await redisClient.ping();
+                redisStatus = 'connected';
+            } catch (error) {
+                console.error('Redis health check failed:', error);
+                redisStatus = 'disconnected';
+            }
+            
+            res.json({
+                status: 'ok',
+                timestamp: new Date().toISOString(),
+                environment: isProduction ? 'production' : 'development',
+                redis: {
+                    status: redisStatus,
+                    connected: redisClient.isReady
+                },
+                session: {
+                    id: req.sessionID,
+                    cookie: req.session?.cookie
+                }
+            });
+        });
+
         // Start server last, after all routes are defined
         app.listen(port, () => {
             console.log(`Server running on port ${port}`);
@@ -348,129 +495,6 @@ const requireAdmin = (req, res, next) => {
         res.status(403).json({ error: 'Unauthorized' });
     }
 };
-
-// Admin route to view users with logging
-app.get('/admin/users', requireAdmin, (req, res) => {
-    console.log('\n=== Viewing All Users ===');
-    db.all('SELECT id, username, portfolio_path, is_public FROM users', [], (err, rows) => {
-        if (err) {
-            console.error('Database error when viewing users:', err);
-            res.status(500).json({ error: 'Database error' });
-            return;
-        }
-        console.log('Users in database:', rows.length);
-        res.json(rows);
-    });
-});
-
-// Admin route to delete user with enhanced security
-app.delete('/admin/users/:id', requireAdmin, (req, res) => {
-    const userId = req.params.id;
-    console.log('\n=== Delete User Attempt ===');
-    console.log('User ID:', userId);
-    console.log('IP:', req.ip);
-    
-    // First get the user details for logging
-    db.get('SELECT username FROM users WHERE id = ?', [userId], (err, user) => {
-        if (err) {
-            console.error('Error getting user details:', err);
-            res.status(500).json({ error: 'Database error' });
-            return;
-        }
-        
-        if (!user) {
-            console.log('User not found for deletion');
-            res.status(404).json({ error: 'User not found' });
-            return;
-        }
-
-        console.log('Deleting user:', user.username);
-        
-        db.run('DELETE FROM users WHERE id = ?', [userId], (err) => {
-            if (err) {
-                console.error('Failed to delete user:', err);
-                res.status(500).json({ error: 'Failed to delete user' });
-                return;
-            }
-            console.log('User successfully deleted');
-            res.json({ success: true });
-        });
-    });
-});
-
-// Admin route to reset user password
-app.post('/admin/reset-password', requireAdmin, async (req, res) => {
-    console.log('Password reset attempt for:', req.body.username);
-    
-    if (!req.body.username || !req.body.password) {
-        return res.status(400).json({ error: 'Username and password are required' });
-    }
-
-    const { username, password } = req.body;
-    
-    try {
-        // First check if user exists
-        const user = await new Promise((resolve, reject) => {
-            db.get('SELECT id FROM users WHERE username = ?', [username], (err, row) => {
-                if (err) reject(err);
-                resolve(row);
-            });
-        });
-
-        if (!user) {
-            console.log('User not found:', username);
-            return res.status(404).json({ error: 'User not found' });
-        }
-
-        // Hash the new password
-        const hashedPassword = await bcrypt.hash(password, 10);
-        
-        // Update the password
-        await new Promise((resolve, reject) => {
-            db.run('UPDATE users SET password = ? WHERE username = ?',
-                [hashedPassword, username],
-                function(err) {
-                    if (err) reject(err);
-                    else resolve(this);
-                });
-        });
-
-        console.log('Password reset successful for:', username);
-        res.json({ success: true, message: 'Password reset successful' });
-    } catch (error) {
-        console.error('Password reset error:', error);
-        res.status(500).json({ error: 'Internal server error during password reset' });
-    }
-});
-
-// Health check endpoint
-app.get('/health', async (req, res) => {
-    console.log('Health check request received');
-    
-    let redisStatus = 'unknown';
-    try {
-        // Try to ping Redis
-        await redisClient.ping();
-        redisStatus = 'connected';
-    } catch (error) {
-        console.error('Redis health check failed:', error);
-        redisStatus = 'disconnected';
-    }
-    
-    res.json({
-        status: 'ok',
-        timestamp: new Date().toISOString(),
-        environment: isProduction ? 'production' : 'development',
-        redis: {
-            status: redisStatus,
-            connected: redisClient.isReady
-        },
-        session: {
-            id: req.sessionID,
-            cookie: req.session?.cookie
-        }
-    });
-});
 
 // Routes
 app.post('/register', async (req, res) => {
