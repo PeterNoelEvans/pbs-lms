@@ -90,13 +90,13 @@ app.use((req, res, next) => {
     console.log('Request Origin:', req.headers.origin);
     console.log('Request Headers:', req.headers);
 
-    // Allow the specific origin during development
+    // Allow the specific origin
     const origin = req.headers.origin || 'https://codinghtml-presentation.onrender.com';
     res.header('Access-Control-Allow-Origin', origin);
     res.header('Access-Control-Allow-Credentials', 'true');
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-    res.header('Access-Control-Expose-Headers', 'Set-Cookie');
+    res.header('Access-Control-Expose-Headers', '*');
     
     // Handle preflight requests
     if (req.method === 'OPTIONS') {
@@ -123,6 +123,7 @@ app.use(session({
         secure: true,
         httpOnly: true,
         sameSite: 'none',
+        domain: '.onrender.com',
         maxAge: 24 * 60 * 60 * 1000 // 24 hours
     }
 }));
