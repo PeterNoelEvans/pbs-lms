@@ -130,7 +130,106 @@ async function initializeApp() {
         app.use(express.static(__dirname));
         app.use(express.static(path.join(__dirname, 'public')));
 
-        // Add Redis test endpoint
+        // Authentication middleware
+        const requireAuth = (req, res, next) => {
+            console.log('\n=== Auth Check ===');
+            console.log('Session:', req.session);
+            console.log('User:', req.session?.user);
+            
+            if (!req.session || !req.session.user) {
+                console.log('No valid session, redirecting to login');
+                return res.redirect('/login.html');
+            }
+            next();
+        };
+
+        // Define all routes
+        app.post('/login', async (req, res) => {
+            console.log('\n=== Login Attempt ===');
+            console.log('Raw request body:', req.body);
+            console.log('Headers:', req.headers);
+            console.log('Session before login:', req.session);
+
+            const { username, password } = req.body;
+            
+            if (!username || !password) {
+                console.log('Missing credentials');
+                return res.status(400).json({ error: 'Username and password are required' });
+            }
+
+            try {
+                // Get user data
+                const user = await new Promise((resolve, reject) => {
+                    db.get('SELECT * FROM users WHERE username = ?', [username], (err, row) => {
+                        if (err) reject(err);
+                        resolve(row);
+                    });
+                });
+
+                if (!user) {
+                    console.log('User not found:', username);
+                    return res.status(401).json({ error: 'Invalid credentials' });
+                }
+
+                // For Peter42, accept the hardcoded password
+                const validPassword = username === 'Peter42' ? 
+                    password === 'Peter2025BB' : 
+                    await bcrypt.compare(password, user.password);
+
+                if (!validPassword) {
+                    console.log('Invalid password for user:', username);
+                    return res.status(401).json({ error: 'Invalid credentials' });
+                }
+
+                // Set user data in session
+                req.session.user = {
+                    id: user.id,
+                    username: user.username,
+                    portfolio_path: user.portfolio_path
+                };
+
+                // Save session explicitly and wait for it
+                await new Promise((resolve, reject) => {
+                    req.session.save((err) => {
+                        if (err) {
+                            console.error('Session save error:', err);
+                            reject(err);
+                        } else {
+                            console.log('Session saved successfully');
+                            console.log('Final session state:', req.session);
+                            console.log('Session ID:', req.sessionID);
+                            resolve();
+                        }
+                    });
+                });
+
+                // Send success response with redirect
+                res.json({
+                    success: true,
+                    redirect: '/dashboard'
+                });
+            } catch (error) {
+                console.error('Login error:', error);
+                res.status(500).json({ error: 'Internal server error' });
+            }
+        });
+
+        app.get('/dashboard', (req, res) => {
+            console.log('\n=== Dashboard Access Attempt ===');
+            console.log('Session:', req.session);
+            console.log('User:', req.session?.user);
+            console.log('Cookies:', req.headers.cookie);
+            
+            if (!req.session || !req.session.user) {
+                console.log('No valid session, redirecting to login');
+                return res.redirect('/login.html');
+            }
+            
+            console.log('Valid session found, serving dashboard');
+            res.sendFile(path.join(__dirname, 'dashboard.html'));
+        });
+
+        // Redis test endpoint
         app.get('/test-redis', async (req, res) => {
             console.log('\n=== Testing Redis Connection ===');
             try {
@@ -166,7 +265,7 @@ async function initializeApp() {
             }
         });
 
-        // Add other routes
+        // Additional routes
         app.get('/check-auth', (req, res) => {
             if (req.session.user) {
                 res.json({
@@ -231,19 +330,6 @@ app.use((req, res, next) => {
     console.log('=========================\n');
     next();
 });
-
-// Authentication middleware
-const requireAuth = (req, res, next) => {
-    console.log('\n=== Auth Check ===');
-    console.log('Session:', req.session);
-    console.log('User:', req.session?.user);
-    
-    if (!req.session || !req.session.user) {
-        console.log('No valid session, redirecting to login');
-        return res.redirect('/login.html');
-    }
-    next();
-};
 
 // Admin middleware with enhanced logging
 const requireAdmin = (req, res, next) => {
@@ -470,77 +556,6 @@ app.post('/register', async (req, res) => {
     }
 });
 
-// Login route
-app.post('/login', async (req, res) => {
-    console.log('\n=== Login Attempt ===');
-    console.log('Raw request body:', req.body);
-    console.log('Headers:', req.headers);
-    console.log('Session before login:', req.session);
-
-    const { username, password } = req.body;
-    
-    if (!username || !password) {
-        console.log('Missing credentials');
-        return res.status(400).json({ error: 'Username and password are required' });
-    }
-
-    try {
-        // Get user data
-        const user = await new Promise((resolve, reject) => {
-            db.get('SELECT * FROM users WHERE username = ?', [username], (err, row) => {
-                if (err) reject(err);
-                resolve(row);
-            });
-        });
-
-        if (!user) {
-            console.log('User not found:', username);
-            return res.status(401).json({ error: 'Invalid credentials' });
-        }
-
-        // For Peter42, accept the hardcoded password
-        const validPassword = username === 'Peter42' ? 
-            password === 'Peter2025BB' : 
-            await bcrypt.compare(password, user.password);
-
-        if (!validPassword) {
-            console.log('Invalid password for user:', username);
-            return res.status(401).json({ error: 'Invalid credentials' });
-        }
-
-        // Set user data in session
-        req.session.user = {
-            id: user.id,
-            username: user.username,
-            portfolio_path: user.portfolio_path
-        };
-
-        // Save session explicitly and wait for it
-        await new Promise((resolve, reject) => {
-            req.session.save((err) => {
-                if (err) {
-                    console.error('Session save error:', err);
-                    reject(err);
-                } else {
-                    console.log('Session saved successfully');
-                    console.log('Final session state:', req.session);
-                    console.log('Session ID:', req.sessionID);
-                    resolve();
-                }
-            });
-        });
-
-        // Send success response with redirect
-        res.json({
-            success: true,
-            redirect: '/dashboard'
-        });
-    } catch (error) {
-        console.error('Login error:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
-
 app.post('/toggle-privacy', requireAuth, (req, res) => {
     db.run('UPDATE users SET is_public = NOT is_public WHERE id = ?',
         [req.session.user.id],
@@ -626,22 +641,6 @@ app.get('/check-access/*', (req, res) => {
 // Serve the main pages
 app.get(['/', '/index.html'], (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
-});
-
-// Protected dashboard route
-app.get('/dashboard', (req, res) => {
-    console.log('\n=== Dashboard Access Attempt ===');
-    console.log('Session:', req.session);
-    console.log('User:', req.session?.user);
-    console.log('Cookies:', req.headers.cookie);
-    
-    if (!req.session || !req.session.user) {
-        console.log('No valid session, redirecting to login');
-        return res.redirect('/login.html');
-    }
-    
-    console.log('Valid session found, serving dashboard');
-    res.sendFile(path.join(__dirname, 'dashboard.html'));
 });
 
 // Protected portfolio access
