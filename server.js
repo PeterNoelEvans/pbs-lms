@@ -510,22 +510,25 @@ app.post('/login', async (req, res) => {
             portfolio_path: user.portfolio_path
         };
 
-        // Save session explicitly
-        req.session.save((err) => {
-            if (err) {
-                console.error('Session save error:', err);
-                return res.status(500).json({ error: 'Session error' });
-            }
-
-            console.log('Login successful for:', username);
-            console.log('Final session state:', req.session);
-            console.log('Session ID:', req.sessionID);
-
-            // Send success response with redirect
-            res.json({
-                success: true,
-                redirect: '/dashboard'
+        // Save session explicitly and wait for it
+        await new Promise((resolve, reject) => {
+            req.session.save((err) => {
+                if (err) {
+                    console.error('Session save error:', err);
+                    reject(err);
+                } else {
+                    console.log('Session saved successfully');
+                    console.log('Final session state:', req.session);
+                    console.log('Session ID:', req.sessionID);
+                    resolve();
+                }
             });
+        });
+
+        // Send success response with redirect
+        res.json({
+            success: true,
+            redirect: '/dashboard'
         });
     } catch (error) {
         console.error('Login error:', error);
@@ -621,9 +624,18 @@ app.get(['/', '/index.html'], (req, res) => {
 });
 
 // Protected dashboard route
-app.get('/dashboard', requireAuth, (req, res) => {
-    console.log('\n=== Dashboard Access ===');
-    console.log('User:', req.session.user);
+app.get('/dashboard', (req, res) => {
+    console.log('\n=== Dashboard Access Attempt ===');
+    console.log('Session:', req.session);
+    console.log('User:', req.session?.user);
+    console.log('Cookies:', req.headers.cookie);
+    
+    if (!req.session || !req.session.user) {
+        console.log('No valid session, redirecting to login');
+        return res.redirect('/login.html');
+    }
+    
+    console.log('Valid session found, serving dashboard');
     res.sendFile(path.join(__dirname, 'dashboard.html'));
 });
 
