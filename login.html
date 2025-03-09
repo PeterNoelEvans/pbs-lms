@@ -60,6 +60,7 @@
             width: auto;
             margin: 0 10px;
         }
+        .error { color: red; display: none; }
     </style>
 </head>
 <body>
@@ -82,7 +83,7 @@
                     <input type="password" id="loginPassword" name="password" required autocomplete="current-password">
                 </div>
                 <button type="submit" class="btn">Login</button>
-                <div id="loginError" class="error-message"></div>
+                <div id="loginError" class="error-message error"></div>
             </form>
             <div class="toggle-forms">
                 <button onclick="toggleForms()" class="btn">Register Instead</button>

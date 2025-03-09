@@ -11,14 +11,26 @@ const port = process.env.PORT || 10000;
 const isProduction = process.env.NODE_ENV === 'production';
 
 // Set database paths based on environment
-const dbPath = isProduction ? '/opt/render/project/src/users.db' : 'users.db';
-const sessionDbPath = isProduction ? '/opt/render/project/src/sessions.db' : 'sessions.db';
+const dbPath = isProduction ? '/opt/render/project/src/data/users.db' : 'users.db';
+const sessionDbPath = isProduction ? '/opt/render/project/src/data/sessions.db' : 'sessions.db';
+
+// Create data directory in production
+if (isProduction) {
+    const fs = require('fs');
+    const dataDir = '/opt/render/project/src/data';
+    if (!fs.existsSync(dataDir)) {
+        console.log('Creating data directory...');
+        fs.mkdirSync(dataDir, { recursive: true });
+    }
+}
 
 // Create SQLite database
 const db = new sqlite3.Database(dbPath);
 
 // Create tables and initial user
 db.serialize(() => {
+    console.log('Initializing database at:', dbPath);
+    
     db.run(`CREATE TABLE IF NOT EXISTS users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT UNIQUE,
@@ -37,18 +49,28 @@ db.serialize(() => {
         // If Peter42 doesn't exist, create them
         if (!row) {
             console.log('Creating Peter42 user...');
-            const hashedPassword = await bcrypt.hash('Peter2025BB', 10);
-            db.run(
-                'INSERT INTO users (username, password, portfolio_path, is_public) VALUES (?, ?, ?, ?)',
-                ['Peter42', hashedPassword, '/portfolios/P4-1/Peter/Peter.html', true],
-                (err) => {
-                    if (err) {
-                        console.error('Error creating Peter42:', err);
-                    } else {
-                        console.log('Peter42 created successfully');
-                    }
-                }
-            );
+            try {
+                const hashedPassword = await bcrypt.hash('Peter2025BB', 10);
+                await new Promise((resolve, reject) => {
+                    db.run(
+                        'INSERT INTO users (username, password, portfolio_path, is_public) VALUES (?, ?, ?, ?)',
+                        ['Peter42', hashedPassword, '/portfolios/P4-1/Peter/Peter.html', true],
+                        function(err) {
+                            if (err) {
+                                console.error('Error creating Peter42:', err);
+                                reject(err);
+                            } else {
+                                console.log('Peter42 created successfully with ID:', this.lastID);
+                                resolve(this.lastID);
+                            }
+                        }
+                    );
+                });
+            } catch (error) {
+                console.error('Failed to create Peter42:', error);
+            }
+        } else {
+            console.log('Peter42 already exists with ID:', row.id);
         }
     });
 });
@@ -88,18 +110,20 @@ app.use((req, res, next) => {
 // Session configuration
 app.use(session({
     store: new SQLiteStore({
-        db: 'sessions.db',
-        dir: isProduction ? '/opt/render/project/src' : '.',
+        db: sessionDbPath,
+        dir: path.dirname(sessionDbPath),
+        concurrentDB: true
     }),
+    name: 'connect.sid',
     secret: 'your-secret-key',
-    resave: false,
-    saveUninitialized: false,
+    resave: true,
+    saveUninitialized: true,
     proxy: true,
     cookie: {
         secure: true,
+        httpOnly: true,
         sameSite: 'none',
-        maxAge: 24 * 60 * 60 * 1000, // 24 hours
-        path: '/'
+        maxAge: 24 * 60 * 60 * 1000 // 24 hours
     }
 }));
 
@@ -282,9 +306,19 @@ app.post('/register', async (req, res) => {
     }
 
     try {
+        // Ensure database exists
+        if (isProduction) {
+            const fs = require('fs');
+            const dataDir = '/opt/render/project/src/data';
+            if (!fs.existsSync(dataDir)) {
+                console.log('Creating data directory...');
+                fs.mkdirSync(dataDir, { recursive: true });
+            }
+        }
+
         // Check if user already exists
         const existingUser = await new Promise((resolve, reject) => {
-            db.get('SELECT id FROM users WHERE username = ? OR portfolio_path = ?', 
+            db.get('SELECT id, username, portfolio_path FROM users WHERE username = ? OR portfolio_path = ?', 
                 [username, portfolio_path], 
                 (err, row) => {
                     if (err) reject(err);
@@ -293,10 +327,11 @@ app.post('/register', async (req, res) => {
         });
 
         if (existingUser) {
-            console.log('User or portfolio path already exists');
-            return res.status(400).json({ 
-                error: 'Username or portfolio path already exists' 
-            });
+            console.log('User or portfolio path already exists:', existingUser);
+            const error = existingUser.username === username ? 
+                'Username already exists' : 
+                'Portfolio path already exists';
+            return res.status(400).json({ error });
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
@@ -306,8 +341,13 @@ app.post('/register', async (req, res) => {
             db.run('INSERT INTO users (username, password, portfolio_path) VALUES (?, ?, ?)',
                 [username, hashedPassword, portfolio_path],
                 function(err) {
-                    if (err) reject(err);
-                    else resolve(this.lastID);
+                    if (err) {
+                        console.error('Database error during insert:', err);
+                        reject(err);
+                    } else {
+                        console.log('User inserted with ID:', this.lastID);
+                        resolve(this.lastID);
+                    }
                 });
         });
 
@@ -324,20 +364,21 @@ app.post('/register', async (req, res) => {
         // Send success response
         res.json({ 
             success: true, 
-            message: 'Registration successful' 
+            message: 'Registration successful',
+            redirect: '/login.html'
         });
     } catch (error) {
         console.error('Registration error:', error);
-        res.status(500).json({ error: 'Error creating user' });
+        res.status(500).json({ error: 'Error creating user. Please try again.' });
     }
 });
 
+// Login route
 app.post('/login', async (req, res) => {
     console.log('\n=== Login Attempt ===');
     console.log('Raw request body:', req.body);
-    console.log('Content-Type:', req.headers['content-type']);
-    console.log('Session before login:', req.session);
     console.log('Headers:', req.headers);
+    console.log('Session before login:', req.session);
 
     const { username, password } = req.body;
     
@@ -347,45 +388,6 @@ app.post('/login', async (req, res) => {
     }
 
     try {
-        // For Peter42, always ensure the password is set correctly
-        if (username === 'Peter42') {
-            console.log('Special case: Peter42 login attempt');
-            // First check if Peter42 exists
-            const peter = await new Promise((resolve, reject) => {
-                db.get('SELECT id FROM users WHERE username = ?', ['Peter42'], (err, row) => {
-                    if (err) reject(err);
-                    resolve(row);
-                });
-            });
-
-            // If Peter42 doesn't exist, create them
-            if (!peter) {
-                console.log('Creating Peter42 user during login...');
-                const hashedPassword = await bcrypt.hash('Peter2025BB', 10);
-                await new Promise((resolve, reject) => {
-                    db.run(
-                        'INSERT INTO users (username, password, portfolio_path, is_public) VALUES (?, ?, ?, ?)',
-                        ['Peter42', hashedPassword, '/portfolios/P4-1/Peter/Peter.html', true],
-                        function(err) {
-                            if (err) reject(err);
-                            else resolve(this.lastID);
-                        }
-                    );
-                });
-            } else {
-                // Update Peter42's password
-                const hashedPassword = await bcrypt.hash('Peter2025BB', 10);
-                await new Promise((resolve, reject) => {
-                    db.run('UPDATE users SET password = ? WHERE username = ?',
-                        [hashedPassword, username],
-                        function(err) {
-                            if (err) reject(err);
-                            else resolve();
-                        });
-                });
-            }
-        }
-
         // Get user data
         const user = await new Promise((resolve, reject) => {
             db.get('SELECT * FROM users WHERE username = ?', [username], (err, row) => {
@@ -409,11 +411,6 @@ app.post('/login', async (req, res) => {
             return res.status(401).json({ error: 'Invalid credentials' });
         }
 
-        // Initialize session if it doesn't exist
-        if (!req.session) {
-            req.session = {};
-        }
-
         // Set user data in session
         req.session.user = {
             id: user.id,
@@ -432,18 +429,10 @@ app.post('/login', async (req, res) => {
             console.log('Final session state:', req.session);
             console.log('Session ID:', req.sessionID);
 
-            // Set headers to prevent caching
-            res.set({
-                'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-                'Pragma': 'no-cache',
-                'Expires': '0'
-            });
-
             // Send success response with redirect
             res.json({
                 success: true,
-                redirect: '/dashboard',
-                sessionId: req.sessionID // for debugging
+                redirect: '/dashboard'
             });
         });
     } catch (error) {
@@ -653,6 +642,19 @@ app.use((req, res, next) => {
     console.log('User in session:', req.session?.user);
     console.log('Cookies:', req.headers.cookie);
     next();
+});
+
+// Add session check endpoint
+app.get('/check-session', (req, res) => {
+    console.log('Session check:', {
+        sessionID: req.sessionID,
+        session: req.session,
+        user: req.session?.user
+    });
+    res.json({
+        authenticated: !!req.session?.user,
+        user: req.session?.user
+    });
 });
 
 app.listen(port, () => {
