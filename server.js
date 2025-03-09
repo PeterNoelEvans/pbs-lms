@@ -151,16 +151,21 @@ app.use((req, res, next) => {
     next();
 });
 
-// Serve static files from the current directory
+// Serve static files from the current directory and public directory
 app.use(express.static(__dirname));
+app.use(express.static(path.join(__dirname, 'public')));
 
 // Authentication middleware
 const requireAuth = (req, res, next) => {
-    if (req.session.user) {
-        next();
-    } else {
-        res.redirect('/login.html');
+    console.log('\n=== Auth Check ===');
+    console.log('Session:', req.session);
+    console.log('User:', req.session?.user);
+    
+    if (!req.session || !req.session.user) {
+        console.log('No valid session, redirecting to login');
+        return res.redirect('/login.html');
     }
+    next();
 };
 
 // Admin middleware with enhanced logging
@@ -528,7 +533,10 @@ app.get(['/', '/index.html'], (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
+// Protected dashboard route
 app.get('/dashboard', requireAuth, (req, res) => {
+    console.log('\n=== Dashboard Access ===');
+    console.log('User:', req.session.user);
     res.sendFile(path.join(__dirname, 'dashboard.html'));
 });
 
