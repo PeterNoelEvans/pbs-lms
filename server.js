@@ -1,7 +1,8 @@
 const express = require('express');
 const path = require('path');
 const session = require('express-session');
-const SQLiteStore = require('connect-sqlite3')(session);
+const RedisStore = require('connect-redis').default;
+const { createClient } = require('redis');
 const bcrypt = require('bcryptjs');
 const sqlite3 = require('sqlite3').verbose();
 const app = express();
@@ -10,9 +11,8 @@ const app = express();
 const port = process.env.PORT || 10000;
 const isProduction = process.env.NODE_ENV === 'production';
 
-// Set database paths based on environment
+// Set database path based on environment
 const dbPath = isProduction ? '/opt/render/project/src/data/users.db' : 'users.db';
-const sessionDbPath = isProduction ? '/opt/render/project/src/data/sessions.db' : 'sessions.db';
 
 // Create data directory in production
 if (isProduction) {
@@ -23,6 +23,58 @@ if (isProduction) {
         fs.mkdirSync(dataDir, { recursive: true });
     }
 }
+
+// Initialize Redis client
+let redisClient;
+let redisStore;
+
+if (isProduction) {
+    console.log('Initializing Redis client in production mode...');
+    redisClient = createClient({
+        url: process.env.REDIS_URL,
+        socket: {
+            reconnectStrategy: (retries) => {
+                console.log(`Redis reconnection attempt ${retries}`);
+                return Math.min(retries * 100, 3000);
+            }
+        }
+    });
+} else {
+    console.log('Initializing Redis client in development mode...');
+    redisClient = createClient();
+}
+
+redisClient.on('error', err => {
+    console.error('Redis Client Error:', err);
+    console.error('Redis URL:', process.env.REDIS_URL ? 'Set' : 'Not set');
+});
+
+redisClient.on('connect', () => {
+    console.log('Redis client connected successfully');
+});
+
+redisClient.on('ready', () => {
+    console.log('Redis client ready to accept commands');
+});
+
+redisClient.on('reconnecting', () => {
+    console.log('Redis client reconnecting...');
+});
+
+redisClient.connect().catch(err => {
+    console.error('Failed to connect to Redis:', err);
+    process.exit(1); // Exit if we can't connect to Redis as it's critical for sessions
+});
+
+// Create Redis store once client is ready
+redisClient.on('ready', () => {
+    redisStore = new RedisStore({
+        client: redisClient,
+        prefix: 'sess:',
+        ttl: 24 * 60 * 60 // Session TTL in seconds (24 hours)
+    });
+    console.log('Redis store initialized');
+});
 
 // Create SQLite database
 const db = new sqlite3.Database(dbPath);
@@ -109,18 +161,14 @@ app.use((req, res, next) => {
 
 // Session configuration
 app.use(session({
-    store: new SQLiteStore({
-        db: sessionDbPath,
-        dir: path.dirname(sessionDbPath),
-        concurrentDB: true
-    }),
+    store: redisStore,
     name: 'connect.sid',
-    secret: 'your-secret-key',
-    resave: true,
-    saveUninitialized: true,
+    secret: process.env.SESSION_SECRET || 'your-secret-key',
+    resave: false,
+    saveUninitialized: false,
     proxy: true,
     cookie: {
-        secure: true,
+        secure: isProduction,
         httpOnly: true,
         sameSite: 'none',
         domain: '.onrender.com',
@@ -282,12 +330,27 @@ app.post('/admin/reset-password', requireAdmin, async (req, res) => {
 });
 
 // Health check endpoint
-app.get('/health', (req, res) => {
+app.get('/health', async (req, res) => {
     console.log('Health check request received');
+    
+    let redisStatus = 'unknown';
+    try {
+        // Try to ping Redis
+        await redisClient.ping();
+        redisStatus = 'connected';
+    } catch (error) {
+        console.error('Redis health check failed:', error);
+        redisStatus = 'disconnected';
+    }
+    
     res.json({
         status: 'ok',
         timestamp: new Date().toISOString(),
         environment: isProduction ? 'production' : 'development',
+        redis: {
+            status: redisStatus,
+            connected: redisClient.isReady
+        },
         session: {
             id: req.sessionID,
             cookie: req.session?.cookie
