@@ -225,24 +225,48 @@
             const errorDiv = document.getElementById('registerError');
             errorDiv.style.display = 'none';
 
+            console.log('Attempting registration...');
+            const formObject = Object.fromEntries(formData);
+            console.log('Registration data:', { 
+                username: formObject.username,
+                portfolio_path: formObject.portfolio_path 
+            });
+
             try {
                 const response = await fetch('/register', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
+                        'Accept': 'application/json'
                     },
-                    body: JSON.stringify(Object.fromEntries(formData)),
-                    credentials: 'same-origin'
+                    body: JSON.stringify(formObject),
+                    credentials: 'include',
+                    mode: 'cors'
                 });
 
+                console.log('Registration response status:', response.status);
+                console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+
                 if (response.redirected) {
+                    console.log('Redirect detected, going to:', response.url);
                     window.location.href = response.url;
-                } else {
+                    return;
+                }
+
+                const contentType = response.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
                     const data = await response.json();
+                    console.log('Registration response data:', data);
+                    
                     if (!response.ok) {
                         errorDiv.textContent = data.error || 'Registration failed';
                         errorDiv.style.display = 'block';
+                    } else if (data.success) {
+                        window.location.href = '/login.html';
                     }
+                } else {
+                    console.log('Received non-JSON response, assuming success');
+                    window.location.href = '/login.html';
                 }
             } catch (error) {
                 console.error('Registration error:', error);

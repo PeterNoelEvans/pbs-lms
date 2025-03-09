@@ -272,6 +272,7 @@ app.post('/register', async (req, res) => {
         username: req.body.username,
         portfolio_path: req.body.portfolio_path
     });
+    console.log('Headers:', req.headers);
 
     const { username, password, portfolio_path } = req.body;
     
@@ -281,20 +282,52 @@ app.post('/register', async (req, res) => {
     }
 
     try {
-        const hashedPassword = await bcrypt.hash(password, 10);
-        db.run('INSERT INTO users (username, password, portfolio_path) VALUES (?, ?, ?)',
-            [username, hashedPassword, portfolio_path],
-            function(err) {
-                if (err) {
-                    console.error('Registration error:', err);
-                    res.status(400).json({ error: 'Username already exists' });
-                } else {
-                    console.log('User registered successfully:', username);
-                    res.redirect('/login.html');
-                }
+        // Check if user already exists
+        const existingUser = await new Promise((resolve, reject) => {
+            db.get('SELECT id FROM users WHERE username = ? OR portfolio_path = ?', 
+                [username, portfolio_path], 
+                (err, row) => {
+                    if (err) reject(err);
+                    resolve(row);
+                });
+        });
+
+        if (existingUser) {
+            console.log('User or portfolio path already exists');
+            return res.status(400).json({ 
+                error: 'Username or portfolio path already exists' 
             });
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+        
+        // Insert new user
+        const result = await new Promise((resolve, reject) => {
+            db.run('INSERT INTO users (username, password, portfolio_path) VALUES (?, ?, ?)',
+                [username, hashedPassword, portfolio_path],
+                function(err) {
+                    if (err) reject(err);
+                    else resolve(this.lastID);
+                });
+        });
+
+        console.log('User registered successfully:', username);
+        console.log('New user ID:', result);
+
+        // Set headers to prevent caching
+        res.set({
+            'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+        });
+
+        // Send success response
+        res.json({ 
+            success: true, 
+            message: 'Registration successful' 
+        });
     } catch (error) {
-        console.error('Error creating user:', error);
+        console.error('Registration error:', error);
         res.status(500).json({ error: 'Error creating user' });
     }
 });
