@@ -116,6 +116,20 @@ async function initializeApp() {
             next();
         });
 
+        // Security headers
+        app.use((req, res, next) => {
+            res.set({
+                'X-Content-Type-Options': 'nosniff',
+                'X-Frame-Options': 'DENY',
+                'X-XSS-Protection': '1; mode=block'
+            });
+            next();
+        });
+
+        // Serve static files
+        app.use(express.static(__dirname));
+        app.use(express.static(path.join(__dirname, 'public')));
+
         // Add Redis test endpoint
         app.get('/test-redis', async (req, res) => {
             console.log('\n=== Testing Redis Connection ===');
@@ -152,7 +166,41 @@ async function initializeApp() {
             }
         });
 
-        // Start server
+        // Add other routes
+        app.get('/check-auth', (req, res) => {
+            if (req.session.user) {
+                res.json({
+                    authenticated: true,
+                    username: req.session.user.username,
+                    portfolio_path: req.session.user.portfolio_path
+                });
+            } else {
+                res.json({ authenticated: false });
+            }
+        });
+
+        app.get('/logout', (req, res) => {
+            req.session.destroy();
+            res.redirect('/');
+        });
+
+        app.get('/debug-session', (req, res) => {
+            console.log('\n=== Debug Session Info ===');
+            console.log('Session ID:', req.sessionID);
+            console.log('Session:', req.session);
+            console.log('Cookies:', req.headers.cookie);
+            console.log('Headers:', req.headers);
+            
+            res.json({
+                sessionId: req.sessionID,
+                session: req.session,
+                cookies: req.headers.cookie,
+                isProduction: isProduction,
+                timestamp: new Date().toISOString()
+            });
+        });
+
+        // Start server last, after all routes are defined
         app.listen(port, () => {
             console.log(`Server running on port ${port}`);
             console.log('Running in', isProduction ? 'production mode' : 'development mode');
@@ -183,20 +231,6 @@ app.use((req, res, next) => {
     console.log('=========================\n');
     next();
 });
-
-// Security headers
-app.use((req, res, next) => {
-    res.set({
-        'X-Content-Type-Options': 'nosniff',
-        'X-Frame-Options': 'DENY',
-        'X-XSS-Protection': '1; mode=block'
-    });
-    next();
-});
-
-// Serve static files from the current directory and public directory
-app.use(express.static(__dirname));
-app.use(express.static(path.join(__dirname, 'public')));
 
 // Authentication middleware
 const requireAuth = (req, res, next) => {
@@ -675,40 +709,6 @@ app.get('/portfolios/*', async (req, res, next) => {
                 }
             }
         });
-});
-
-app.get('/check-auth', (req, res) => {
-    if (req.session.user) {
-        res.json({
-            authenticated: true,
-            username: req.session.user.username,
-            portfolio_path: req.session.user.portfolio_path
-        });
-    } else {
-        res.json({ authenticated: false });
-    }
-});
-
-app.get('/logout', (req, res) => {
-    req.session.destroy();
-    res.redirect('/');
-});
-
-// Debug test endpoint
-app.get('/debug-session', (req, res) => {
-    console.log('\n=== Debug Session Info ===');
-    console.log('Session ID:', req.sessionID);
-    console.log('Session:', req.session);
-    console.log('Cookies:', req.headers.cookie);
-    console.log('Headers:', req.headers);
-    
-    res.json({
-        sessionId: req.sessionID,
-        session: req.session,
-        cookies: req.headers.cookie,
-        isProduction: isProduction,
-        timestamp: new Date().toISOString()
-    });
 });
 
 // Add session check middleware
