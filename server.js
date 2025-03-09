@@ -33,140 +33,6 @@ if (isProduction) {
     }
 }
 
-// Initialize Redis client
-let redisClient;
-let redisStore;
-
-async function initializeRedis() {
-    console.log('Initializing Redis client...');
-    try {
-        redisClient = createClient({
-            url: 'redis://red-cv6hb9ij1k6c73e55rng:6379',
-            socket: {
-                reconnectStrategy: (retries) => {
-                    console.log(`Redis reconnection attempt ${retries}`);
-                    return Math.min(retries * 100, 3000);
-                }
-            }
-        });
-
-        redisClient.on('error', err => {
-            console.error('Redis Client Error:', err);
-        });
-
-        redisClient.on('connect', () => {
-            console.log('Redis client connected successfully');
-        });
-
-        redisClient.on('ready', () => {
-            console.log('Redis client ready to accept commands');
-            // Initialize Redis store
-            redisStore = new RedisStore({
-                client: redisClient,
-                prefix: 'sess:',
-                ttl: 24 * 60 * 60 // Session TTL in seconds (24 hours)
-            });
-            console.log('Redis store initialized');
-            
-            // Set up session middleware after Redis store is ready
-            app.use(session({
-                store: redisStore,
-                name: 'connect.sid',
-                secret: process.env.SESSION_SECRET || 'your-secret-key',
-                resave: false,
-                saveUninitialized: false,
-                proxy: true,
-                cookie: {
-                    secure: isProduction,
-                    httpOnly: true,
-                    sameSite: 'none',
-                    domain: '.onrender.com',
-                    maxAge: 24 * 60 * 60 * 1000 // 24 hours
-                }
-            }));
-            
-            // Start the server only after Redis is ready
-            app.listen(port, () => {
-                console.log(`Server running on port ${port}`);
-                if (isProduction) {
-                    console.log('Running in production mode');
-                } else {
-                    console.log(`Local access: http://localhost:${port}`);
-                }
-            });
-        });
-
-        await redisClient.connect();
-    } catch (err) {
-        console.error('Failed to initialize Redis:', err);
-        process.exit(1);
-    }
-}
-
-// Initialize Redis and start server
-initializeRedis().catch(err => {
-    console.error('Failed to initialize application:', err);
-    process.exit(1);
-});
-
-// Create SQLite database with proper error handling
-console.log('Initializing database at:', dbPath);
-const db = new sqlite3.Database(dbPath, (err) => {
-    if (err) {
-        console.error('Error opening database:', err);
-        process.exit(1);
-    }
-    console.log('Successfully connected to database');
-    
-    // Create tables and initial user
-    db.serialize(() => {
-        db.run(`CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE,
-            password TEXT,
-            portfolio_path TEXT UNIQUE,
-            is_public BOOLEAN DEFAULT 0
-        )`, (err) => {
-            if (err) {
-                console.error('Error creating users table:', err);
-                return;
-            }
-            console.log('Users table ready');
-            
-            // Check if Peter42 exists
-            db.get('SELECT id FROM users WHERE username = ?', ['Peter42'], async (err, row) => {
-                if (err) {
-                    console.error('Error checking for Peter42:', err);
-                    return;
-                }
-
-                // If Peter42 doesn't exist, create them
-                if (!row) {
-                    console.log('Creating Peter42 user...');
-                    try {
-                        const hashedPassword = await bcrypt.hash('Peter2025BB', 10);
-                        db.run(
-                            'INSERT INTO users (username, password, portfolio_path, is_public) VALUES (?, ?, ?, ?)',
-                            ['Peter42', hashedPassword, '/portfolios/P4-1/Peter/Peter.html', true],
-                            function(err) {
-                                if (err) {
-                                    console.error('Error creating Peter42:', err);
-                                } else {
-                                    console.log('Peter42 created successfully with ID:', this.lastID);
-                                }
-                            }
-                        );
-                    } catch (error) {
-                        console.error('Failed to create Peter42:', error);
-                    }
-                } else {
-                    console.log('Peter42 already exists with ID:', row.id);
-                }
-            });
-        });
-    });
-});
-
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -764,70 +630,202 @@ app.get('/check-session', (req, res) => {
     });
 });
 
-// Add session test routes
-app.get('/test-session', async (req, res) => {
-    console.log('\n=== Testing Session ===');
-    console.log('Initial session state:', req.session);
-    
+// Initialize Redis client
+let redisClient;
+let redisStore;
+
+async function initializeRedis() {
+    console.log('Initializing Redis client...');
     try {
-        // Test 1: Set a value
-        req.session.test = 'Session is working!';
-        req.session.timestamp = new Date().toISOString();
+        redisClient = createClient({
+            url: 'redis://red-cv6hb9ij1k6c73e55rng:6379',
+            socket: {
+                reconnectStrategy: (retries) => {
+                    console.log(`Redis reconnection attempt ${retries}`);
+                    return Math.min(retries * 100, 3000);
+                }
+            }
+        });
+
+        redisClient.on('error', err => {
+            console.error('Redis Client Error:', err);
+        });
+
+        redisClient.on('connect', () => {
+            console.log('Redis client connected successfully');
+        });
+
+        await redisClient.connect();
+
+        // Initialize Redis store
+        redisStore = new RedisStore({
+            client: redisClient,
+            prefix: 'sess:',
+            ttl: 24 * 60 * 60 // Session TTL in seconds (24 hours)
+        });
+        console.log('Redis store initialized');
         
-        // Test 2: Save explicitly
-        await new Promise((resolve, reject) => {
-            req.session.save((err) => {
+        // Set up session middleware after Redis store is ready
+        app.use(session({
+            store: redisStore,
+            name: 'connect.sid',
+            secret: process.env.SESSION_SECRET || 'your-secret-key',
+            resave: false,
+            saveUninitialized: false,
+            proxy: true,
+            cookie: {
+                secure: isProduction,
+                httpOnly: true,
+                sameSite: 'none',
+                domain: '.onrender.com',
+                maxAge: 24 * 60 * 60 * 1000 // 24 hours
+            }
+        }));
+
+        // Add session test routes
+        app.get('/test-session', async (req, res) => {
+            console.log('\n=== Testing Session ===');
+            console.log('Initial session state:', req.session);
+            
+            try {
+                // Test 1: Set a value
+                req.session.test = 'Session is working!';
+                req.session.timestamp = new Date().toISOString();
+                
+                // Test 2: Save explicitly
+                await new Promise((resolve, reject) => {
+                    req.session.save((err) => {
+                        if (err) {
+                            console.error('Session save error:', err);
+                            reject(err);
+                        } else {
+                            console.log('Session saved successfully');
+                            resolve();
+                        }
+                    });
+                });
+
+                // Test 3: Verify Redis connection
+                const redisStatus = await redisClient.ping();
+                console.log('Redis ping response:', redisStatus);
+
+                // Test 4: Try to store and retrieve from Redis directly
+                const testKey = `test:${req.sessionID}`;
+                await redisClient.set(testKey, 'Direct Redis test');
+                const testValue = await redisClient.get(testKey);
+                
+                res.json({
+                    message: 'Session tests completed',
+                    sessionId: req.sessionID,
+                    session: req.session,
+                    redisConnection: redisStatus === 'PONG',
+                    redisDirectTest: testValue === 'Direct Redis test',
+                    cookies: req.headers.cookie
+                });
+            } catch (error) {
+                console.error('Session test error:', error);
+                res.status(500).json({
+                    error: 'Session test failed',
+                    details: error.message,
+                    sessionId: req.sessionID,
+                    session: req.session
+                });
+            }
+        });
+
+        // Add session verification route
+        app.get('/verify-session', (req, res) => {
+            console.log('\n=== Verifying Session ===');
+            console.log('Session ID:', req.sessionID);
+            console.log('Session:', req.session);
+            console.log('Previous test value:', req.session.test);
+            console.log('Previous timestamp:', req.session.timestamp);
+            
+            res.json({
+                sessionExists: !!req.session,
+                sessionId: req.sessionID,
+                testValue: req.session.test,
+                timestamp: req.session.timestamp,
+                fullSession: req.session
+            });
+        });
+        
+        // Start the server only after Redis is ready
+        app.listen(port, () => {
+            console.log(`Server running on port ${port}`);
+            if (isProduction) {
+                console.log('Running in production mode');
+            } else {
+                console.log(`Local access: http://localhost:${port}`);
+            }
+        });
+
+    } catch (err) {
+        console.error('Failed to initialize Redis:', err);
+        process.exit(1);
+    }
+}
+
+// Initialize Redis and start server
+initializeRedis().catch(err => {
+    console.error('Failed to initialize application:', err);
+    process.exit(1);
+});
+
+// Create SQLite database with proper error handling
+console.log('Initializing database at:', dbPath);
+const db = new sqlite3.Database(dbPath, (err) => {
+    if (err) {
+        console.error('Error opening database:', err);
+        process.exit(1);
+    }
+    console.log('Successfully connected to database');
+    
+    // Create tables and initial user
+    db.serialize(() => {
+        db.run(`CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE,
+            password TEXT,
+            portfolio_path TEXT UNIQUE,
+            is_public BOOLEAN DEFAULT 0
+        )`, (err) => {
+            if (err) {
+                console.error('Error creating users table:', err);
+                return;
+            }
+            console.log('Users table ready');
+            
+            // Check if Peter42 exists
+            db.get('SELECT id FROM users WHERE username = ?', ['Peter42'], async (err, row) => {
                 if (err) {
-                    console.error('Session save error:', err);
-                    reject(err);
+                    console.error('Error checking for Peter42:', err);
+                    return;
+                }
+
+                // If Peter42 doesn't exist, create them
+                if (!row) {
+                    console.log('Creating Peter42 user...');
+                    try {
+                        const hashedPassword = await bcrypt.hash('Peter2025BB', 10);
+                        db.run(
+                            'INSERT INTO users (username, password, portfolio_path, is_public) VALUES (?, ?, ?, ?)',
+                            ['Peter42', hashedPassword, '/portfolios/P4-1/Peter/Peter.html', true],
+                            function(err) {
+                                if (err) {
+                                    console.error('Error creating Peter42:', err);
+                                } else {
+                                    console.log('Peter42 created successfully with ID:', this.lastID);
+                                }
+                            }
+                        );
+                    } catch (error) {
+                        console.error('Failed to create Peter42:', error);
+                    }
                 } else {
-                    console.log('Session saved successfully');
-                    resolve();
+                    console.log('Peter42 already exists with ID:', row.id);
                 }
             });
         });
-
-        // Test 3: Verify Redis connection
-        const redisStatus = await redisClient.ping();
-        console.log('Redis ping response:', redisStatus);
-
-        // Test 4: Try to store and retrieve from Redis directly
-        const testKey = `test:${req.sessionID}`;
-        await redisClient.set(testKey, 'Direct Redis test');
-        const testValue = await redisClient.get(testKey);
-        
-        res.json({
-            message: 'Session tests completed',
-            sessionId: req.sessionID,
-            session: req.session,
-            redisConnection: redisStatus === 'PONG',
-            redisDirectTest: testValue === 'Direct Redis test',
-            cookies: req.headers.cookie
-        });
-    } catch (error) {
-        console.error('Session test error:', error);
-        res.status(500).json({
-            error: 'Session test failed',
-            details: error.message,
-            sessionId: req.sessionID,
-            session: req.session
-        });
-    }
-});
-
-// Add session verification route
-app.get('/verify-session', (req, res) => {
-    console.log('\n=== Verifying Session ===');
-    console.log('Session ID:', req.sessionID);
-    console.log('Session:', req.session);
-    console.log('Previous test value:', req.session.test);
-    console.log('Previous timestamp:', req.session.timestamp);
-    
-    res.json({
-        sessionExists: !!req.session,
-        sessionId: req.sessionID,
-        testValue: req.session.test,
-        timestamp: req.session.timestamp,
-        fullSession: req.session
     });
 }); 
