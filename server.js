@@ -10,6 +10,7 @@ const app = express();
 // Use environment variables or defaults
 const port = process.env.PORT || 10000;
 const isProduction = process.env.NODE_ENV === 'production';
+console.log('Running in', isProduction ? 'production mode' : 'development mode');
 
 // Set database path based on environment
 const dbPath = isProduction ? '/opt/render/project/src/data/users.db' : 'users.db';
@@ -18,9 +19,17 @@ const dbPath = isProduction ? '/opt/render/project/src/data/users.db' : 'users.d
 if (isProduction) {
     const fs = require('fs');
     const dataDir = '/opt/render/project/src/data';
-    if (!fs.existsSync(dataDir)) {
-        console.log('Creating data directory...');
-        fs.mkdirSync(dataDir, { recursive: true });
+    try {
+        if (!fs.existsSync(dataDir)) {
+            console.log('Creating data directory...');
+            fs.mkdirSync(dataDir, { recursive: true, mode: 0o755 });
+        }
+        // Ensure we have write permissions
+        fs.accessSync(dataDir, fs.constants.W_OK);
+        console.log('Data directory is writable:', dataDir);
+    } catch (error) {
+        console.error('Error with data directory:', error);
+        process.exit(1); // Exit if we can't access the data directory
     }
 }
 
@@ -28,102 +37,133 @@ if (isProduction) {
 let redisClient;
 let redisStore;
 
-if (isProduction) {
-    console.log('Initializing Redis client in production mode...');
-    redisClient = createClient({
-        url: process.env.REDIS_URL,
-        socket: {
-            reconnectStrategy: (retries) => {
-                console.log(`Redis reconnection attempt ${retries}`);
-                return Math.min(retries * 100, 3000);
+async function initializeRedis() {
+    console.log('Initializing Redis client...');
+    try {
+        redisClient = createClient({
+            url: 'redis://red-cv6hb9ij1k6c73e55rng:6379',
+            socket: {
+                reconnectStrategy: (retries) => {
+                    console.log(`Redis reconnection attempt ${retries}`);
+                    return Math.min(retries * 100, 3000);
+                }
             }
-        }
-    });
-} else {
-    console.log('Initializing Redis client in development mode...');
-    redisClient = createClient();
+        });
+
+        redisClient.on('error', err => {
+            console.error('Redis Client Error:', err);
+        });
+
+        redisClient.on('connect', () => {
+            console.log('Redis client connected successfully');
+        });
+
+        redisClient.on('ready', () => {
+            console.log('Redis client ready to accept commands');
+            // Initialize Redis store
+            redisStore = new RedisStore({
+                client: redisClient,
+                prefix: 'sess:',
+                ttl: 24 * 60 * 60 // Session TTL in seconds (24 hours)
+            });
+            console.log('Redis store initialized');
+            
+            // Set up session middleware after Redis store is ready
+            app.use(session({
+                store: redisStore,
+                name: 'connect.sid',
+                secret: process.env.SESSION_SECRET || 'your-secret-key',
+                resave: false,
+                saveUninitialized: false,
+                proxy: true,
+                cookie: {
+                    secure: isProduction,
+                    httpOnly: true,
+                    sameSite: 'none',
+                    domain: '.onrender.com',
+                    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+                }
+            }));
+            
+            // Start the server only after Redis is ready
+            app.listen(port, () => {
+                console.log(`Server running on port ${port}`);
+                if (isProduction) {
+                    console.log('Running in production mode');
+                } else {
+                    console.log(`Local access: http://localhost:${port}`);
+                }
+            });
+        });
+
+        await redisClient.connect();
+    } catch (err) {
+        console.error('Failed to initialize Redis:', err);
+        process.exit(1);
+    }
 }
 
-redisClient.on('error', err => {
-    console.error('Redis Client Error:', err);
-    console.error('Redis URL:', process.env.REDIS_URL ? 'Set' : 'Not set');
+// Initialize Redis and start server
+initializeRedis().catch(err => {
+    console.error('Failed to initialize application:', err);
+    process.exit(1);
 });
 
-redisClient.on('connect', () => {
-    console.log('Redis client connected successfully');
-});
-
-redisClient.on('ready', () => {
-    console.log('Redis client ready to accept commands');
-});
-
-redisClient.on('reconnecting', () => {
-    console.log('Redis client reconnecting...');
-});
-
-redisClient.connect().catch(err => {
-    console.error('Failed to connect to Redis:', err);
-    process.exit(1); // Exit if we can't connect to Redis as it's critical for sessions
-});
-
-// Create Redis store once client is ready
-redisClient.on('ready', () => {
-    redisStore = new RedisStore({
-        client: redisClient,
-        prefix: 'sess:',
-        ttl: 24 * 60 * 60 // Session TTL in seconds (24 hours)
-    });
-    console.log('Redis store initialized');
-});
-
-// Create SQLite database
-const db = new sqlite3.Database(dbPath);
-
-// Create tables and initial user
-db.serialize(() => {
-    console.log('Initializing database at:', dbPath);
+// Create SQLite database with proper error handling
+console.log('Initializing database at:', dbPath);
+const db = new sqlite3.Database(dbPath, (err) => {
+    if (err) {
+        console.error('Error opening database:', err);
+        process.exit(1);
+    }
+    console.log('Successfully connected to database');
     
-    db.run(`CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        username TEXT UNIQUE,
-        password TEXT,
-        portfolio_path TEXT UNIQUE,
-        is_public BOOLEAN DEFAULT 0
-    )`);
-
-    // Check if Peter42 exists
-    db.get('SELECT id FROM users WHERE username = ?', ['Peter42'], async (err, row) => {
-        if (err) {
-            console.error('Error checking for Peter42:', err);
-            return;
-        }
-
-        // If Peter42 doesn't exist, create them
-        if (!row) {
-            console.log('Creating Peter42 user...');
-            try {
-                const hashedPassword = await bcrypt.hash('Peter2025BB', 10);
-                await new Promise((resolve, reject) => {
-                    db.run(
-                        'INSERT INTO users (username, password, portfolio_path, is_public) VALUES (?, ?, ?, ?)',
-                        ['Peter42', hashedPassword, '/portfolios/P4-1/Peter/Peter.html', true],
-                        function(err) {
-                            if (err) {
-                                console.error('Error creating Peter42:', err);
-                                reject(err);
-                            } else {
-                                console.log('Peter42 created successfully with ID:', this.lastID);
-                                resolve(this.lastID);
-                            }
-                        }
-                    );
-                });
-            } catch (error) {
-                console.error('Failed to create Peter42:', error);
+    // Create tables and initial user
+    db.serialize(() => {
+        db.run(`CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE,
+            password TEXT,
+            portfolio_path TEXT UNIQUE,
+            is_public BOOLEAN DEFAULT 0
+        )`, (err) => {
+            if (err) {
+                console.error('Error creating users table:', err);
+                return;
             }
-        } else {
-            console.log('Peter42 already exists with ID:', row.id);
-        }
+            console.log('Users table ready');
+            
+            // Check if Peter42 exists
+            db.get('SELECT id FROM users WHERE username = ?', ['Peter42'], async (err, row) => {
+                if (err) {
+                    console.error('Error checking for Peter42:', err);
+                    return;
+                }
+
+                // If Peter42 doesn't exist, create them
+                if (!row) {
+                    console.log('Creating Peter42 user...');
+                    try {
+                        const hashedPassword = await bcrypt.hash('Peter2025BB', 10);
+                        db.run(
+                            'INSERT INTO users (username, password, portfolio_path, is_public) VALUES (?, ?, ?, ?)',
+                            ['Peter42', hashedPassword, '/portfolios/P4-1/Peter/Peter.html', true],
+                            function(err) {
+                                if (err) {
+                                    console.error('Error creating Peter42:', err);
+                                } else {
+                                    console.log('Peter42 created successfully with ID:', this.lastID);
+                                }
+                            }
+                        );
+                    } catch (error) {
+                        console.error('Failed to create Peter42:', error);
+                    }
+                } else {
+                    console.log('Peter42 already exists with ID:', row.id);
+                }
+            });
+        });
     });
 });
 
@@ -158,23 +198,6 @@ app.use((req, res, next) => {
     
     next();
 });
-
-// Session configuration
-app.use(session({
-    store: redisStore,
-    name: 'connect.sid',
-    secret: process.env.SESSION_SECRET || 'your-secret-key',
-    resave: false,
-    saveUninitialized: false,
-    proxy: true,
-    cookie: {
-        secure: isProduction,
-        httpOnly: true,
-        sameSite: 'none',
-        domain: '.onrender.com',
-        maxAge: 24 * 60 * 60 * 1000 // 24 hours
-    }
-}));
 
 // Debug middleware to log session and request details
 app.use((req, res, next) => {
@@ -727,13 +750,4 @@ app.get('/check-session', (req, res) => {
         authenticated: !!req.session?.user,
         user: req.session?.user
     });
-});
-
-app.listen(port, () => {
-    console.log(`Server running on port ${port}`);
-    if (isProduction) {
-        console.log('Running in production mode');
-    } else {
-        console.log(`Local access: http://localhost:${port}`);
-    }
 }); 
