@@ -116,6 +116,42 @@ async function initializeApp() {
             next();
         });
 
+        // Add Redis test endpoint
+        app.get('/test-redis', async (req, res) => {
+            console.log('\n=== Testing Redis Connection ===');
+            try {
+                // Test 1: Basic set/get
+                await redisClient.set('testKey', 'Redis is working!');
+                const value = await redisClient.get('testKey');
+                console.log('Redis test value:', value);
+
+                // Test 2: Ping
+                const pingResult = await redisClient.ping();
+                console.log('Redis ping result:', pingResult);
+
+                // Test 3: Connection status
+                console.log('Redis ready state:', redisClient.isReady);
+                console.log('Redis connection state:', redisClient.isOpen);
+
+                res.json({
+                    success: true,
+                    redisValue: value,
+                    ping: pingResult,
+                    connectionStatus: {
+                        isReady: redisClient.isReady,
+                        isOpen: redisClient.isOpen
+                    }
+                });
+            } catch (err) {
+                console.error('Redis test error:', err);
+                res.status(500).json({
+                    error: 'Redis test failed',
+                    details: err.message,
+                    stack: err.stack
+                });
+            }
+        });
+
         // Start server
         app.listen(port, () => {
             console.log(`Server running on port ${port}`);
