@@ -33,36 +33,105 @@ if (isProduction) {
     }
 }
 
-// Middleware
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Initialize Redis client first
+let redisClient;
+let redisStore;
 
-// Add trust proxy setting for Render - MUST be before session middleware
-app.set('trust proxy', 1);
+// Initialize Redis and create store
+async function initializeApp() {
+    console.log('Initializing application...');
+    try {
+        // Initialize Redis client
+        console.log('Connecting to Redis...');
+        redisClient = createClient({
+            url: 'redis://red-cv6hb9ij1k6c73e55rng:6379',
+            socket: {
+                reconnectStrategy: (retries) => {
+                    console.log(`Redis reconnection attempt ${retries}`);
+                    return Math.min(retries * 100, 3000);
+                }
+            }
+        });
 
-// CORS configuration - MUST be before session middleware
-app.use((req, res, next) => {
-    console.log('\n=== CORS Debug ===');
-    console.log('Request URL:', req.url);
-    console.log('Request Method:', req.method);
-    console.log('Request Origin:', req.headers.origin);
-    console.log('Request Headers:', req.headers);
+        redisClient.on('error', err => {
+            console.error('Redis Client Error:', err);
+        });
 
-    // Allow the specific origin
-    const origin = req.headers.origin || 'https://codinghtml-presentation.onrender.com';
-    res.header('Access-Control-Allow-Origin', origin);
-    res.header('Access-Control-Allow-Credentials', 'true');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-    res.header('Access-Control-Expose-Headers', '*');
-    
-    // Handle preflight requests
-    if (req.method === 'OPTIONS') {
-        console.log('Handling OPTIONS preflight request');
-        return res.status(200).end();
+        await redisClient.connect();
+        console.log('Redis connected successfully');
+
+        // Create Redis store
+        redisStore = new RedisStore({
+            client: redisClient,
+            prefix: 'sess:',
+            ttl: 24 * 60 * 60 // Session TTL in seconds (24 hours)
+        });
+        console.log('Redis store created');
+
+        // Essential middleware first
+        app.use(express.json());
+        app.use(express.urlencoded({ extended: true }));
+        app.set('trust proxy', 1);
+
+        // CORS configuration before session
+        app.use((req, res, next) => {
+            console.log('\n=== CORS Debug ===');
+            const origin = req.headers.origin || 'https://codinghtml-presentation.onrender.com';
+            res.header('Access-Control-Allow-Origin', origin);
+            res.header('Access-Control-Allow-Credentials', 'true');
+            res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+            res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+            res.header('Access-Control-Expose-Headers', '*');
+            
+            if (req.method === 'OPTIONS') {
+                return res.status(200).end();
+            }
+            next();
+        });
+
+        // Session middleware
+        app.use(session({
+            store: redisStore,
+            name: 'connect.sid',
+            secret: process.env.SESSION_SECRET || 'your-secret-key',
+            resave: false,
+            saveUninitialized: false,
+            proxy: true,
+            cookie: {
+                secure: isProduction,
+                httpOnly: true,
+                sameSite: 'none',
+                domain: '.onrender.com',
+                maxAge: 24 * 60 * 60 * 1000 // 24 hours
+            }
+        }));
+
+        // Debug middleware after session
+        app.use((req, res, next) => {
+            console.log('\n=== Session Debug ===');
+            console.log('URL:', req.url);
+            console.log('Session ID:', req.sessionID);
+            console.log('Session:', req.session);
+            console.log('Cookies:', req.headers.cookie);
+            next();
+        });
+
+        // Start server
+        app.listen(port, () => {
+            console.log(`Server running on port ${port}`);
+            console.log('Running in', isProduction ? 'production mode' : 'development mode');
+        });
+
+    } catch (err) {
+        console.error('Failed to initialize application:', err);
+        process.exit(1);
     }
-    
-    next();
+}
+
+// Initialize the application
+initializeApp().catch(err => {
+    console.error('Application startup failed:', err);
+    process.exit(1);
 });
 
 // Debug middleware to log session and request details
@@ -628,152 +697,6 @@ app.get('/check-session', (req, res) => {
         authenticated: !!req.session?.user,
         user: req.session?.user
     });
-});
-
-// Initialize Redis client
-let redisClient;
-let redisStore;
-
-// Define test routes first
-const setupTestRoutes = () => {
-    app.get('/test-session', async (req, res) => {
-        console.log('\n=== Testing Session ===');
-        console.log('Initial session state:', req.session);
-        
-        try {
-            // Test 1: Set a value
-            req.session.test = 'Session is working!';
-            req.session.timestamp = new Date().toISOString();
-            
-            // Test 2: Save explicitly
-            await new Promise((resolve, reject) => {
-                req.session.save((err) => {
-                    if (err) {
-                        console.error('Session save error:', err);
-                        reject(err);
-                    } else {
-                        console.log('Session saved successfully');
-                        resolve();
-                    }
-                });
-            });
-
-            // Test 3: Verify Redis connection
-            const redisStatus = await redisClient.ping();
-            console.log('Redis ping response:', redisStatus);
-
-            // Test 4: Try to store and retrieve from Redis directly
-            const testKey = `test:${req.sessionID}`;
-            await redisClient.set(testKey, 'Direct Redis test');
-            const testValue = await redisClient.get(testKey);
-            
-            res.json({
-                message: 'Session tests completed',
-                sessionId: req.sessionID,
-                session: req.session,
-                redisConnection: redisStatus === 'PONG',
-                redisDirectTest: testValue === 'Direct Redis test',
-                cookies: req.headers.cookie
-            });
-        } catch (error) {
-            console.error('Session test error:', error);
-            res.status(500).json({
-                error: 'Session test failed',
-                details: error.message,
-                sessionId: req.sessionID,
-                session: req.session
-            });
-        }
-    });
-
-    app.get('/verify-session', (req, res) => {
-        console.log('\n=== Verifying Session ===');
-        console.log('Session ID:', req.sessionID);
-        console.log('Session:', req.session);
-        console.log('Previous test value:', req.session.test);
-        console.log('Previous timestamp:', req.session.timestamp);
-        
-        res.json({
-            sessionExists: !!req.session,
-            sessionId: req.sessionID,
-            testValue: req.session.test,
-            timestamp: req.session.timestamp,
-            fullSession: req.session
-        });
-    });
-};
-
-async function initializeRedis() {
-    console.log('Initializing Redis client...');
-    try {
-        redisClient = createClient({
-            url: 'redis://red-cv6hb9ij1k6c73e55rng:6379',
-            socket: {
-                reconnectStrategy: (retries) => {
-                    console.log(`Redis reconnection attempt ${retries}`);
-                    return Math.min(retries * 100, 3000);
-                }
-            }
-        });
-
-        redisClient.on('error', err => {
-            console.error('Redis Client Error:', err);
-        });
-
-        redisClient.on('connect', () => {
-            console.log('Redis client connected successfully');
-        });
-
-        await redisClient.connect();
-
-        // Initialize Redis store
-        redisStore = new RedisStore({
-            client: redisClient,
-            prefix: 'sess:',
-            ttl: 24 * 60 * 60 // Session TTL in seconds (24 hours)
-        });
-        console.log('Redis store initialized');
-        
-        // Set up session middleware after Redis store is ready
-        app.use(session({
-            store: redisStore,
-            name: 'connect.sid',
-            secret: process.env.SESSION_SECRET || 'your-secret-key',
-            resave: false,
-            saveUninitialized: false,
-            proxy: true,
-            cookie: {
-                secure: isProduction,
-                httpOnly: true,
-                sameSite: 'none',
-                domain: '.onrender.com',
-                maxAge: 24 * 60 * 60 * 1000 // 24 hours
-            }
-        }));
-
-        // Setup test routes after session middleware
-        setupTestRoutes();
-
-        // Start the server only after all routes are set up
-        app.listen(port, () => {
-            console.log(`Server running on port ${port}`);
-            if (isProduction) {
-                console.log('Running in production mode');
-            } else {
-                console.log(`Local access: http://localhost:${port}`);
-            }
-        });
-
-    } catch (err) {
-        console.error('Failed to initialize Redis:', err);
-        process.exit(1);
-    }
-}
-
-// Initialize Redis and start server
-initializeRedis().catch(err => {
-    console.error('Failed to initialize application:', err);
-    process.exit(1);
 });
 
 // Create SQLite database with proper error handling
