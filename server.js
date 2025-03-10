@@ -271,7 +271,6 @@ async function initializeApp() {
                 secure: true,
                 httpOnly: true,
                 sameSite: 'none',
-                domain: '.onrender.com',
                 path: '/',
                 maxAge: 24 * 60 * 60 * 1000 // 24 hours
             },
@@ -283,30 +282,20 @@ async function initializeApp() {
             console.error('Redis store error:', err);
         });
 
-        // Add session store connect logging
-        redisStore.on('connect', function() {
-            console.log('Redis store connected');
-        });
-
-        // Simple session debug middleware
+        // Add session debug middleware
         app.use((req, res, next) => {
             // Log before session processing
-            console.log('\n=== Pre-Session Debug ===');
-            console.log('URL:', req.url);
-            console.log('Raw Cookie:', req.headers.cookie);
-            console.log('Session ID (pre):', req.sessionID);
+            console.log('\n=== Session Debug ===');
+            console.log('Request URL:', req.url);
+            console.log('Request Method:', req.method);
+            console.log('Session ID:', req.sessionID);
+            console.log('Session Data:', req.session);
+            console.log('Headers:', req.headers);
             
-            // Ensure session
-            if (!req.session) {
-                console.error('No session object');
-                return next(new Error('Session initialization failed'));
-            }
-
-            // Log after session processing
-            console.log('\n=== Post-Session Debug ===');
-            console.log('Session ID (post):', req.sessionID);
-            console.log('Session:', req.session);
+            // Add session debug header
+            res.setHeader('X-Session-Debug', req.sessionID || 'no-session');
             
+            // Continue processing
             next();
         });
 
