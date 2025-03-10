@@ -230,73 +230,43 @@ async function initializeApp() {
 
         console.log('Redis store created');
 
-        // Session middleware with enhanced error handling
+        // CORS configuration before session
+        app.use((req, res, next) => {
+            const origin = req.headers.origin || 'https://codinghtml-presentation.onrender.com';
+            res.header('Access-Control-Allow-Origin', origin);
+            res.header('Access-Control-Allow-Methods', 'GET,HEAD,PUT,PATCH,POST,DELETE');
+            res.header('Access-Control-Allow-Credentials', 'true');
+            res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control');
+            res.header('Access-Control-Expose-Headers', 'Set-Cookie');
+            if (req.method === 'OPTIONS') {
+                return res.status(204).end();
+            }
+            next();
+        });
+
+        // Session middleware with production-ready configuration
         app.use(session({
             store: redisStore,
             name: 'connect.sid',
             secret: process.env.SESSION_SECRET || 'your-secret-key',
-            resave: true,
+            resave: false,
             saveUninitialized: false,
             proxy: true,
             rolling: true,
             cookie: {
-                secure: true,
+                secure: isProduction,
                 httpOnly: true,
-                sameSite: 'none',
+                sameSite: 'lax',
                 path: '/',
                 maxAge: 24 * 60 * 60 * 1000
-            },
-            unset: 'destroy'
+            }
         }));
 
-        // Add session consistency middleware immediately after session
+        // Add session initialization check middleware
         app.use((req, res, next) => {
             if (!req.session) {
                 console.error('Session initialization failed');
-                return next(new Error('Session initialization failed'));
-            }
-            
-            // If there's a cookie but no session user, try to restore from Redis
-            if (req.headers.cookie?.includes('connect.sid')) {
-                console.log('Found session cookie, attempting to restore session...');
-                console.log('Session ID:', req.sessionID);
-                
-                if (req.sessionID) {
-                    redisStore.get(req.sessionID, (err, sess) => {
-                        if (err) {
-                            console.error('Error loading session from Redis:', err);
-                            return next();
-                        }
-                        
-                        if (sess) {
-                            console.log('Found session in Redis:', sess);
-                            // Restore the entire session
-                            req.session.regenerate((err) => {
-                                if (err) {
-                                    console.error('Error regenerating session:', err);
-                                    return next();
-                                }
-                                
-                                // Copy all properties from the stored session
-                                Object.assign(req.session, sess);
-                                
-                                req.session.save((err) => {
-                                    if (err) {
-                                        console.error('Error saving restored session:', err);
-                                    } else {
-                                        console.log('Session restored successfully');
-                                    }
-                                    next();
-                                });
-                            });
-                            return;
-                        } else {
-                            console.log('No session found in Redis for ID:', req.sessionID);
-                            next();
-                        }
-                    });
-                    return;
-                }
+                return res.status(500).json({ error: 'Session initialization failed' });
             }
             next();
         });
@@ -312,25 +282,6 @@ async function initializeApp() {
             console.log('Session:', req.session);
             console.log('Cookies:', req.headers.cookie);
             console.log('=========================\n');
-            next();
-        });
-
-        // CORS configuration after session
-        app.use((req, res, next) => {
-            const origin = req.headers.origin || 'https://codinghtml-presentation.onrender.com';
-            
-            // Set CORS headers
-            res.header('Access-Control-Allow-Origin', origin);
-            res.header('Access-Control-Allow-Methods', 'GET,HEAD,PUT,PATCH,POST,DELETE');
-            res.header('Access-Control-Allow-Credentials', 'true');
-            res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control');
-            res.header('Access-Control-Expose-Headers', 'Set-Cookie');
-            
-            // Handle preflight
-            if (req.method === 'OPTIONS') {
-                return res.status(204).end();
-            }
-            
             next();
         });
 
@@ -362,6 +313,8 @@ app.use(express.static(__dirname));
         app.post('/login', async (req, res) => {
             console.log('\n=== Login Attempt ===');
             console.log('Raw request body:', req.body);
+            console.log('Current session:', req.session);
+            console.log('Session ID:', req.sessionID);
 
             const { username, password } = req.body;
             
@@ -394,41 +347,36 @@ app.use(express.static(__dirname));
                     return res.status(401).json({ error: 'Invalid credentials' });
                 }
 
-                // Initialize a new session
-                req.session.regenerate(async function(err) {
-                    if (err) {
-                        console.error('Session regeneration error:', err);
-                        return res.status(500).json({ error: 'Session error' });
-                    }
+                // Create a new session synchronously
+                req.session.user = {
+                    id: user.id,
+                    username: user.username,
+                    portfolio_path: user.portfolio_path
+                };
 
-                    // Set session data
-                    req.session.user = {
-                        id: user.id,
-                        username: user.username,
-                        portfolio_path: user.portfolio_path
-                    };
-
-                    // Save session
-                    req.session.save(function(err) {
+                // Save the session
+                await new Promise((resolve, reject) => {
+                    req.session.save((err) => {
                         if (err) {
                             console.error('Session save error:', err);
-                            return res.status(500).json({ error: 'Session error' });
+                            reject(err);
+                        } else {
+                            console.log('Session saved successfully');
+                            console.log('Final session state:', req.session);
+                            console.log('Session ID:', req.sessionID);
+                            resolve();
                         }
-
-                        console.log('Session saved successfully');
-                        console.log('Final session state:', req.session);
-                        console.log('Session ID:', req.sessionID);
-
-                        // Send success response with redirect
-                        res.json({
-                            success: true,
-                            redirect: '/dashboard',
-                            user: {
-                                username: user.username,
-                                portfolio_path: user.portfolio_path
-                            }
-                        });
                     });
+                });
+
+                // Send success response with redirect
+                res.json({
+                    success: true,
+                    redirect: '/dashboard',
+                    user: {
+                        username: user.username,
+                        portfolio_path: user.portfolio_path
+                    }
                 });
             } catch (error) {
                 console.error('Login error:', error);
