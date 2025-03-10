@@ -115,22 +115,22 @@ async function initializeApp() {
                     }
                     return Math.min(retries * 1000, 3000);
                 },
-                connectTimeout: 30000, // Increased to 30 seconds
-                keepAlive: 5000,
-                tls: true // Always enable TLS for Redis connection
-            },
-            // Remove fallback configuration as we should always use URL in production
-            retry_strategy: function (options) {
-                console.log('Redis retry attempt:', options.attempt);
-                return Math.min(options.attempt * 100, 3000);
+                connectTimeout: 60000, // 60 seconds
+                keepAlive: 30000, // 30 seconds
+                tls: false // Disable TLS since we're using redis:// not rediss://
             }
         };
 
-        console.log('Redis config:', {
-            ...redisConfig,
-            url: redisConfig.url ? '[REDACTED]' : undefined
+        // Log Redis connection attempt (but hide sensitive URL)
+        console.log('Attempting to connect to Redis with config:', {
+            hasUrl: !!redisConfig.url,
+            urlProtocol: redisConfig.url ? new URL(redisConfig.url).protocol : 'none',
+            tls: redisConfig.socket.tls,
+            timeout: redisConfig.socket.connectTimeout,
+            keepAlive: redisConfig.socket.keepAlive
         });
 
+        // Initialize Redis client with better error handling
         redisClient = createClient(redisConfig);
 
         // Enhanced error logging
@@ -139,15 +139,16 @@ async function initializeApp() {
             console.error('Redis connection details:', {
                 ready: redisClient.isReady,
                 connected: redisClient.isOpen,
-                retryAttempts: redisClient.options.retry_strategy,
-                error: err.message
+                error: err.message,
+                stack: err.stack
             });
         });
 
         redisClient.on('connect', () => {
             console.log('Redis client connecting...', {
                 ready: redisClient.isReady,
-                connected: redisClient.isOpen
+                connected: redisClient.isOpen,
+                url: redisConfig.url ? 'URL configured' : 'No URL configured'
             });
         });
 
@@ -976,34 +977,17 @@ const db = new sqlite3.Database(dbPath, (err) => {
             }
             console.log('Users table ready');
             
-            // Check if Peter42 exists
-            db.get('SELECT id FROM users WHERE username = ?', ['Peter42'], async (err, row) => {
+            // Only check if Peter42 exists, don't create
+            db.get('SELECT id, username FROM users WHERE username = ?', ['Peter42'], (err, row) => {
                 if (err) {
                     console.error('Error checking for Peter42:', err);
                     return;
                 }
 
-                // If Peter42 doesn't exist, create them
-                if (!row) {
-                    console.log('Creating Peter42 user...');
-                    try {
-                        const hashedPassword = await bcrypt.hash('Peter2025BB', 10);
-                        db.run(
-                            'INSERT INTO users (username, password, portfolio_path, is_public) VALUES (?, ?, ?, ?)',
-                            ['Peter42', hashedPassword, '/portfolios/P4-1/Peter/Peter.html', true],
-                            function(err) {
-                                if (err) {
-                                    console.error('Error creating Peter42:', err);
-                                } else {
-                                    console.log('Peter42 created successfully with ID:', this.lastID);
-                                }
-                            }
-                        );
-                    } catch (error) {
-                        console.error('Failed to create Peter42:', error);
-                    }
+                if (row) {
+                    console.log('Peter42 exists with ID:', row.id);
                 } else {
-                    console.log('Peter42 already exists with ID:', row.id);
+                    console.log('Warning: Peter42 user not found in database');
                 }
             });
         });
