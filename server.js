@@ -199,23 +199,48 @@ async function initializeApp() {
             retryStrategy: function (options) {
                 console.log('Redis store retry attempt:', options.attempt);
                 return Math.min(options.attempt * 100, 3000);
+            },
+            scanCount: 100,
+            serializer: {
+                parse: async function (raw) {
+                    try {
+                        return JSON.parse(raw);
+                    } catch (err) {
+                        console.error('Session parse error:', err);
+                        return {};
+                    }
+                },
+                stringify: function (sess) {
+                    try {
+                        return JSON.stringify(sess);
+                    } catch (err) {
+                        console.error('Session stringify error:', err);
+                        return '';
+                    }
+                }
             }
         });
 
-        // Add Redis store error handler with reconnection logic
+        // Test Redis connection and session store
+        try {
+            await redisClient.set('test:connection', 'ok');
+            const testResult = await redisClient.get('test:connection');
+            console.log('Redis connection test result:', testResult);
+            
+            if (testResult !== 'ok') {
+                throw new Error('Redis connection test failed');
+            }
+        } catch (err) {
+            console.error('Redis connection test error:', err);
+            throw err;
+        }
+
+        // Add Redis store error handler
         redisStore.on('error', function(err) {
             console.error('Redis Store Error:', err);
-            console.error('Redis Store Status:', {
-                client: redisClient?.isOpen,
-                error: err.message
-            });
-            
-            // Attempt to reconnect if client is disconnected
-            if (!redisClient?.isOpen) {
-                console.log('Attempting to reconnect Redis client...');
-                redisClient.connect().catch(err => {
-                    console.error('Redis reconnection failed:', err);
-                });
+            if (err.code === 'ECONNREFUSED') {
+                console.error('Redis connection refused. Attempting to reconnect...');
+                redisClient.connect().catch(console.error);
             }
         });
 
@@ -253,27 +278,48 @@ async function initializeApp() {
             name: 'connect.sid',
             secret: process.env.SESSION_SECRET || 'your-secret-key',
             resave: true,
-            saveUninitialized: true,
+            saveUninitialized: false,
             proxy: true,
             rolling: true,
             cookie: {
-                secure: false, // Allow both HTTP and HTTPS
+                secure: false,
                 httpOnly: true,
-                sameSite: 'none', // Allow cross-site cookies
+                sameSite: 'lax',
                 path: '/',
-                maxAge: 24 * 60 * 60 * 1000,
-                domain: '.onrender.com' // Allow cookies for all subdomains
-            }
+                maxAge: 24 * 60 * 60 * 1000
+            },
+            unset: 'destroy'
         }));
 
-        // Add session debug middleware
+        // Add session debug middleware with more detailed logging
         app.use((req, res, next) => {
-            console.log('\n=== Session Debug ===');
+            console.log('\n=== Detailed Session Debug ===');
             console.log('Request URL:', req.url);
             console.log('Cookie Header:', req.headers.cookie);
             console.log('Session ID:', req.sessionID);
+            console.log('Session Store:', !!req.sessionStore);
+            console.log('Redis Store Connected:', redisClient?.isOpen);
+            console.log('Redis Store Ready:', redisClient?.isReady);
             console.log('Session:', req.session);
-            console.log('Is Session New:', req.session?.isNew);
+            
+            // Check for and fix duplicate cookies
+            if (req.headers.cookie && req.headers.cookie.split('connect.sid=').length > 2) {
+                console.log('Detected duplicate cookies, cleaning up...');
+                const cookies = req.headers.cookie.split(';');
+                const uniqueCookies = new Map();
+                
+                cookies.forEach(cookie => {
+                    const [name, value] = cookie.trim().split('=');
+                    uniqueCookies.set(name, value);
+                });
+                
+                req.headers.cookie = Array.from(uniqueCookies.entries())
+                    .map(([name, value]) => `${name}=${value}`)
+                    .join('; ');
+                    
+                console.log('Cleaned cookie header:', req.headers.cookie);
+            }
+            
             next();
         });
 
