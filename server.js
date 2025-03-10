@@ -115,36 +115,47 @@ async function initializeApp() {
                     }
                     return Math.min(retries * 1000, 3000);
                 },
-                connectTimeout: 10000, // 10 seconds
-                keepAlive: 5000, // Send keepalive every 5 seconds
+                connectTimeout: 30000, // Increased to 30 seconds
+                keepAlive: 5000,
+                tls: true // Always enable TLS for Redis connection
             },
-            // Fallback configuration if URL is not provided
-            host: process.env.REDIS_HOST || 'localhost',
-            port: process.env.REDIS_PORT || 6379,
-            username: process.env.REDIS_USERNAME,
-            password: process.env.REDIS_PASSWORD,
-            tls: isProduction ? {} : undefined // Enable TLS in production
+            // Remove fallback configuration as we should always use URL in production
+            retry_strategy: function (options) {
+                console.log('Redis retry attempt:', options.attempt);
+                return Math.min(options.attempt * 100, 3000);
+            }
         };
 
         console.log('Redis config:', {
             ...redisConfig,
-            url: redisConfig.url ? redisConfig.url.replace(/:[^:]*@/, ':***@') : undefined,
-            password: redisConfig.password ? '***' : undefined
+            url: redisConfig.url ? '[REDACTED]' : undefined
         });
 
         redisClient = createClient(redisConfig);
 
-        // Set up event handlers
+        // Enhanced error logging
         redisClient.on('error', err => {
             console.error('Redis Client Error:', err);
+            console.error('Redis connection details:', {
+                ready: redisClient.isReady,
+                connected: redisClient.isOpen,
+                retryAttempts: redisClient.options.retry_strategy,
+                error: err.message
+            });
         });
 
         redisClient.on('connect', () => {
-            console.log('Redis client connecting...');
+            console.log('Redis client connecting...', {
+                ready: redisClient.isReady,
+                connected: redisClient.isOpen
+            });
         });
 
         redisClient.on('ready', () => {
-            console.log('Redis client ready');
+            console.log('Redis client ready', {
+                ready: redisClient.isReady,
+                connected: redisClient.isOpen
+            });
         });
 
         redisClient.on('end', () => {
@@ -178,26 +189,89 @@ async function initializeApp() {
             client: redisClient,
             prefix: 'sess:',
             ttl: 24 * 60 * 60, // Session TTL in seconds (24 hours)
-            disableTouch: false
+            disableTouch: false,
+            logErrors: true,
+            retryStrategy: function (options) {
+                console.log('Redis store retry attempt:', options.attempt);
+                return Math.min(options.attempt * 100, 3000);
+            }
         });
+
+        // Add Redis store error handler with reconnection logic
+        redisStore.on('error', function(err) {
+            console.error('Redis Store Error:', err);
+            console.error('Redis Store Status:', {
+                client: redisClient?.isOpen,
+                error: err.message
+            });
+            
+            // Attempt to reconnect if client is disconnected
+            if (!redisClient?.isOpen) {
+                console.log('Attempting to reconnect Redis client...');
+                redisClient.connect().catch(err => {
+                    console.error('Redis reconnection failed:', err);
+                });
+            }
+        });
+
+        // Add Redis store connect handler with status check
+        redisStore.on('connect', function() {
+            console.log('Redis Store connected');
+            console.log('Redis Store Status:', {
+                client: redisClient?.isOpen,
+                ready: redisClient?.isReady
+            });
+        });
+
         console.log('Redis store created');
 
-        // Session middleware - MUST be before CORS
+        // Session middleware with enhanced error handling
         app.use(session({
             store: redisStore,
             name: 'connect.sid',
             secret: process.env.SESSION_SECRET || 'your-secret-key',
-            resave: false,
-            saveUninitialized: true,
+            resave: true, // Changed to true to ensure session is saved
+            saveUninitialized: false,
             proxy: true,
+            rolling: true,
             cookie: {
                 secure: true,
                 httpOnly: true,
                 sameSite: 'none',
                 path: '/',
-                maxAge: 24 * 60 * 60 * 1000 // 24 hours
-            }
+                maxAge: 24 * 60 * 60 * 1000
+            },
+            // Add error handling for session store
+            storeReady: true,
+            unset: 'destroy'
         }));
+
+        // Add session store debug middleware with async/await
+        app.use(async (req, res, next) => {
+            console.log('\n=== Redis Store Debug ===');
+            if (req.sessionID && redisStore) {
+                try {
+                    const sess = await new Promise((resolve, reject) => {
+                        redisStore.get(req.sessionID, (err, sess) => {
+                            if (err) reject(err);
+                            else resolve(sess);
+                        });
+                    });
+                    
+                    console.log('Redis session data:', sess);
+                    console.log('Redis store status:', {
+                        sessionID: req.sessionID,
+                        hasSession: !!sess,
+                        redisConnected: redisClient?.isOpen
+                    });
+                } catch (err) {
+                    console.error('Redis get session error:', err);
+                }
+            } else {
+                console.log('No session ID or Redis store');
+            }
+            next();
+        });
 
         // CORS configuration after session
         app.use((req, res, next) => {
