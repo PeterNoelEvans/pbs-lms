@@ -176,6 +176,7 @@
             try {
                 const response = await fetch('/login', {
                     method: 'POST',
+                    credentials: 'include',
                     headers: {
                         'Content-Type': 'application/json',
                         'Accept': 'application/json'
@@ -195,6 +196,7 @@
                     console.log('Login successful, redirecting to:', data.redirect);
                     // Check session is established before redirecting
                     const sessionCheck = await fetch('/check-session', {
+                        method: 'GET',
                         credentials: 'include'
                     });
                     const sessionData = await sessionCheck.json();

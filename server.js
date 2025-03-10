@@ -182,23 +182,7 @@ async function initializeApp() {
         });
         console.log('Redis store created');
 
-        // CORS configuration before session
-        app.use((req, res, next) => {
-            console.log('\n=== CORS Debug ===');
-            const origin = req.headers.origin || 'https://codinghtml-presentation.onrender.com';
-            res.header('Access-Control-Allow-Origin', origin);
-            res.header('Access-Control-Allow-Credentials', 'true');
-            res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-            res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-            res.header('Access-Control-Expose-Headers', '*');
-            
-            if (req.method === 'OPTIONS') {
-                return res.status(200).end();
-            }
-            next();
-        });
-
-        // Session middleware
+        // Session middleware - MUST be before CORS
         app.use(session({
             store: redisStore,
             name: 'connect.sid',
@@ -214,6 +198,22 @@ async function initializeApp() {
                 maxAge: 24 * 60 * 60 * 1000 // 24 hours
             }
         }));
+
+        // CORS configuration after session
+        app.use((req, res, next) => {
+            console.log('\n=== CORS Debug ===');
+            const origin = req.headers.origin || 'https://codinghtml-presentation.onrender.com';
+            res.header('Access-Control-Allow-Origin', origin);
+            res.header('Access-Control-Allow-Credentials', 'true');
+            res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+            res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+            res.header('Access-Control-Expose-Headers', '*');
+            
+            if (req.method === 'OPTIONS') {
+                return res.status(200).end();
+            }
+            next();
+        });
 
         // Debug middleware after session
         app.use((req, res, next) => {
