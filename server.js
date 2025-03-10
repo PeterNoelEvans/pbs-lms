@@ -758,24 +758,61 @@ app.post('/register', async (req, res) => {
     }
 
     try {
-        // Check if user already exists
+        // Ensure data directory exists in production
+        if (isProduction) {
+            const fs = require('fs');
+            const dataDir = '/opt/render/project/src/data';
+            try {
+                if (!fs.existsSync(dataDir)) {
+                    console.log('Creating data directory...');
+                    fs.mkdirSync(dataDir, { recursive: true });
+                }
+                // Ensure we have write permissions
+                fs.accessSync(dataDir, fs.constants.W_OK);
+                console.log('Data directory is writable:', dataDir);
+            } catch (error) {
+                console.error('Error with data directory:', error);
+                return res.status(500).json({ error: 'Server configuration error' });
+            }
+        }
+
+        // Check if user already exists with more detailed error handling
         const existingUser = await new Promise((resolve, reject) => {
-            db.get('SELECT id, username, portfolio_path FROM users WHERE username = ?', 
-                [username], 
+            db.get('SELECT id, username, portfolio_path FROM users WHERE username = ? OR portfolio_path = ?', 
+                [username, portfolio_path], 
                 (err, row) => {
-                    if (err) reject(err);
+                    if (err) {
+                        console.error('Database error checking existing user:', err);
+                        reject(err);
+                    }
                     resolve(row);
                 });
         });
 
         if (existingUser) {
-            console.log('Username already exists:', existingUser);
-            return res.status(400).json({ error: 'Username already exists' });
+            // Special case for Peter42 - allow re-registration with same portfolio path
+            if (username === 'Peter42' && portfolio_path === '/portfolios/P4-1/Peter/Peter.html') {
+                console.log('Allowing Peter42 re-registration...');
+                // Delete existing Peter42 entry
+                await new Promise((resolve, reject) => {
+                    db.run('DELETE FROM users WHERE username = ?', ['Peter42'], (err) => {
+                        if (err) reject(err);
+                        else resolve();
+                    });
+                });
+            } else {
+                const errorMessage = existingUser.username === username ? 
+                    'Username already exists' : 
+                    'Portfolio path already exists';
+                console.log('Registration conflict:', errorMessage);
+                return res.status(400).json({ error: errorMessage });
+            }
         }
 
+        // Hash password
         const hashedPassword = await bcrypt.hash(password, 10);
         
-        // Insert new user
+        // Insert new user with better error handling
         const result = await new Promise((resolve, reject) => {
             db.run('INSERT INTO users (username, password, portfolio_path, is_public) VALUES (?, ?, ?, ?)',
                 [username, hashedPassword, portfolio_path, true],
@@ -800,22 +837,43 @@ app.post('/register', async (req, res) => {
             portfolio_path: portfolio_path
         };
 
+        // Save session with error handling
         await new Promise((resolve, reject) => {
             req.session.save((err) => {
-                if (err) reject(err);
-                else resolve();
+                if (err) {
+                    console.error('Session save error:', err);
+                    reject(err);
+                } else {
+                    console.log('Session saved after registration');
+                    resolve();
+                }
             });
+        });
+
+        // Set response headers to prevent caching
+        res.set({
+            'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
         });
 
         // Send success response
         res.json({ 
             success: true, 
             message: 'Registration successful',
-            redirect: '/login.html'
+            redirect: '/login.html',
+            user: {
+                id: result,
+                username: username,
+                portfolio_path: portfolio_path
+            }
         });
     } catch (error) {
         console.error('Registration error:', error);
-        res.status(500).json({ error: 'Error creating user. Please try again.' });
+        res.status(500).json({ 
+            error: 'Error creating user. Please try again.',
+            details: isProduction ? undefined : error.message
+        });
     }
 });
 
@@ -989,32 +1047,69 @@ const db = new sqlite3.Database(dbPath, (err) => {
     
     // Create tables and initial user
     db.serialize(() => {
+        // Ensure data directory exists in production
+        if (isProduction) {
+            const fs = require('fs');
+            const dataDir = '/opt/render/project/src/data';
+            try {
+                if (!fs.existsSync(dataDir)) {
+                    console.log('Creating data directory...');
+                    fs.mkdirSync(dataDir, { recursive: true });
+                }
+                // Ensure we have write permissions
+                fs.accessSync(dataDir, fs.constants.W_OK);
+                console.log('Data directory is writable:', dataDir);
+            } catch (error) {
+                console.error('Error with data directory:', error);
+                process.exit(1);
+            }
+        }
+
         db.run(`CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE,
             password TEXT,
             portfolio_path TEXT UNIQUE,
             is_public BOOLEAN DEFAULT 0
-        )`, (err) => {
+        )`, async (err) => {
             if (err) {
                 console.error('Error creating users table:', err);
                 return;
             }
             console.log('Users table ready');
             
-            // Only check if Peter42 exists, don't create
-            db.get('SELECT id, username FROM users WHERE username = ?', ['Peter42'], (err, row) => {
-                if (err) {
-                    console.error('Error checking for Peter42:', err);
-                    return;
-                }
+            try {
+                // Check if Peter42 exists
+                const row = await new Promise((resolve, reject) => {
+                    db.get('SELECT id, username FROM users WHERE username = ?', ['Peter42'], (err, row) => {
+                        if (err) reject(err);
+                        else resolve(row);
+                    });
+                });
 
                 if (row) {
                     console.log('Peter42 exists with ID:', row.id);
                 } else {
-                    console.log('Warning: Peter42 user not found in database');
+                    console.log('Peter42 not found, creating...');
+                    // Create Peter42 with hashed password
+                    const hashedPassword = await bcrypt.hash('Peter2025BB', 10);
+                    await new Promise((resolve, reject) => {
+                        db.run(
+                            'INSERT INTO users (username, password, portfolio_path, is_public) VALUES (?, ?, ?, ?)',
+                            ['Peter42', hashedPassword, '/portfolios/P4-1/Peter/Peter.html', true],
+                            function(err) {
+                                if (err) reject(err);
+                                else {
+                                    console.log('Peter42 created successfully with ID:', this.lastID);
+                                    resolve(this.lastID);
+                                }
+                            }
+                        );
+                    });
                 }
-            });
+            } catch (error) {
+                console.error('Error handling Peter42 user:', error);
+            }
         });
     });
 }); 
