@@ -248,10 +248,14 @@ async function initializeApp() {
             }
         }));
 
-        // Add session consistency middleware
+        // Add session consistency middleware immediately after session
         app.use((req, res, next) => {
-            // If there's a cookie but no session, try to load from Redis
-            if (req.headers.cookie?.includes('connect.sid') && !req.session?.user) {
+            if (!req.session) {
+                return next(new Error('Session initialization failed'));
+            }
+            
+            // If there's a cookie but no session user, try to load from Redis
+            if (req.headers.cookie?.includes('connect.sid') && !req.session.user) {
                 console.log('Attempting to restore session from Redis...');
                 const sessionID = req.sessionID;
                 if (sessionID) {
@@ -261,7 +265,11 @@ async function initializeApp() {
                         } else if (sess) {
                             console.log('Found session in Redis, restoring...');
                             req.session.user = sess.user;
-                            req.session.save();
+                            req.session.save((err) => {
+                                if (err) console.error('Error saving restored session:', err);
+                                next();
+                            });
+                            return;
                         }
                         next();
                     });
@@ -271,30 +279,17 @@ async function initializeApp() {
             next();
         });
 
-        // Add session store debug middleware with async/await
-        app.use(async (req, res, next) => {
-            console.log('\n=== Redis Store Debug ===');
-            if (req.sessionID && redisStore) {
-                try {
-                    const sess = await new Promise((resolve, reject) => {
-                        redisStore.get(req.sessionID, (err, sess) => {
-                            if (err) reject(err);
-                            else resolve(sess);
-                        });
-                    });
-                    
-                    console.log('Redis session data:', sess);
-                    console.log('Redis store status:', {
-                        sessionID: req.sessionID,
-                        hasSession: !!sess,
-                        redisConnected: redisClient?.isOpen
-                    });
-                } catch (err) {
-                    console.error('Redis get session error:', err);
-                }
-            } else {
-                console.log('No session ID or Redis store');
-            }
+        // Debug middleware after session initialization
+        app.use((req, res, next) => {
+            console.log('\n=== Request Debug Info ===');
+            console.log('URL:', req.url);
+            console.log('Method:', req.method);
+            console.log('Origin:', req.headers.origin);
+            console.log('Headers:', req.headers);
+            console.log('Session ID:', req.sessionID);
+            console.log('Session:', req.session);
+            console.log('Cookies:', req.headers.cookie);
+            console.log('=========================\n');
             next();
         });
 
@@ -377,57 +372,41 @@ app.use(express.static(__dirname));
                     return res.status(401).json({ error: 'Invalid credentials' });
                 }
 
-                // Clear any existing session
-                if (req.session.user) {
-                    console.log('Clearing existing session');
-                    await new Promise((resolve) => {
-                        req.session.destroy(() => {
-                            resolve();
-                        });
-                    });
-                    
-                    // Create new session
-                    await new Promise((resolve) => {
-                        req.session.regenerate((err) => {
-                            if (err) {
-                                console.error('Error regenerating session:', err);
-                                reject(err);
-                            }
-                            resolve();
-                        });
-                    });
-                }
+                // Initialize a new session
+                req.session.regenerate(async function(err) {
+                    if (err) {
+                        console.error('Session regeneration error:', err);
+                        return res.status(500).json({ error: 'Session error' });
+                    }
 
-                // Create new session
-                req.session.user = {
-                    id: user.id,
-                    username: user.username,
-                    portfolio_path: user.portfolio_path
-                };
-
-                // Save session explicitly and wait for it
-                await new Promise((resolve, reject) => {
-                    req.session.save((err) => {
-                        if (err) {
-                            console.error('Session save error:', err);
-                            reject(err);
-                        } else {
-                            console.log('Session saved successfully');
-                            console.log('Final session state:', req.session);
-                            console.log('Session ID:', req.sessionID);
-                            resolve();
-                        }
-                    });
-                });
-
-                // Send success response with redirect
-                res.json({
-                    success: true,
-                    redirect: '/dashboard',
-                    user: {
+                    // Set session data
+                    req.session.user = {
+                        id: user.id,
                         username: user.username,
                         portfolio_path: user.portfolio_path
-                    }
+                    };
+
+                    // Save session
+                    req.session.save(function(err) {
+                        if (err) {
+                            console.error('Session save error:', err);
+                            return res.status(500).json({ error: 'Session error' });
+                        }
+
+                        console.log('Session saved successfully');
+                        console.log('Final session state:', req.session);
+                        console.log('Session ID:', req.sessionID);
+
+                        // Send success response with redirect
+                        res.json({
+                            success: true,
+                            redirect: '/dashboard',
+                            user: {
+                                username: user.username,
+                                portfolio_path: user.portfolio_path
+                            }
+                        });
+                    });
                 });
             } catch (error) {
                 console.error('Login error:', error);
