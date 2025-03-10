@@ -238,60 +238,42 @@ async function initializeApp() {
             res.header('Access-Control-Allow-Credentials', 'true');
             res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control');
             res.header('Access-Control-Expose-Headers', 'Set-Cookie');
+            
+            // Handle preflight
             if (req.method === 'OPTIONS') {
+                res.header('Access-Control-Max-Age', '86400');
                 return res.status(204).end();
             }
             next();
         });
 
-        // Session middleware with production-ready configuration
+        // Session middleware with more permissive configuration
         app.use(session({
             store: redisStore,
             name: 'connect.sid',
             secret: process.env.SESSION_SECRET || 'your-secret-key',
-            resave: false,
-            saveUninitialized: false,
+            resave: true,
+            saveUninitialized: true,
             proxy: true,
             rolling: true,
             cookie: {
-                secure: isProduction,
+                secure: false, // Allow both HTTP and HTTPS
                 httpOnly: true,
-                sameSite: 'lax',
+                sameSite: 'none', // Allow cross-site cookies
                 path: '/',
-                maxAge: 24 * 60 * 60 * 1000
+                maxAge: 24 * 60 * 60 * 1000,
+                domain: '.onrender.com' // Allow cookies for all subdomains
             }
         }));
 
-        // Add session initialization check middleware
-        app.use((req, res, next) => {
-            if (!req.session) {
-                console.error('Session initialization failed');
-                return res.status(500).json({ error: 'Session initialization failed' });
-            }
-            next();
-        });
-
-        // Debug middleware after session initialization
-        app.use((req, res, next) => {
-            console.log('\n=== Request Debug Info ===');
-            console.log('URL:', req.url);
-            console.log('Method:', req.method);
-            console.log('Origin:', req.headers.origin);
-            console.log('Headers:', req.headers);
-            console.log('Session ID:', req.sessionID);
-            console.log('Session:', req.session);
-            console.log('Cookies:', req.headers.cookie);
-            console.log('=========================\n');
-            next();
-        });
-
-        // Debug middleware after session
+        // Add session debug middleware
         app.use((req, res, next) => {
             console.log('\n=== Session Debug ===');
-            console.log('URL:', req.url);
+            console.log('Request URL:', req.url);
+            console.log('Cookie Header:', req.headers.cookie);
             console.log('Session ID:', req.sessionID);
             console.log('Session:', req.session);
-            console.log('Cookies:', req.headers.cookie);
+            console.log('Is Session New:', req.session?.isNew);
             next();
         });
 
