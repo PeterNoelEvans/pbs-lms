@@ -204,71 +204,75 @@ async function initializeApp() {
             throw err;
         }
 
-        // Create Redis store with error handling
+        // Initialize Redis store with better configuration
         redisStore = new RedisStore({
             client: redisClient,
             prefix: 'sess:',
-            ttl: 24 * 60 * 60, // Session TTL in seconds (24 hours)
+            ttl: 24 * 60 * 60,
             disableTouch: false,
             logErrors: true,
-            retryStrategy: function (options) {
+            scanCount: 100,
+            retry_strategy: function (options) {
                 console.log('Redis store retry attempt:', options.attempt);
                 return Math.min(options.attempt * 100, 3000);
-            },
-            scanCount: 100,
-            serializer: {
-                parse: async function (raw) {
-                    try {
-                        return JSON.parse(raw);
-                    } catch (err) {
-                        console.error('Session parse error:', err);
-                        return {};
-                    }
-                },
-                stringify: function (sess) {
-                    try {
-                        return JSON.stringify(sess);
-                    } catch (err) {
-                        console.error('Session stringify error:', err);
-                        return '';
-                    }
-                }
             }
         });
 
-        // Test Redis connection and session store
-        try {
-            await redisClient.set('test:connection', 'ok');
-            const testResult = await redisClient.get('test:connection');
-            console.log('Redis connection test result:', testResult);
-            
-            if (testResult !== 'ok') {
-                throw new Error('Redis connection test failed');
+        // Session middleware configuration - MUST be before any routes
+        app.use(session({
+            store: redisStore,
+            name: 'connect.sid',
+            secret: process.env.SESSION_SECRET || 'your-secret-key',
+            resave: true, // Changed back to true to ensure updates are saved
+            saveUninitialized: true, // Changed to true to ensure session is always created
+            proxy: true,
+            rolling: true,
+            cookie: {
+                secure: 'auto', // Let Express detect HTTPS
+                httpOnly: true,
+                sameSite: 'none',
+                path: '/',
+                maxAge: 24 * 60 * 60 * 1000
             }
-        } catch (err) {
-            console.error('Redis connection test error:', err);
-            throw err;
-        }
+        }));
 
-        // Add Redis store error handler
-        redisStore.on('error', function(err) {
-            console.error('Redis Store Error:', err);
-            if (err.code === 'ECONNREFUSED') {
-                console.error('Redis connection refused. Attempting to reconnect...');
-                redisClient.connect().catch(console.error);
+        // Session initialization check middleware
+        app.use((req, res, next) => {
+            if (!req.session) {
+                console.error('Session not initialized');
+                return res.status(500).json({ error: 'Session initialization failed' });
+            }
+            // Initialize empty session if none exists
+            if (!req.session.initialized) {
+                req.session.initialized = true;
+                req.session.save((err) => {
+                    if (err) {
+                        console.error('Error saving initial session:', err);
+                        return res.status(500).json({ error: 'Session save failed' });
+                    }
+                    next();
+                });
+            } else {
+                next();
             }
         });
 
-        // Add Redis store connect handler with status check
-        redisStore.on('connect', function() {
-            console.log('Redis Store connected');
-            console.log('Redis Store Status:', {
-                client: redisClient?.isOpen,
-                ready: redisClient?.isReady
+        // Debug middleware AFTER session initialization
+        app.use((req, res, next) => {
+            console.log('\n=== Session Debug ===');
+            console.log('URL:', req.url);
+            console.log('Session ID:', req.sessionID);
+            console.log('Session:', req.session);
+            console.log('Session Store:', !!req.sessionStore);
+            console.log('Redis Connected:', redisClient?.isOpen);
+            console.log('Redis Ready:', redisClient?.isReady);
+            console.log('Headers:', {
+                cookie: req.headers.cookie,
+                'x-forwarded-proto': req.headers['x-forwarded-proto'],
+                'cf-visitor': req.headers['cf-visitor']
             });
+            next();
         });
-
-        console.log('Redis store created');
 
         // CORS configuration before session
         app.use((req, res, next) => {
@@ -286,25 +290,6 @@ async function initializeApp() {
             }
             next();
         });
-
-        // Session middleware with enhanced configuration
-        app.use(session({
-            store: redisStore,
-            name: 'connect.sid',
-            secret: process.env.SESSION_SECRET || 'your-secret-key',
-            resave: false,
-            saveUninitialized: false,
-            proxy: true,
-            rolling: true,
-            cookie: {
-                secure: true,
-                httpOnly: true,
-                sameSite: 'none',
-                path: '/',
-                domain: '.onrender.com',
-                maxAge: 24 * 60 * 60 * 1000
-            }
-        }));
 
         // Cookie cleanup middleware - remove duplicate cookies
         app.use((req, res, next) => {
