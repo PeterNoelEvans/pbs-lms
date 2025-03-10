@@ -41,13 +41,26 @@ let redisStore;
 async function initializeApp() {
     console.log('Initializing application...');
     try {
+        // Essential middleware first
+        app.use(express.json());
+        app.use(express.urlencoded({ extended: true }));
+        app.set('trust proxy', 1);
+
+        // Health check endpoint - MUST be defined before any async initialization
+        app.get('/health', (req, res) => {
+            // Simple synchronous health check
+            res.status(200).json({
+                status: 'ok',
+                timestamp: new Date().toISOString()
+            });
+        });
+
         // Initialize Redis client with better error handling
         console.log('Connecting to Redis...');
-        const redisUrl = process.env.REDIS_URL || 'redis://red-cv6hb9ij1k6c73e55rng:6379';
-        console.log('Using Redis URL:', redisUrl.replace(/:[^:]*@/, ':***@')); // Hide password in logs
         
-        redisClient = createClient({
-            url: redisUrl,
+        // Get Redis configuration from environment variables
+        const redisConfig = {
+            url: process.env.REDIS_URL || process.env.REDIS_INTERNAL_URL,
             socket: {
                 reconnectStrategy: (retries) => {
                     console.log(`Redis reconnection attempt ${retries}`);
@@ -59,9 +72,24 @@ async function initializeApp() {
                 },
                 connectTimeout: 10000, // 10 seconds
                 keepAlive: 5000, // Send keepalive every 5 seconds
-            }
+            },
+            // Fallback configuration if URL is not provided
+            host: process.env.REDIS_HOST || 'localhost',
+            port: process.env.REDIS_PORT || 6379,
+            username: process.env.REDIS_USERNAME,
+            password: process.env.REDIS_PASSWORD,
+            tls: isProduction ? {} : undefined // Enable TLS in production
+        };
+
+        console.log('Redis config:', {
+            ...redisConfig,
+            url: redisConfig.url ? redisConfig.url.replace(/:[^:]*@/, ':***@') : undefined,
+            password: redisConfig.password ? '***' : undefined
         });
 
+        redisClient = createClient(redisConfig);
+
+        // Set up event handlers
         redisClient.on('error', err => {
             console.error('Redis Client Error:', err);
         });
@@ -78,6 +106,11 @@ async function initializeApp() {
             console.log('Redis client connection ended');
         });
 
+        redisClient.on('reconnecting', () => {
+            console.log('Redis client reconnecting...');
+        });
+
+        // Connect to Redis
         await redisClient.connect();
         console.log('Redis connected successfully');
 
@@ -85,8 +118,13 @@ async function initializeApp() {
         try {
             const pingResult = await redisClient.ping();
             console.log('Redis PING result:', pingResult);
+            
+            // Test basic operations
+            await redisClient.set('test_key', 'Redis connection test');
+            const testValue = await redisClient.get('test_key');
+            console.log('Redis test value:', testValue);
         } catch (err) {
-            console.error('Redis PING failed:', err);
+            console.error('Redis connection test failed:', err);
             throw err;
         }
 
@@ -98,11 +136,6 @@ async function initializeApp() {
             disableTouch: false
         });
         console.log('Redis store created');
-
-        // Essential middleware first
-        app.use(express.json());
-        app.use(express.urlencoded({ extended: true }));
-        app.set('trust proxy', 1);
 
         // CORS configuration before session
         app.use((req, res, next) => {
@@ -158,7 +191,7 @@ async function initializeApp() {
         });
 
         // Serve static files
-        app.use(express.static(__dirname));
+app.use(express.static(__dirname));
         app.use(express.static(path.join(__dirname, 'public')));
 
         // Authentication middleware
@@ -418,32 +451,77 @@ async function initializeApp() {
             }
         });
 
-        // Health check endpoint
-        app.get('/health', async (req, res) => {
-            console.log('Health check request received');
+        // Detailed health check endpoint for debugging
+        app.get('/health/detailed', async (req, res) => {
+            console.log('\n=== Detailed Health Check ===');
+            console.log('Request received at:', new Date().toISOString());
+            console.log('Environment:', isProduction ? 'production' : 'development');
             
-            let redisStatus = 'unknown';
-            try {
-                await redisClient.ping();
-                redisStatus = 'connected';
-            } catch (error) {
-                console.error('Redis health check failed:', error);
-                redisStatus = 'disconnected';
-            }
-            
-            res.json({
+            const health = {
                 status: 'ok',
                 timestamp: new Date().toISOString(),
                 environment: isProduction ? 'production' : 'development',
                 redis: {
-                    status: redisStatus,
-                    connected: redisClient.isReady
+                    status: 'unknown',
+                    connected: false,
+                    error: null,
+                    client: {
+                        ready: redisClient?.isReady || false,
+                        connected: redisClient?.isOpen || false
+                    }
                 },
                 session: {
-                    id: req.sessionID,
-                    cookie: req.session?.cookie
+                    exists: !!req.session,
+                    id: req.sessionID || null,
+                    cookie: req.session?.cookie || null
                 }
-            });
+            };
+
+            try {
+                console.log('Testing Redis connection...');
+                if (!redisClient) {
+                    throw new Error('Redis client is not initialized');
+                }
+
+                // Test Redis connection
+                const pingResult = await redisClient.ping();
+                console.log('Redis PING result:', pingResult);
+                
+                // Test Redis operations
+                await redisClient.set('health_check', 'ok');
+                const testValue = await redisClient.get('health_check');
+                console.log('Redis test value:', testValue);
+
+                health.redis = {
+                    status: 'connected',
+                    connected: true,
+                    ping: pingResult,
+                    testValue: testValue,
+                    client: {
+                        ready: redisClient.isReady,
+                        connected: redisClient.isOpen
+                    }
+                };
+            } catch (error) {
+                console.error('Health check Redis error:', error);
+                health.redis = {
+                    status: 'error',
+                    connected: false,
+                    error: error.message,
+                    stack: error.stack,
+                    client: {
+                        ready: redisClient?.isReady || false,
+                        connected: redisClient?.isOpen || false
+                    }
+                };
+                // Don't change overall status - Redis issues shouldn't fail the health check
+            }
+
+            // Log the complete health status
+            console.log('Health check result:', JSON.stringify(health, null, 2));
+
+            // Always return 200 - detailed health check is for debugging
+            res.status(200).json(health);
         });
 
         // Start server last, after all routes are defined
@@ -462,6 +540,82 @@ async function initializeApp() {
 initializeApp().catch(err => {
     console.error('Application startup failed:', err);
     process.exit(1);
+});
+
+// Graceful shutdown handling
+process.on('SIGTERM', () => {
+    console.log('SIGTERM signal received. Starting graceful shutdown...');
+    
+    // Track shutdown state
+    let shutdownComplete = false;
+    
+    // Set a timeout for forceful shutdown
+    const forceShutdown = setTimeout(() => {
+        console.error('Forceful shutdown initiated after timeout');
+        process.exit(1);
+    }, 25000); // 25 seconds timeout (Render gives 30 seconds)
+    
+    Promise.all([
+        // Close the HTTP server
+        new Promise((resolve) => {
+            if (!app.server) {
+                resolve();
+                return;
+            }
+            console.log('Closing HTTP server...');
+            app.server.close(() => {
+                console.log('HTTP server closed');
+                resolve();
+            });
+        }),
+        // Close Redis connection
+        new Promise((resolve) => {
+            if (!redisClient) {
+                resolve();
+                return;
+            }
+            console.log('Closing Redis connection...');
+            redisClient.quit().then(() => {
+                console.log('Redis connection closed');
+                resolve();
+            }).catch((err) => {
+                console.error('Error closing Redis connection:', err);
+                resolve();
+            });
+        }),
+        // Close database connection
+        new Promise((resolve) => {
+            if (!db) {
+                resolve();
+                return;
+            }
+            console.log('Closing database connection...');
+            db.close((err) => {
+                if (err) {
+                    console.error('Error closing database:', err);
+                } else {
+                    console.log('Database connection closed');
+                }
+                resolve();
+            });
+        })
+    ]).then(() => {
+        console.log('Graceful shutdown completed');
+        clearTimeout(forceShutdown);
+        shutdownComplete = true;
+        process.exit(0);
+    }).catch((err) => {
+        console.error('Error during graceful shutdown:', err);
+        if (!shutdownComplete) {
+            process.exit(1);
+        }
+    });
+});
+
+// Store server instance for graceful shutdown
+app.server = app.listen(port, () => {
+    console.log(`Server running on port ${port}`);
+    console.log('Running in', isProduction ? 'production mode' : 'development mode');
 });
 
 // Debug middleware to log session and request details
