@@ -104,8 +104,15 @@ async function initializeApp() {
         console.log('Connecting to Redis...');
         
         // Get Redis configuration from environment variables
+        const redisUrl = process.env.REDIS_URL || process.env.REDIS_INTERNAL_URL;
+        if (!redisUrl) {
+            throw new Error('Redis URL not configured');
+        }
+
+        console.log('Redis URL protocol:', new URL(redisUrl).protocol);
+
         const redisConfig = {
-            url: process.env.REDIS_URL || process.env.REDIS_INTERNAL_URL,
+            url: redisUrl,
             socket: {
                 reconnectStrategy: (retries) => {
                     console.log(`Redis reconnection attempt ${retries}`);
@@ -117,71 +124,68 @@ async function initializeApp() {
                 },
                 connectTimeout: 60000, // 60 seconds
                 keepAlive: 30000, // 30 seconds
-                tls: false // Disable TLS since we're using redis:// not rediss://
-            }
+                tls: false // Disable TLS for redis:// URLs
+            },
+            // Remove retry_strategy as it's redundant with reconnectStrategy
         };
 
         // Log Redis connection attempt (but hide sensitive URL)
         console.log('Attempting to connect to Redis with config:', {
             hasUrl: !!redisConfig.url,
-            urlProtocol: redisConfig.url ? new URL(redisConfig.url).protocol : 'none',
+            urlProtocol: new URL(redisConfig.url).protocol,
             tls: redisConfig.socket.tls,
             timeout: redisConfig.socket.connectTimeout,
             keepAlive: redisConfig.socket.keepAlive
         });
 
-        // Initialize Redis client with better error handling
+        // Initialize Redis client
         redisClient = createClient(redisConfig);
 
         // Enhanced error logging
         redisClient.on('error', err => {
             console.error('Redis Client Error:', err);
             console.error('Redis connection details:', {
-                ready: redisClient.isReady,
-                connected: redisClient.isOpen,
-                error: err.message,
-                stack: err.stack
+                ready: redisClient?.isReady,
+                connected: redisClient?.isOpen,
+                error: err.message
             });
+
+            // If connection times out, log additional information
+            if (err.message.includes('timeout')) {
+                console.error('Connection timeout details:', {
+                    url: redisUrl ? 'Configured' : 'Missing',
+                    protocol: redisUrl ? new URL(redisUrl).protocol : 'N/A',
+                    socketConfig: redisConfig.socket
+                });
+            }
         });
 
         redisClient.on('connect', () => {
             console.log('Redis client connecting...', {
-                ready: redisClient.isReady,
-                connected: redisClient.isOpen,
-                url: redisConfig.url ? 'URL configured' : 'No URL configured'
+                ready: redisClient?.isReady,
+                connected: redisClient?.isOpen
             });
         });
 
         redisClient.on('ready', () => {
-            console.log('Redis client ready', {
-                ready: redisClient.isReady,
-                connected: redisClient.isOpen
-            });
+            console.log('Redis client ready and connected');
         });
 
-        redisClient.on('end', () => {
-            console.log('Redis client connection ended');
-        });
-
-        redisClient.on('reconnecting', () => {
-            console.log('Redis client reconnecting...');
-        });
-
-        // Connect to Redis
-        await redisClient.connect();
-        console.log('Redis connected successfully');
-
-        // Test Redis connection immediately
+        // Connect to Redis with timeout
         try {
+            await Promise.race([
+                redisClient.connect(),
+                new Promise((_, reject) => 
+                    setTimeout(() => reject(new Error('Redis connection timeout after 60s')), 60000)
+                )
+            ]);
+            console.log('Redis connected successfully');
+
+            // Test Redis connection
             const pingResult = await redisClient.ping();
             console.log('Redis PING result:', pingResult);
-            
-            // Test basic operations
-            await redisClient.set('test_key', 'Redis connection test');
-            const testValue = await redisClient.get('test_key');
-            console.log('Redis test value:', testValue);
         } catch (err) {
-            console.error('Redis connection test failed:', err);
+            console.error('Redis connection failed:', err);
             throw err;
         }
 
@@ -231,7 +235,7 @@ async function initializeApp() {
             store: redisStore,
             name: 'connect.sid',
             secret: process.env.SESSION_SECRET || 'your-secret-key',
-            resave: true, // Changed to true to ensure session is saved
+            resave: true,
             saveUninitialized: false,
             proxy: true,
             rolling: true,
@@ -241,11 +245,31 @@ async function initializeApp() {
                 sameSite: 'none',
                 path: '/',
                 maxAge: 24 * 60 * 60 * 1000
-            },
-            // Add error handling for session store
-            storeReady: true,
-            unset: 'destroy'
+            }
         }));
+
+        // Add session consistency middleware
+        app.use((req, res, next) => {
+            // If there's a cookie but no session, try to load from Redis
+            if (req.headers.cookie?.includes('connect.sid') && !req.session?.user) {
+                console.log('Attempting to restore session from Redis...');
+                const sessionID = req.sessionID;
+                if (sessionID) {
+                    redisStore.get(sessionID, (err, sess) => {
+                        if (err) {
+                            console.error('Error loading session from Redis:', err);
+                        } else if (sess) {
+                            console.log('Found session in Redis, restoring...');
+                            req.session.user = sess.user;
+                            req.session.save();
+                        }
+                        next();
+                    });
+                    return;
+                }
+            }
+            next();
+        });
 
         // Add session store debug middleware with async/await
         app.use(async (req, res, next) => {
@@ -321,8 +345,6 @@ app.use(express.static(__dirname));
         app.post('/login', async (req, res) => {
             console.log('\n=== Login Attempt ===');
             console.log('Raw request body:', req.body);
-            console.log('Headers:', req.headers);
-            console.log('Session before login:', req.session);
 
             const { username, password } = req.body;
             
@@ -355,7 +377,13 @@ app.use(express.static(__dirname));
                     return res.status(401).json({ error: 'Invalid credentials' });
                 }
 
-                // Set user data in session
+                // Clear any existing session
+                if (req.session.user) {
+                    console.log('Clearing existing session');
+                    req.session.destroy();
+                }
+
+                // Create new session
                 req.session.user = {
                     id: user.id,
                     username: user.username,
@@ -380,7 +408,11 @@ app.use(express.static(__dirname));
                 // Send success response with redirect
                 res.json({
                     success: true,
-                    redirect: '/dashboard'
+                    redirect: '/dashboard',
+                    user: {
+                        username: user.username,
+                        portfolio_path: user.portfolio_path
+                    }
                 });
             } catch (error) {
                 console.error('Login error:', error);
@@ -717,7 +749,6 @@ app.post('/register', async (req, res) => {
         username: req.body.username,
         portfolio_path: req.body.portfolio_path
     });
-    console.log('Headers:', req.headers);
 
     const { username, password, portfolio_path } = req.body;
     
@@ -727,20 +758,10 @@ app.post('/register', async (req, res) => {
     }
 
     try {
-        // Ensure database exists
-        if (isProduction) {
-            const fs = require('fs');
-            const dataDir = '/opt/render/project/src/data';
-            if (!fs.existsSync(dataDir)) {
-                console.log('Creating data directory...');
-                fs.mkdirSync(dataDir, { recursive: true });
-            }
-        }
-
         // Check if user already exists
         const existingUser = await new Promise((resolve, reject) => {
-            db.get('SELECT id, username, portfolio_path FROM users WHERE username = ? OR portfolio_path = ?', 
-                [username, portfolio_path], 
+            db.get('SELECT id, username, portfolio_path FROM users WHERE username = ?', 
+                [username], 
                 (err, row) => {
                     if (err) reject(err);
                     resolve(row);
@@ -748,19 +769,16 @@ app.post('/register', async (req, res) => {
         });
 
         if (existingUser) {
-            console.log('User or portfolio path already exists:', existingUser);
-            const error = existingUser.username === username ? 
-                'Username already exists' : 
-                'Portfolio path already exists';
-            return res.status(400).json({ error });
+            console.log('Username already exists:', existingUser);
+            return res.status(400).json({ error: 'Username already exists' });
         }
 
         const hashedPassword = await bcrypt.hash(password, 10);
         
         // Insert new user
         const result = await new Promise((resolve, reject) => {
-            db.run('INSERT INTO users (username, password, portfolio_path) VALUES (?, ?, ?)',
-                [username, hashedPassword, portfolio_path],
+            db.run('INSERT INTO users (username, password, portfolio_path, is_public) VALUES (?, ?, ?, ?)',
+                [username, hashedPassword, portfolio_path, true],
                 function(err) {
                     if (err) {
                         console.error('Database error during insert:', err);
@@ -775,11 +793,18 @@ app.post('/register', async (req, res) => {
         console.log('User registered successfully:', username);
         console.log('New user ID:', result);
 
-        // Set headers to prevent caching
-        res.set({
-            'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0'
+        // Set session immediately after registration
+        req.session.user = {
+            id: result,
+            username: username,
+            portfolio_path: portfolio_path
+        };
+
+        await new Promise((resolve, reject) => {
+            req.session.save((err) => {
+                if (err) reject(err);
+                else resolve();
+            });
         });
 
         // Send success response
