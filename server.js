@@ -263,7 +263,8 @@ async function initializeApp() {
         app.use(session({
             store: redisStore,
             secret: process.env.SESSION_SECRET || 'your-secret-key',
-            resave: false,
+            resave: true,
+            rolling: true,
             saveUninitialized: false,
             name: 'connect.sid',
             proxy: true,
@@ -273,29 +274,29 @@ async function initializeApp() {
                 sameSite: 'none',
                 path: '/',
                 maxAge: 24 * 60 * 60 * 1000 // 24 hours
-            },
-            unset: 'destroy'
+            }
         }));
 
-        // Add session store error logging
-        redisStore.on('error', function(err) {
-            console.error('Redis store error:', err);
-        });
-
-        // Add session debug middleware
+        // Single consolidated debug middleware - AFTER session initialization
         app.use((req, res, next) => {
-            // Log before session processing
-            console.log('\n=== Session Debug ===');
-            console.log('Request URL:', req.url);
-            console.log('Request Method:', req.method);
-            console.log('Session ID:', req.sessionID);
-            console.log('Session Data:', req.session);
-            console.log('Headers:', req.headers);
-            
-            // Add session debug header
-            res.setHeader('X-Session-Debug', req.sessionID || 'no-session');
-            
-            // Continue processing
+            // Wait for session to be fully initialized
+            process.nextTick(() => {
+                console.log('\n=== Request and Session Debug ===');
+                console.log('URL:', req.url);
+                console.log('Method:', req.method);
+                console.log('Session Status:', {
+                    exists: !!req.session,
+                    id: req.sessionID,
+                    user: req.session?.user,
+                    cookie: req.session?.cookie
+                });
+                console.log('Headers:', {
+                    origin: req.headers.origin,
+                    cookie: req.headers.cookie,
+                    'cf-visitor': req.headers['cf-visitor']
+                });
+                console.log('==============================\n');
+            });
             next();
         });
 
