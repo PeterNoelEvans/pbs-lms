@@ -287,52 +287,93 @@ async function initializeApp() {
             next();
         });
 
-        // Session middleware with Cloudflare-compatible configuration
+        // Session middleware with enhanced configuration
         app.use(session({
             store: redisStore,
             name: 'connect.sid',
             secret: process.env.SESSION_SECRET || 'your-secret-key',
-            resave: true,
+            resave: false,
             saveUninitialized: false,
             proxy: true,
             rolling: true,
             cookie: {
-                secure: 'auto',
+                secure: true,
                 httpOnly: true,
                 sameSite: 'none',
                 path: '/',
+                domain: '.onrender.com',
                 maxAge: 24 * 60 * 60 * 1000
             }
         }));
 
-        // Session restoration middleware
+        // Cookie cleanup middleware - remove duplicate cookies
         app.use((req, res, next) => {
-            if (!req.session && req.headers.cookie) {
+            if (req.headers.cookie) {
+                const cookies = req.headers.cookie.split(';')
+                    .map(c => c.trim())
+                    .filter(c => c.startsWith('connect.sid='));
+                
+                if (cookies.length > 1) {
+                    // Keep only the most recent cookie
+                    const latestCookie = cookies[cookies.length - 1];
+                    res.setHeader('Set-Cookie', [
+                        `${latestCookie}; Path=/; HttpOnly; Secure; SameSite=None; Domain=.onrender.com`,
+                        // Clear any other cookies
+                        ...cookies.slice(0, -1).map(c => 
+                            `${c.split('=')[0]}=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; Secure; SameSite=None; Domain=.onrender.com`
+                        )
+                    ]);
+                }
+            }
+            next();
+        });
+
+        // Enhanced session restoration middleware
+        app.use((req, res, next) => {
+            if (!req.session?.user && req.headers.cookie) {
                 const cookies = req.headers.cookie.split(';')
                     .map(c => c.trim())
                     .filter(c => c.startsWith('connect.sid='));
                 
                 if (cookies.length > 0) {
                     console.log('Attempting to restore session...');
-                    const sessionId = cookies[0].split('=')[1];
+                    const sessionId = cookies[0].split('=')[1].split('.')[0].slice(2); // Extract session ID
                     
                     redisStore.get(sessionId, (err, session) => {
                         if (err) {
                             console.error('Error restoring session:', err);
                         } else if (session) {
-                            console.log('Session restored:', session);
-                            req.session = session;
+                            console.log('Found session in Redis:', session);
+                            req.session.regenerate((err) => {
+                                if (err) {
+                                    console.error('Error regenerating session:', err);
+                                    next();
+                                    return;
+                                }
+                                
+                                // Copy session data
+                                Object.assign(req.session, session);
+                                
+                                // Save the regenerated session
+                                req.session.save((err) => {
+                                    if (err) {
+                                        console.error('Error saving regenerated session:', err);
+                                    } else {
+                                        console.log('Session restored and saved:', req.session);
+                                    }
+                                    next();
+                                });
+                            });
+                            return;
                         } else {
                             console.log('No session found in Redis for ID:', sessionId);
                         }
                         next();
                     });
-                } else {
-                    next();
+                    return;
                 }
-            } else {
-                next();
             }
+            next();
         });
 
         // Add session debug middleware with more detailed logging
