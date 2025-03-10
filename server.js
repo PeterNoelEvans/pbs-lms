@@ -44,7 +44,22 @@ async function initializeApp() {
         // Essential middleware first
         app.use(express.json());
         app.use(express.urlencoded({ extended: true }));
+        
+        // Trust proxy settings - MUST be before session middleware
         app.set('trust proxy', 1);
+        
+        // Trust Cloudflare headers
+        app.use((req, res, next) => {
+            if (req.headers['cf-visitor']) {
+                try {
+                    const cfVisitor = JSON.parse(req.headers['cf-visitor']);
+                    req.protocol = cfVisitor.scheme;
+                } catch (e) {
+                    console.error('Error parsing cf-visitor header:', e);
+                }
+            }
+            next();
+        });
 
         // Health check endpoint - MUST be defined before any async initialization
         app.get('/health', (req, res) => {
@@ -272,7 +287,7 @@ async function initializeApp() {
             next();
         });
 
-        // Session middleware with more permissive configuration
+        // Session middleware with Cloudflare-compatible configuration
         app.use(session({
             store: redisStore,
             name: 'connect.sid',
@@ -282,44 +297,58 @@ async function initializeApp() {
             proxy: true,
             rolling: true,
             cookie: {
-                secure: false,
+                secure: 'auto',
                 httpOnly: true,
-                sameSite: 'lax',
+                sameSite: 'none',
                 path: '/',
                 maxAge: 24 * 60 * 60 * 1000
-            },
-            unset: 'destroy'
+            }
         }));
+
+        // Session restoration middleware
+        app.use((req, res, next) => {
+            if (!req.session && req.headers.cookie) {
+                const cookies = req.headers.cookie.split(';')
+                    .map(c => c.trim())
+                    .filter(c => c.startsWith('connect.sid='));
+                
+                if (cookies.length > 0) {
+                    console.log('Attempting to restore session...');
+                    const sessionId = cookies[0].split('=')[1];
+                    
+                    redisStore.get(sessionId, (err, session) => {
+                        if (err) {
+                            console.error('Error restoring session:', err);
+                        } else if (session) {
+                            console.log('Session restored:', session);
+                            req.session = session;
+                        } else {
+                            console.log('No session found in Redis for ID:', sessionId);
+                        }
+                        next();
+                    });
+                } else {
+                    next();
+                }
+            } else {
+                next();
+            }
+        });
 
         // Add session debug middleware with more detailed logging
         app.use((req, res, next) => {
             console.log('\n=== Detailed Session Debug ===');
             console.log('Request URL:', req.url);
+            console.log('Protocol:', req.protocol);
+            console.log('Secure:', req.secure);
+            console.log('X-Forwarded-Proto:', req.headers['x-forwarded-proto']);
+            console.log('CF-Visitor:', req.headers['cf-visitor']);
             console.log('Cookie Header:', req.headers.cookie);
             console.log('Session ID:', req.sessionID);
             console.log('Session Store:', !!req.sessionStore);
             console.log('Redis Store Connected:', redisClient?.isOpen);
             console.log('Redis Store Ready:', redisClient?.isReady);
             console.log('Session:', req.session);
-            
-            // Check for and fix duplicate cookies
-            if (req.headers.cookie && req.headers.cookie.split('connect.sid=').length > 2) {
-                console.log('Detected duplicate cookies, cleaning up...');
-                const cookies = req.headers.cookie.split(';');
-                const uniqueCookies = new Map();
-                
-                cookies.forEach(cookie => {
-                    const [name, value] = cookie.trim().split('=');
-                    uniqueCookies.set(name, value);
-                });
-                
-                req.headers.cookie = Array.from(uniqueCookies.entries())
-                    .map(([name, value]) => `${name}=${value}`)
-                    .join('; ');
-                    
-                console.log('Cleaned cookie header:', req.headers.cookie);
-            }
-            
             next();
         });
 
