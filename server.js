@@ -240,10 +240,10 @@ async function initializeApp() {
             res.header('Access-Control-Allow-Credentials', 'true');
             res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control');
             res.header('Access-Control-Expose-Headers', 'Set-Cookie');
+            res.header('Access-Control-Max-Age', '86400');
             
             // Handle preflight
             if (req.method === 'OPTIONS') {
-                res.header('Access-Control-Max-Age', '86400');
                 return res.status(204).end();
             }
             next();
@@ -271,16 +271,42 @@ async function initializeApp() {
                 secure: true,
                 httpOnly: true,
                 sameSite: 'none',
+                domain: '.onrender.com',
+                path: '/',
                 maxAge: 24 * 60 * 60 * 1000 // 24 hours
-            }
+            },
+            unset: 'destroy'
         }));
 
-        // Simple session logging middleware
+        // Add session store error logging
+        redisStore.on('error', function(err) {
+            console.error('Redis store error:', err);
+        });
+
+        // Add session store connect logging
+        redisStore.on('connect', function() {
+            console.log('Redis store connected');
+        });
+
+        // Simple session debug middleware
         app.use((req, res, next) => {
-            console.log('\n=== Session Debug ===');
+            // Log before session processing
+            console.log('\n=== Pre-Session Debug ===');
             console.log('URL:', req.url);
-            console.log('Session ID:', req.sessionID);
+            console.log('Raw Cookie:', req.headers.cookie);
+            console.log('Session ID (pre):', req.sessionID);
+            
+            // Ensure session
+            if (!req.session) {
+                console.error('No session object');
+                return next(new Error('Session initialization failed'));
+            }
+
+            // Log after session processing
+            console.log('\n=== Post-Session Debug ===');
+            console.log('Session ID (post):', req.sessionID);
             console.log('Session:', req.session);
+            
             next();
         });
 
