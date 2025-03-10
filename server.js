@@ -245,33 +245,55 @@ async function initializeApp() {
                 sameSite: 'none',
                 path: '/',
                 maxAge: 24 * 60 * 60 * 1000
-            }
+            },
+            unset: 'destroy'
         }));
 
         // Add session consistency middleware immediately after session
         app.use((req, res, next) => {
             if (!req.session) {
+                console.error('Session initialization failed');
                 return next(new Error('Session initialization failed'));
             }
             
-            // If there's a cookie but no session user, try to load from Redis
-            if (req.headers.cookie?.includes('connect.sid') && !req.session.user) {
-                console.log('Attempting to restore session from Redis...');
-                const sessionID = req.sessionID;
-                if (sessionID) {
-                    redisStore.get(sessionID, (err, sess) => {
+            // If there's a cookie but no session user, try to restore from Redis
+            if (req.headers.cookie?.includes('connect.sid')) {
+                console.log('Found session cookie, attempting to restore session...');
+                console.log('Session ID:', req.sessionID);
+                
+                if (req.sessionID) {
+                    redisStore.get(req.sessionID, (err, sess) => {
                         if (err) {
                             console.error('Error loading session from Redis:', err);
-                        } else if (sess) {
-                            console.log('Found session in Redis, restoring...');
-                            req.session.user = sess.user;
-                            req.session.save((err) => {
-                                if (err) console.error('Error saving restored session:', err);
-                                next();
+                            return next();
+                        }
+                        
+                        if (sess) {
+                            console.log('Found session in Redis:', sess);
+                            // Restore the entire session
+                            req.session.regenerate((err) => {
+                                if (err) {
+                                    console.error('Error regenerating session:', err);
+                                    return next();
+                                }
+                                
+                                // Copy all properties from the stored session
+                                Object.assign(req.session, sess);
+                                
+                                req.session.save((err) => {
+                                    if (err) {
+                                        console.error('Error saving restored session:', err);
+                                    } else {
+                                        console.log('Session restored successfully');
+                                    }
+                                    next();
+                                });
                             });
                             return;
+                        } else {
+                            console.log('No session found in Redis for ID:', req.sessionID);
+                            next();
                         }
-                        next();
                     });
                     return;
                 }
