@@ -262,126 +262,25 @@ async function initializeApp() {
         // Session middleware configuration
         app.use(session({
             store: redisStore,
-            name: 'connect.sid',
             secret: process.env.SESSION_SECRET || 'your-secret-key',
-            resave: true,
-            saveUninitialized: true,
+            resave: false,
+            saveUninitialized: false,
+            name: 'connect.sid',
             proxy: true,
-            rolling: true,
             cookie: {
                 secure: true,
                 httpOnly: true,
                 sameSite: 'none',
-                path: '/',
-                maxAge: 24 * 60 * 60 * 1000
-            },
-            genid: function(req) {
-                // Generate a custom session ID that includes a timestamp
-                return Date.now() + '-' + Math.random().toString(36).substring(2);
+                maxAge: 24 * 60 * 60 * 1000 // 24 hours
             }
         }));
 
-        // Session verification middleware
+        // Simple session logging middleware
         app.use((req, res, next) => {
-            // Check if session exists
-            if (!req.session) {
-                console.error('No session object');
-                return next(new Error('Session initialization failed'));
-            }
-
-            // Log session details
-            console.log('\n=== Session Verification ===');
-            console.log('Session ID:', req.sessionID);
-            console.log('Session:', req.session);
-            console.log('Cookie:', req.session.cookie);
-
-            // Set session cookie on every response
-            const cookieStr = `connect.sid=s%3A${req.sessionID}; Path=/; HttpOnly; Secure; SameSite=None`;
-            res.setHeader('Set-Cookie', cookieStr);
-
-            // Touch session to keep it alive
-            req.session.touch();
-            
-            next();
-        });
-
-        // Session restoration middleware
-        app.use(async (req, res, next) => {
-            if (!req.session?.user && req.headers.cookie) {
-                try {
-                    const cookies = req.headers.cookie.split(';')
-                        .map(c => c.trim())
-                        .filter(c => c.startsWith('connect.sid='));
-                    
-                    if (cookies.length > 0) {
-                        const sessionId = cookies[0].split('=')[1].split('.')[0].slice(2);
-                        console.log('Attempting to restore session:', sessionId);
-                        
-                        const session = await new Promise((resolve, reject) => {
-                            redisStore.get(sessionId, (err, session) => {
-                                if (err) reject(err);
-                                else resolve(session);
-                            });
-                        });
-
-                        if (session) {
-                            console.log('Found session in Redis:', session);
-                            await new Promise((resolve, reject) => {
-                                req.session.regenerate((err) => {
-                                    if (err) {
-                                        console.error('Session regeneration error:', err);
-                                        reject(err);
-                                    } else {
-                                        Object.assign(req.session, session);
-                                        req.session.save((err) => {
-                                            if (err) {
-                                                console.error('Session save error:', err);
-                                                reject(err);
-                                            } else {
-                                                console.log('Session restored and saved:', req.session);
-                                                resolve();
-                                            }
-                                        });
-                                    }
-                                });
-                            });
-                        } else {
-                            console.log('No session found in Redis for ID:', sessionId);
-                        }
-                    }
-                } catch (err) {
-                    console.error('Session restoration error:', err);
-                }
-            }
-            next();
-        });
-
-        // Debug middleware
-        app.use((req, res, next) => {
-            console.log('\n=== Session State ===');
+            console.log('\n=== Session Debug ===');
             console.log('URL:', req.url);
             console.log('Session ID:', req.sessionID);
             console.log('Session:', req.session);
-            console.log('Redis Connected:', redisClient?.isOpen);
-            console.log('Redis Ready:', redisClient?.isReady);
-            console.log('Headers:', {
-                cookie: req.headers.cookie,
-                'x-forwarded-proto': req.headers['x-forwarded-proto'],
-                'cf-visitor': req.headers['cf-visitor']
-            });
-
-            // Ensure session cookie is set properly
-            if (req.sessionID) {
-                const cookieOptions = [
-                    'Path=/',
-                    'HttpOnly',
-                    'Secure',
-                    'SameSite=None'
-                ].join('; ');
-                
-                res.set('Set-Cookie', `connect.sid=s%3A${req.sessionID}; ${cookieOptions}`);
-            }
-            
             next();
         });
 
