@@ -55,6 +55,51 @@ async function initializeApp() {
             });
         });
 
+        // Debug middleware to log session and request details
+        app.use((req, res, next) => {
+            console.log('\n=== Request Debug Info ===');
+            console.log('URL:', req.url);
+            console.log('Method:', req.method);
+            console.log('Origin:', req.headers.origin);
+            console.log('Headers:', req.headers);
+            console.log('Session ID:', req.sessionID);
+            console.log('Session:', req.session);
+            console.log('Cookies:', req.headers.cookie);
+            console.log('=========================\n');
+            next();
+        });
+
+        // Authentication middleware
+        const requireAuth = (req, res, next) => {
+            console.log('\n=== Auth Check ===');
+            console.log('Session:', req.session);
+            console.log('User:', req.session?.user);
+            
+            if (!req.session || !req.session.user) {
+                console.log('No valid session, redirecting to login');
+                return res.redirect('/login.html');
+            }
+            next();
+        };
+
+        // Admin middleware with enhanced logging
+        const requireAdmin = (req, res, next) => {
+            const adminToken = req.headers['admin-token'];
+            console.log('\n=== Admin Access Attempt ===');
+            console.log('URL:', req.url);
+            console.log('Method:', req.method);
+            console.log('IP:', req.ip);
+            console.log('Token provided:', !!adminToken);
+            
+            if (adminToken === process.env.ADMIN_TOKEN || adminToken === 'your-secret-admin-token') {
+                console.log('Admin access granted');
+                next();
+            } else {
+                console.log('Admin access denied');
+                res.status(403).json({ error: 'Unauthorized' });
+            }
+        };
+
         // Initialize Redis client with better error handling
         console.log('Connecting to Redis...');
         
@@ -194,20 +239,7 @@ async function initializeApp() {
 app.use(express.static(__dirname));
         app.use(express.static(path.join(__dirname, 'public')));
 
-        // Authentication middleware
-        const requireAuth = (req, res, next) => {
-            console.log('\n=== Auth Check ===');
-            console.log('Session:', req.session);
-            console.log('User:', req.session?.user);
-            
-            if (!req.session || !req.session.user) {
-                console.log('No valid session, redirecting to login');
-                return res.redirect('/login.html');
-            }
-            next();
-        };
-
-        // Define all routes
+        // Define routes that use the middleware
         app.post('/login', async (req, res) => {
             console.log('\n=== Login Attempt ===');
             console.log('Raw request body:', req.body);
@@ -278,55 +310,43 @@ app.use(express.static(__dirname));
             }
         });
 
-        app.get('/dashboard', (req, res) => {
+        app.get('/dashboard', requireAuth, (req, res) => {
             console.log('\n=== Dashboard Access Attempt ===');
             console.log('Session:', req.session);
             console.log('User:', req.session?.user);
             console.log('Cookies:', req.headers.cookie);
             
-            if (!req.session || !req.session.user) {
-                console.log('No valid session, redirecting to login');
-                return res.redirect('/login.html');
-            }
-            
             console.log('Valid session found, serving dashboard');
             res.sendFile(path.join(__dirname, 'dashboard.html'));
         });
 
-        // Redis test endpoint
-        app.get('/test-redis', async (req, res) => {
-            console.log('\n=== Testing Redis Connection ===');
-            try {
-                // Test 1: Basic set/get
-                await redisClient.set('testKey', 'Redis is working!');
-                const value = await redisClient.get('testKey');
-                console.log('Redis test value:', value);
-
-                // Test 2: Ping
-                const pingResult = await redisClient.ping();
-                console.log('Redis ping result:', pingResult);
-
-                // Test 3: Connection status
-                console.log('Redis ready state:', redisClient.isReady);
-                console.log('Redis connection state:', redisClient.isOpen);
-
-                res.json({
-                    success: true,
-                    redisValue: value,
-                    ping: pingResult,
-                    connectionStatus: {
-                        isReady: redisClient.isReady,
-                        isOpen: redisClient.isOpen
+        app.post('/toggle-privacy', requireAuth, (req, res) => {
+            db.run('UPDATE users SET is_public = NOT is_public WHERE id = ?',
+                [req.session.user.id],
+                function(err) {
+                    if (err) {
+                        res.status(500).json({ error: 'Error updating privacy settings' });
+                    } else {
+                        // Get the new status after toggle
+                        db.get('SELECT is_public FROM users WHERE id = ?', [req.session.user.id], (err, result) => {
+                            if (err) {
+                                res.status(500).json({ error: 'Error getting updated status' });
+                            } else {
+                                res.json({ success: true, is_public: result.is_public });
+                            }
+                        });
                     }
                 });
-            } catch (err) {
-                console.error('Redis test error:', err);
-                res.status(500).json({
-                    error: 'Redis test failed',
-                    details: err.message,
-                    stack: err.stack
-                });
-            }
+        });
+
+        app.get('/get-privacy-status', requireAuth, (req, res) => {
+            db.get('SELECT is_public FROM users WHERE id = ?', [req.session.user.id], (err, result) => {
+                if (err) {
+                    res.status(500).json({ error: 'Error getting privacy status' });
+                } else {
+                    res.json({ is_public: result.is_public });
+                }
+            });
         });
 
         // Additional routes
@@ -618,38 +638,6 @@ app.server = app.listen(port, () => {
     console.log('Running in', isProduction ? 'production mode' : 'development mode');
 });
 
-// Debug middleware to log session and request details
-app.use((req, res, next) => {
-    console.log('\n=== Request Debug Info ===');
-    console.log('URL:', req.url);
-    console.log('Method:', req.method);
-    console.log('Origin:', req.headers.origin);
-    console.log('Headers:', req.headers);
-    console.log('Session ID:', req.sessionID);
-    console.log('Session:', req.session);
-    console.log('Cookies:', req.headers.cookie);
-    console.log('=========================\n');
-    next();
-});
-
-// Admin middleware with enhanced logging
-const requireAdmin = (req, res, next) => {
-    const adminToken = req.headers['admin-token'];
-    console.log('\n=== Admin Access Attempt ===');
-    console.log('URL:', req.url);
-    console.log('Method:', req.method);
-    console.log('IP:', req.ip);
-    console.log('Token provided:', !!adminToken);
-    
-    if (adminToken === process.env.ADMIN_TOKEN || adminToken === 'your-secret-admin-token') {
-        console.log('Admin access granted');
-        next();
-    } else {
-        console.log('Admin access denied');
-        res.status(403).json({ error: 'Unauthorized' });
-    }
-};
-
 // Routes
 app.post('/register', async (req, res) => {
     console.log('\n=== Registration Attempt ===');
@@ -732,36 +720,6 @@ app.post('/register', async (req, res) => {
         console.error('Registration error:', error);
         res.status(500).json({ error: 'Error creating user. Please try again.' });
     }
-});
-
-app.post('/toggle-privacy', requireAuth, (req, res) => {
-    db.run('UPDATE users SET is_public = NOT is_public WHERE id = ?',
-        [req.session.user.id],
-        function(err) {
-            if (err) {
-                res.status(500).json({ error: 'Error updating privacy settings' });
-            } else {
-                // Get the new status after toggle
-                db.get('SELECT is_public FROM users WHERE id = ?', [req.session.user.id], (err, result) => {
-                    if (err) {
-                        res.status(500).json({ error: 'Error getting updated status' });
-                    } else {
-                        res.json({ success: true, is_public: result.is_public });
-                    }
-                });
-            }
-        });
-});
-
-// New endpoint to get privacy status
-app.get('/get-privacy-status', requireAuth, (req, res) => {
-    db.get('SELECT is_public FROM users WHERE id = ?', [req.session.user.id], (err, result) => {
-        if (err) {
-            res.status(500).json({ error: 'Error getting privacy status' });
-        } else {
-            res.json({ is_public: result.is_public });
-        }
-    });
 });
 
 app.get('/check-access/*', (req, res) => {
