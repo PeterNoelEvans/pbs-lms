@@ -218,6 +218,33 @@ async function initializeApp() {
             }
         });
 
+        // Add Redis store error handler
+        redisStore.on('error', function(err) {
+            console.error('Redis Store Error:', err);
+            if (err.code === 'ECONNREFUSED') {
+                console.error('Redis connection refused. Attempting to reconnect...');
+                redisClient.connect().catch(console.error);
+            }
+        });
+
+        // Add Redis store connect handler
+        redisStore.on('connect', function() {
+            console.log('Redis Store connected and ready');
+        });
+
+        // Test Redis store
+        await new Promise((resolve, reject) => {
+            redisStore.client.ping((err, result) => {
+                if (err) {
+                    console.error('Redis store test failed:', err);
+                    reject(err);
+                } else {
+                    console.log('Redis store test successful:', result);
+                    resolve();
+                }
+            });
+        });
+
         // CORS configuration BEFORE session middleware
         app.use((req, res, next) => {
             const origin = req.headers.origin || 'https://codinghtml-presentation.onrender.com';
@@ -260,39 +287,46 @@ async function initializeApp() {
                 sameSite: 'none',
                 path: '/',
                 maxAge: 24 * 60 * 60 * 1000
+            },
+            genid: function(req) {
+                // Generate a custom session ID that includes a timestamp
+                return Date.now() + '-' + Math.random().toString(36).substring(2);
             }
         }));
 
-        // Session initialization middleware
+        // Session verification middleware
         app.use((req, res, next) => {
+            // Check if session exists
             if (!req.session) {
+                console.error('No session object');
                 return next(new Error('Session initialization failed'));
             }
 
-            // Ensure session has basic structure
-            if (!req.session.initialized) {
-                req.session.initialized = true;
-                req.session.save((err) => {
-                    if (err) {
-                        console.error('Error saving initial session:', err);
-                        return next(err);
-                    }
-                    next();
-                });
-            } else {
-                next();
-            }
+            // Log session details
+            console.log('\n=== Session Verification ===');
+            console.log('Session ID:', req.sessionID);
+            console.log('Session:', req.session);
+            console.log('Cookie:', req.session.cookie);
+
+            // Set session cookie on every response
+            const cookieStr = `connect.sid=s%3A${req.sessionID}; Path=/; HttpOnly; Secure; SameSite=None`;
+            res.setHeader('Set-Cookie', cookieStr);
+
+            // Touch session to keep it alive
+            req.session.touch();
+            
+            next();
         });
 
         // Session restoration middleware
         app.use(async (req, res, next) => {
             if (!req.session?.user && req.headers.cookie) {
-                const cookies = req.headers.cookie.split(';')
-                    .map(c => c.trim())
-                    .filter(c => c.startsWith('connect.sid='));
-                
-                if (cookies.length > 0) {
-                    try {
+                try {
+                    const cookies = req.headers.cookie.split(';')
+                        .map(c => c.trim())
+                        .filter(c => c.startsWith('connect.sid='));
+                    
+                    if (cookies.length > 0) {
                         const sessionId = cookies[0].split('=')[1].split('.')[0].slice(2);
                         console.log('Attempting to restore session:', sessionId);
                         
@@ -324,10 +358,12 @@ async function initializeApp() {
                                     }
                                 });
                             });
+                        } else {
+                            console.log('No session found in Redis for ID:', sessionId);
                         }
-                    } catch (err) {
-                        console.error('Session restoration error:', err);
                     }
+                } catch (err) {
+                    console.error('Session restoration error:', err);
                 }
             }
             next();
