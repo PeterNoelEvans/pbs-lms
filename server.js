@@ -544,8 +544,8 @@ app.use(express.static(__dirname));
             res.status(200).json(health);
         });
 
-        // Start server last, after all routes are defined
-        app.listen(port, () => {
+        // Create server instance
+        app.server = app.listen(port, () => {
             console.log(`Server running on port ${port}`);
             console.log('Running in', isProduction ? 'production mode' : 'development mode');
         });
@@ -630,12 +630,6 @@ process.on('SIGTERM', () => {
             process.exit(1);
         }
     });
-});
-
-// Store server instance for graceful shutdown
-app.server = app.listen(port, () => {
-    console.log(`Server running on port ${port}`);
-    console.log('Running in', isProduction ? 'production mode' : 'development mode');
 });
 
 // Routes
