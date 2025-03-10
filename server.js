@@ -211,12 +211,29 @@ async function initializeApp() {
             ttl: 24 * 60 * 60,
             disableTouch: false,
             logErrors: true,
-            scanCount: 100,
-            retry_strategy: function (options) {
-                console.log('Redis store retry attempt:', options.attempt);
-                return Math.min(options.attempt * 100, 3000);
-            }
+            scanCount: 100
         });
+
+        // Add Redis store debugging
+        const originalGet = redisStore.get.bind(redisStore);
+        redisStore.get = function(sid, fn) {
+            console.log('Redis Store GET attempt for session:', sid);
+            originalGet(sid, function(err, session) {
+                if (err) console.error('Redis Store GET error:', err);
+                console.log('Redis Store GET result:', session ? 'Session found' : 'Session not found');
+                fn(err, session);
+            });
+        };
+
+        const originalSet = redisStore.set.bind(redisStore);
+        redisStore.set = function(sid, session, fn) {
+            console.log('Redis Store SET attempt for session:', sid);
+            originalSet(sid, session, function(err) {
+                if (err) console.error('Redis Store SET error:', err);
+                else console.log('Redis Store SET successful');
+                fn && fn(err);
+            });
+        };
 
         // Add Redis store error handler
         redisStore.on('error', function(err) {
@@ -264,7 +281,6 @@ async function initializeApp() {
             store: redisStore,
             secret: process.env.SESSION_SECRET || 'your-secret-key',
             resave: true,
-            rolling: true,
             saveUninitialized: false,
             name: 'connect.sid',
             proxy: true,
@@ -274,8 +290,20 @@ async function initializeApp() {
                 sameSite: 'none',
                 path: '/',
                 maxAge: 24 * 60 * 60 * 1000 // 24 hours
-            }
+            },
+            // Add session store ready check
+            unset: 'keep',
+            rolling: true
         }));
+
+        // Add session store ready check middleware
+        app.use((req, res, next) => {
+            if (!redisStore.client.isReady) {
+                console.error('Redis store not ready');
+                return res.status(500).json({ error: 'Session store not ready' });
+            }
+            next();
+        });
 
         // Single consolidated debug middleware - AFTER session initialization
         app.use((req, res, next) => {
@@ -343,35 +371,60 @@ async function initializeApp() {
                 }
 
                 // Create a new session synchronously
-                req.session.user = {
-                    id: user.id,
-                    username: user.username,
-                    portfolio_path: user.portfolio_path
-                };
+                req.session.regenerate(async (err) => {
+                    if (err) {
+                        console.error('Session regeneration error:', err);
+                        return res.status(500).json({ error: 'Session error' });
+                    }
 
-                // Save the session
-                await new Promise((resolve, reject) => {
-                    req.session.save((err) => {
-                        if (err) {
-                            console.error('Session save error:', err);
-                            reject(err);
-                        } else {
-                            console.log('Session saved successfully');
-                            console.log('Final session state:', req.session);
-                            console.log('Session ID:', req.sessionID);
-                            resolve();
-                        }
-                    });
-                });
-
-                // Send success response with redirect
-                res.json({
-                    success: true,
-                    redirect: '/dashboard',
-                    user: {
+                    req.session.user = {
+                        id: user.id,
                         username: user.username,
                         portfolio_path: user.portfolio_path
+                    };
+
+                    // Save the session and wait for confirmation
+                    await new Promise((resolve, reject) => {
+                        req.session.save((err) => {
+                            if (err) {
+                                console.error('Session save error:', err);
+                                reject(err);
+                            } else {
+                                console.log('Session saved successfully');
+                                console.log('Final session state:', req.session);
+                                console.log('Session ID:', req.sessionID);
+                                resolve();
+                            }
+                        });
+                    });
+
+                    // Verify session was saved in Redis
+                    const sessionExists = await new Promise((resolve) => {
+                        redisStore.get(req.sessionID, (err, session) => {
+                            if (err || !session) {
+                                console.error('Session verification failed:', err || 'Session not found');
+                                resolve(false);
+                            } else {
+                                console.log('Session verified in Redis');
+                                resolve(true);
+                            }
+                        });
+                    });
+
+                    if (!sessionExists) {
+                        return res.status(500).json({ error: 'Session creation failed' });
                     }
+
+                    // Send success response with redirect
+                    res.json({
+                        success: true,
+                        redirect: '/dashboard',
+                        user: {
+                            username: user.username,
+                            portfolio_path: user.portfolio_path
+                        },
+                        sessionId: req.sessionID
+                    });
                 });
             } catch (error) {
                 console.error('Login error:', error);
