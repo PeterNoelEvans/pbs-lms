@@ -232,19 +232,6 @@ async function initializeApp() {
             console.log('Redis Store connected and ready');
         });
 
-        // Test Redis store
-        await new Promise((resolve, reject) => {
-            redisStore.client.ping((err, result) => {
-                if (err) {
-                    console.error('Redis store test failed:', err);
-                    reject(err);
-                } else {
-                    console.log('Redis store test successful:', result);
-                    resolve();
-                }
-            });
-        });
-
         // CORS configuration BEFORE session middleware
         app.use((req, res, next) => {
             const origin = req.headers.origin || 'https://codinghtml-presentation.onrender.com';
