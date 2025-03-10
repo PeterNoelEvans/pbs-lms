@@ -179,13 +179,13 @@
                     credentials: 'include',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Accept': 'application/json'
+                        'Accept': 'application/json',
+                        'Cache-Control': 'no-cache'
                     },
                     body: JSON.stringify({ 
                         username: username, 
                         password: password 
-                    }),
-                    credentials: 'include'
+                    })
                 });
                 
                 console.log('Response status:', response.status);
@@ -194,19 +194,38 @@
                 
                 if (data.success) {
                     console.log('Login successful, redirecting to:', data.redirect);
-                    // Check session is established before redirecting
-                    const sessionCheck = await fetch('/check-session', {
-                        method: 'GET',
-                        credentials: 'include'
-                    });
-                    const sessionData = await sessionCheck.json();
-                    console.log('Session check:', sessionData);
                     
-                    if (sessionData.authenticated) {
-                        window.location.href = data.redirect;
-                    } else {
-                        console.error('Session not established');
-                        errorDiv.textContent = 'Session could not be established. Please try again.';
+                    // Wait a moment for the session cookie to be set
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    
+                    // Check session is established before redirecting
+                    try {
+                        const sessionCheck = await fetch('/check-session', {
+                            method: 'GET',
+                            credentials: 'include',
+                            headers: {
+                                'Cache-Control': 'no-cache',
+                                'Pragma': 'no-cache'
+                            }
+                        });
+                        
+                        if (!sessionCheck.ok) {
+                            throw new Error('Session check failed');
+                        }
+                        
+                        const sessionData = await sessionCheck.json();
+                        console.log('Session check:', sessionData);
+                        
+                        if (sessionData.authenticated) {
+                            window.location.replace(data.redirect);
+                        } else {
+                            console.error('Session not established');
+                            errorDiv.textContent = 'Session could not be established. Please try again.';
+                            errorDiv.style.display = 'block';
+                        }
+                    } catch (error) {
+                        console.error('Session check error:', error);
+                        errorDiv.textContent = 'Error checking session. Please try again.';
                         errorDiv.style.display = 'block';
                     }
                     return;
@@ -240,13 +259,13 @@
             try {
                 const response = await fetch('/register', {
                     method: 'POST',
+                    credentials: 'include',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Accept': 'application/json'
+                        'Accept': 'application/json',
+                        'Cache-Control': 'no-cache'
                     },
-                    body: JSON.stringify(formObject),
-                    credentials: 'include',
-                    mode: 'cors'
+                    body: JSON.stringify(formObject)
                 });
 
                 console.log('Registration response status:', response.status);
