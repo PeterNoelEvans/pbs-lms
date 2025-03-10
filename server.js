@@ -380,7 +380,22 @@ app.use(express.static(__dirname));
                 // Clear any existing session
                 if (req.session.user) {
                     console.log('Clearing existing session');
-                    req.session.destroy();
+                    await new Promise((resolve) => {
+                        req.session.destroy(() => {
+                            resolve();
+                        });
+                    });
+                    
+                    // Create new session
+                    await new Promise((resolve) => {
+                        req.session.regenerate((err) => {
+                            if (err) {
+                                console.error('Error regenerating session:', err);
+                                reject(err);
+                            }
+                            resolve();
+                        });
+                    });
                 }
 
                 // Create new session
