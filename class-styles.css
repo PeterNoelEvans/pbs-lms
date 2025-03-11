@@ -9,38 +9,45 @@ body {
 h1 {
     text-align: center;
     color: #333;
-    margin-bottom: 30px;
+    margin: 20px 0;
 }
 
 .login-container {
     text-align: center;
-    padding: 20px;
+    padding: 10px;
+    margin: 10px 0;
     background-color: #fff3cd;
-    border-radius: 8px;
-    margin-bottom: 20px;
+    border: 1px solid #ffeeba;
+    border-radius: 4px;
+    color: #856404;
 }
 
 .login-container a {
-    color: #0066cc;
+    color: #0056b3;
     text-decoration: none;
-    font-weight: bold;
+}
+
+.login-container a:hover {
+    text-decoration: underline;
 }
 
 .portfolios-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
     gap: 20px;
-    padding: 20px 0;
+    padding: 20px;
+    max-width: 1200px;
+    margin: 0 auto;
 }
 
 .portfolio-card {
-    background-color: white;
-    padding: 20px;
+    background: white;
     border-radius: 8px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    padding: 15px;
     text-align: center;
     position: relative;
-    transition: transform 0.2s ease;
+    transition: transform 0.2s;
 }
 
 .portfolio-card:hover {
@@ -58,22 +65,21 @@ h1 {
 }
 
 .privacy-badge.public {
-    background-color: #d4edda;
-    color: #155724;
+    background-color: #4CAF50;
+    color: white;
 }
 
 .privacy-badge.private {
-    background-color: #f8d7da;
-    color: #721c24;
+    background-color: #f44336;
+    color: white;
 }
 
 .avatar {
     width: 120px;
     height: 120px;
     border-radius: 50%;
+    margin-bottom: 10px;
     object-fit: cover;
-    margin: 10px auto;
-    border: 3px solid #f0f0f0;
 }
 
 .portfolio-card h3 {
@@ -84,13 +90,13 @@ h1 {
 
 .view-portfolio {
     display: inline-block;
-    padding: 10px 20px;
+    padding: 8px 16px;
     background-color: #4CAF50;
     color: white;
     text-decoration: none;
     border-radius: 4px;
     margin-top: 10px;
-    transition: background-color 0.3s ease;
+    transition: background-color 0.3s;
 }
 
 .view-portfolio:hover {
@@ -100,28 +106,20 @@ h1 {
 .button {
     display: inline-block;
     padding: 10px 20px;
-    margin: 5px;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
+    background-color: #2196F3;
+    color: white;
     text-decoration: none;
-    font-size: 16px;
-    transition: background-color 0.3s ease;
+    border-radius: 5px;
+    transition: background-color 0.3s;
 }
 
-@media (max-width: 768px) {
-    .portfolios-grid {
-        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-    }
-    
-    .portfolio-card {
-        padding: 15px;
-    }
-    
-    .avatar {
-        width: 100px;
-        height: 100px;
-    }
+.button:hover {
+    background-color: #1976D2;
+}
+
+.navigation-links {
+    text-align: center;
+    margin: 20px 0;
 }
 
 .students-grid {
@@ -167,4 +165,19 @@ h1 {
 .rating-button.so-so { background-color: #ffd700; }
 .rating-button.good { background-color: #90EE90; }
 .rating-button.great { background-color: #87CEEB; }
-.rating-button.fantastic { background-color: #FF69B4; } 
+.rating-button.fantastic { background-color: #FF69B4; }
+
+@media (max-width: 768px) {
+    .portfolios-grid {
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    }
+    
+    .portfolio-card {
+        padding: 15px;
+    }
+    
+    .avatar {
+        width: 100px;
+        height: 100px;
+    }
+} 
