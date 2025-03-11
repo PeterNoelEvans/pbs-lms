@@ -10,9 +10,8 @@
             max-width: 800px;
             margin: 0 auto;
             padding: 20px;
-            background-color: #f5f5f5;
         }
-        .welcome-card, .class-links-card {
+        .welcome-card {
             background: white;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
@@ -28,32 +27,18 @@
             cursor: pointer;
             text-decoration: none;
             font-size: 16px;
-            transition: all 0.3s ease;
         }
         .view-btn {
             background-color: #4CAF50;
             color: white;
         }
-        .view-btn:hover {
-            background-color: #45a049;
-        }
-        .class-btn {
-            background-color: #2196F3;
-            color: white;
-        }
-        .class-btn:hover {
-            background-color: #1976D2;
-        }
         .logout-btn {
             background-color: #f44336;
             color: white;
         }
-        .logout-btn:hover {
-            background-color: #da190b;
-        }
         .privacy-toggle {
             margin-top: 20px;
-            padding: 15px;
+            padding: 10px;
             background-color: #f8f9fa;
             border-radius: 4px;
         }
@@ -63,7 +48,6 @@
             width: 60px;
             height: 34px;
             margin-left: 10px;
-            vertical-align: middle;
         }
         .toggle-switch input {
             opacity: 0;
@@ -112,10 +96,24 @@
             background-color: #f2dede;
             color: #a94442;
         }
+        .class-links-card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
         .class-links {
-            display: flex;
-            gap: 10px;
-            margin-top: 10px;
+            margin-top: 20px;
+        }
+        .class-btn {
+            background-color: #4CAF50;
+            color: white;
+            margin-right: 10px;
+        }
+        .info-text {
+            margin-top: 15px;
+            color: #666;
         }
     </style>
 </head>
@@ -141,10 +139,14 @@
 
     <div class="class-links-card">
         <h2>Class Portfolios</h2>
-        <p>View portfolios from different classes:</p>
+        <p>View portfolios by class:</p>
         <div class="class-links">
-            <a href="/class-4-1.html" class="button class-btn">Grade 4/1 Portfolios</a>
-            <a href="/class-4-2.html" class="button class-btn">Grade 4/2 Portfolios</a>
+            <a href="/class1.html" class="button class-btn">Class 1 Portfolios</a>
+            <a href="/class2.html" class="button class-btn" style="opacity: 0.5;" title="Coming in 2024-2025">Class 2 Portfolios (Coming Soon)</a>
+        </div>
+        <div class="info-text" style="margin-top: 15px; color: #666;">
+            <p><strong>Class 1:</strong> Current students (2023-2024 Grade 4)</p>
+            <p><strong>Class 2:</strong> Future students (Starting 2024-2025)</p>
         </div>
     </div>
 

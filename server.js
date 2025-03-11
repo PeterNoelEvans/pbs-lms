@@ -721,18 +721,21 @@ app.post('/register', async (req, res) => {
     console.log('\n=== Registration Attempt ===');
     console.log('Registration data:', {
         username: req.body.username,
-        portfolio_path: req.body.portfolio_path
+        class: req.body.class || 'Class1' // Default to Class1 for current students
     });
 
-    const { username, password, portfolio_path } = req.body;
+    const { username, password, class: studentClass = 'Class1' } = req.body;
     
-    if (!username || !password || !portfolio_path) {
+    if (!username || !password) {
         console.log('Missing registration data');
         return res.status(400).json({ error: 'All fields are required' });
     }
 
+    // Construct portfolio path based on class
+    const portfolio_path = `/portfolios/${studentClass}/${username}/${username}.html`;
+
     try {
-        // Check if user already exists with more detailed error handling
+        // Check if user already exists
         const existingUser = await new Promise((resolve, reject) => {
             db.get('SELECT id, username, portfolio_path FROM users WHERE username = ? OR portfolio_path = ?', 
                 [username, portfolio_path], 
@@ -746,10 +749,9 @@ app.post('/register', async (req, res) => {
         });
 
         if (existingUser) {
-            // Special case for Peter42 - allow re-registration with same portfolio path
-            if (username === 'Peter42' && portfolio_path === '/portfolios/P4-2/Peter/Peter.html') {
+            // Special case for Peter42
+            if (username === 'Peter42' && portfolio_path === '/portfolios/Class1/Peter/Peter.html') {
                 console.log('Allowing Peter42 re-registration...');
-                // Delete existing Peter42 entry
                 await new Promise((resolve, reject) => {
                     db.run('DELETE FROM users WHERE username = ?', ['Peter42'], (err) => {
                         if (err) reject(err);
@@ -765,10 +767,9 @@ app.post('/register', async (req, res) => {
             }
         }
 
-        // Hash password
+        // Hash password and create user
         const hashedPassword = await bcrypt.hash(password, 10);
         
-        // Insert new user with better error handling
         const result = await new Promise((resolve, reject) => {
             db.run('INSERT INTO users (username, password, portfolio_path, is_public) VALUES (?, ?, ?, ?)',
                 [username, hashedPassword, portfolio_path, true],
@@ -783,17 +784,45 @@ app.post('/register', async (req, res) => {
                 });
         });
 
-        console.log('User registered successfully:', username);
-        console.log('New user ID:', result);
+        // Create user's portfolio directory
+        const portfolioDir = path.join(__dirname, 'portfolios', studentClass, username);
+        if (!fs.existsSync(portfolioDir)) {
+            fs.mkdirSync(portfolioDir, { recursive: true });
+            console.log('Created portfolio directory:', portfolioDir);
+        }
 
-        // Set session immediately after registration
+        // Create initial portfolio file
+        const portfolioFile = path.join(portfolioDir, `${username}.html`);
+        if (!fs.existsSync(portfolioFile)) {
+            const initialContent = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${username}'s Portfolio</title>
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+    <div class="portfolio-container">
+        <h1>Welcome to ${username}'s Portfolio</h1>
+        <p>This is my learning journey portfolio.</p>
+        <!-- Add your content here -->
+    </div>
+</body>
+</html>`;
+            fs.writeFileSync(portfolioFile, initialContent);
+            console.log('Created initial portfolio file:', portfolioFile);
+        }
+
+        // Set session
         req.session.user = {
             id: result,
             username: username,
             portfolio_path: portfolio_path
         };
 
-        // Save session with error handling
+        // Save session
         await new Promise((resolve, reject) => {
             req.session.save((err) => {
                 if (err) {
@@ -804,13 +833,6 @@ app.post('/register', async (req, res) => {
                     resolve();
                 }
             });
-        });
-
-        // Set response headers to prevent caching
-        res.set({
-            'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-            'Pragma': 'no-cache',
-            'Expires': '0'
         });
 
         // Send success response
@@ -886,7 +908,11 @@ app.get('/check-access/*', (req, res) => {
 });
 
 // Serve the main pages
-app.get(['/', '/index.html', '/login.html', '/register.html', '/dashboard.html', '/class-4-1.html', '/class-4-2.html'], (req, res) => {
+app.get(['/', '/index.html', '/login.html', '/register.html', '/dashboard.html', '/class1.html', '/class2.html'], (req, res) => {
+    // Redirect old class URLs to new class1.html
+    if (req.path === '/class-4-1.html' || req.path === '/class-4-2.html') {
+        return res.redirect('/class1.html');
+    }
     res.sendFile(path.join(__dirname, req.path === '/' ? 'index.html' : req.path));
 });
 
@@ -914,12 +940,20 @@ app.get('/portfolios/*', async (req, res, next) => {
             console.log('Created portfolios directory');
         }
 
-        // Check if the specific portfolio directory exists
-        const portfolioDir = path.join(__dirname, path.dirname(portfolioPath));
-        if (!fs.existsSync(portfolioDir)) {
-            console.log('Portfolio directory does not exist:', portfolioDir);
-            fs.mkdirSync(portfolioDir, { recursive: true });
-            console.log('Created portfolio directory');
+        // Create Class1 directory if it doesn't exist (for current students)
+        const class1Dir = path.join(portfoliosDir, 'Class1');
+        if (!fs.existsSync(class1Dir)) {
+            console.log('Class1 directory does not exist:', class1Dir);
+            fs.mkdirSync(class1Dir, { recursive: true });
+            console.log('Created Class1 directory');
+        }
+
+        // Create Class2 directory if it doesn't exist (for future students)
+        const class2Dir = path.join(portfoliosDir, 'Class2');
+        if (!fs.existsSync(class2Dir)) {
+            console.log('Class2 directory does not exist:', class2Dir);
+            fs.mkdirSync(class2Dir, { recursive: true });
+            console.log('Created Class2 directory');
         }
 
         // Check if the file exists

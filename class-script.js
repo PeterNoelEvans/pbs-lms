@@ -36,4 +36,95 @@ document.querySelectorAll('.student-card').forEach(card => {
     });
     
     card.appendChild(ratingContainer);
-}); 
+});
+
+// Function to create a portfolio card
+function createPortfolioCard(username, imagePath, isPublic, portfolioPath) {
+    const card = document.createElement('div');
+    card.className = 'portfolio-card';
+    
+    const img = document.createElement('img');
+    img.src = imagePath || '/images/default-avatar.png';
+    img.alt = `${username}'s avatar`;
+    img.className = 'avatar';
+    
+    const name = document.createElement('h3');
+    name.textContent = username;
+    
+    const privacyBadge = document.createElement('span');
+    privacyBadge.className = `privacy-badge ${isPublic ? 'public' : 'private'}`;
+    privacyBadge.textContent = isPublic ? 'Public' : 'Private';
+    
+    const viewBtn = document.createElement('a');
+    viewBtn.className = 'view-portfolio button';
+    viewBtn.textContent = 'View Portfolio';
+    viewBtn.href = portfolioPath;
+    
+    if (!isPublic) {
+        viewBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            checkAccess(portfolioPath);
+        });
+    }
+    
+    card.appendChild(privacyBadge);
+    card.appendChild(img);
+    card.appendChild(name);
+    card.appendChild(viewBtn);
+    
+    return card;
+}
+
+// Function to check portfolio access
+async function checkAccess(portfolioPath) {
+    try {
+        const response = await fetch(`/check-access${portfolioPath}`);
+        const data = await response.json();
+        
+        if (data.hasAccess) {
+            window.location.href = portfolioPath;
+        } else {
+            const loginPrompt = document.getElementById('loginPrompt');
+            loginPrompt.style.display = 'block';
+            setTimeout(() => {
+                loginPrompt.style.display = 'none';
+            }, 3000);
+        }
+    } catch (error) {
+        console.error('Error checking access:', error);
+    }
+}
+
+// Function to load portfolios for a specific class
+async function initializePortfolios(classId) {
+    try {
+        const response = await fetch('/check-auth');
+        const authData = await response.json();
+        
+        // Show login prompt if not authenticated
+        const loginPrompt = document.getElementById('loginPrompt');
+        if (!authData.authenticated) {
+            loginPrompt.style.display = 'block';
+        }
+        
+        // Load portfolios
+        const usersResponse = await fetch('/admin/users');
+        const users = await usersResponse.json();
+        const container = document.getElementById('portfoliosContainer');
+        
+        users.forEach(user => {
+            // Match users based on their class
+            if (user.portfolio_path.includes(`/${classId}/`)) {
+                const card = createPortfolioCard(
+                    user.username,
+                    user.avatar_path || '/images/default-avatar.png',
+                    user.is_public,
+                    user.portfolio_path
+                );
+                container.appendChild(card);
+            }
+        });
+    } catch (error) {
+        console.error('Error initializing portfolios:', error);
+    }
+} 
