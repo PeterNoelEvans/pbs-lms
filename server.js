@@ -767,12 +767,27 @@ app.post('/register', async (req, res) => {
             }
         }
 
-        // Hash password and create user
+        // Create user's portfolio directory if it doesn't exist
+        const portfolioDir = path.join(__dirname, 'portfolios', studentClass, username);
+        if (!fs.existsSync(portfolioDir)) {
+            fs.mkdirSync(portfolioDir, { recursive: true });
+            console.log('Created portfolio directory:', portfolioDir);
+            
+            // Create images directory for new users
+            const imagesDir = path.join(portfolioDir, 'images');
+            fs.mkdirSync(imagesDir, { recursive: true });
+            console.log('Created images directory:', imagesDir);
+        }
+
+        // Set the avatar path
+        const avatar_path = `/portfolios/${studentClass}/${username}/images/${username}.jpg`;
+
+        // Hash password and create user with avatar_path
         const hashedPassword = await bcrypt.hash(password, 10);
         
         const result = await new Promise((resolve, reject) => {
-            db.run('INSERT INTO users (username, password, portfolio_path, is_public) VALUES (?, ?, ?, ?)',
-                [username, hashedPassword, portfolio_path, true],
+            db.run('INSERT INTO users (username, password, portfolio_path, avatar_path, is_public) VALUES (?, ?, ?, ?, ?)',
+                [username, hashedPassword, portfolio_path, avatar_path, false],
                 function(err) {
                     if (err) {
                         console.error('Database error during insert:', err);
@@ -783,13 +798,6 @@ app.post('/register', async (req, res) => {
                     }
                 });
         });
-
-        // Create user's portfolio directory
-        const portfolioDir = path.join(__dirname, 'portfolios', studentClass, username);
-        if (!fs.existsSync(portfolioDir)) {
-            fs.mkdirSync(portfolioDir, { recursive: true });
-            console.log('Created portfolio directory:', portfolioDir);
-        }
 
         // Create initial portfolio file
         const portfolioFile = path.join(portfolioDir, `${username}.html`);
@@ -1093,6 +1101,7 @@ const db = new sqlite3.Database(dbPath, (err) => {
             username TEXT UNIQUE,
             password TEXT,
             portfolio_path TEXT UNIQUE,
+            avatar_path TEXT,
             is_public BOOLEAN DEFAULT 0
         )`, async (err) => {
             if (err) {
@@ -1100,6 +1109,13 @@ const db = new sqlite3.Database(dbPath, (err) => {
                 return;
             }
             console.log('Users table ready');
+            
+            // Add avatar_path column if it doesn't exist
+            db.run(`ALTER TABLE users ADD COLUMN avatar_path TEXT;`, (err) => {
+                if (err && !err.message.includes('duplicate column')) {
+                    console.error('Error adding avatar_path column:', err);
+                }
+            });
             
             try {
                 // Check if Peter42 exists
@@ -1112,6 +1128,20 @@ const db = new sqlite3.Database(dbPath, (err) => {
 
                 if (row) {
                     console.log('Peter42 exists with ID:', row.id);
+                    // Update Peter42's avatar path
+                    await new Promise((resolve, reject) => {
+                        db.run(
+                            'UPDATE users SET avatar_path = ? WHERE username = ?',
+                            ['/portfolios/P4-2/Peter/images/Peter42.jpg', 'Peter42'],
+                            function(err) {
+                                if (err) reject(err);
+                                else {
+                                    console.log('Updated Peter42 avatar path');
+                                    resolve();
+                                }
+                            }
+                        );
+                    });
                 } else {
                     console.log('Peter42 not found, creating...');
                     // Create Peter42 with hashed password

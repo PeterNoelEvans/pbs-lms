@@ -16,12 +16,36 @@
 3. You will be directed to your dashboard
 4. Use the toggle switch to set your portfolio as public or private:
    - Public: Everyone can see your portfolio
-   - Private: Only you and your parents can see your portfolio
+   - Private: Only you and your parents can see your portfolio (default setting)
+
+### Portfolio Structure
+When you register, the system automatically creates:
+1. Your portfolio directory at `/portfolios/P4-1/` or `/portfolios/P4-2/` (based on your class)
+2. An `images` folder for your media
+3. Your initial portfolio HTML file
+
+#### Adding Your Avatar Image
+1. Your avatar should be placed in your `images` folder
+2. Name it exactly like your username (e.g., "Peter42.png" or "Peter42.jpg")
+3. Supported formats: .png, .jpg, or .jpeg
+4. Preferably use a square (1:1 aspect ratio) image
+
+For example, if your username is "Peter42", your portfolio structure will be:
+```
+/portfolios/
+  /P4-2/
+    /Peter/
+      /images/
+        Peter42.png (or Peter42.jpg)
+      Peter.html
+```
 
 ### Important Notes for Students
 - You can change your portfolio visibility at any time through the dashboard
 - You can always see your own portfolio, regardless of its visibility setting
 - You can see other students' portfolios only if they are set to public
+- All portfolios are private by default when created
+- Your portfolio and images folders are created automatically upon registration
 
 ## For Parents
 
