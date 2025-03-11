@@ -886,8 +886,8 @@ app.get('/check-access/*', (req, res) => {
 });
 
 // Serve the main pages
-app.get(['/', '/index.html'], (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
+app.get(['/', '/index.html', '/login.html', '/register.html', '/dashboard.html', '/class-4-1.html', '/class-4-2.html'], (req, res) => {
+    res.sendFile(path.join(__dirname, req.path === '/' ? 'index.html' : req.path));
 });
 
 // Protected portfolio access
