@@ -19,60 +19,17 @@ const dbPath = isProduction ? '/opt/render/project/src/data/users.db' : 'users.d
 if (isProduction) {
     const fs = require('fs');
     const dataDir = '/opt/render/project/src/data';
-    const portfoliosDir = path.join(__dirname, 'portfolios', 'P4-1', 'Peter');
     
     try {
-        // Create data directory
+        // Create data directory only
         if (!fs.existsSync(dataDir)) {
             console.log('Creating data directory...');
             fs.mkdirSync(dataDir, { recursive: true, mode: 0o755 });
         }
-        
-        // Create portfolios directory structure
-        if (!fs.existsSync(portfoliosDir)) {
-            console.log('Creating portfolios directory structure...');
-            fs.mkdirSync(portfoliosDir, { recursive: true, mode: 0o755 });
-            
-            // Create a basic portfolio HTML file
-            const portfolioContent = `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Peter's Portfolio</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        .portfolio-container {
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            padding: 20px;
-            margin-bottom: 20px;
-        }
-    </style>
-</head>
-<body>
-    <div class="portfolio-container">
-        <h1>Peter's Portfolio</h1>
-        <p>Welcome to my portfolio! This is where I showcase my work.</p>
-    </div>
-</body>
-</html>`;
-            
-            fs.writeFileSync(path.join(portfoliosDir, 'Peter.html'), portfolioContent);
-            console.log('Created basic portfolio file');
-        }
 
-        // Ensure we have write permissions
+        // Ensure we have write permissions for data directory
         fs.accessSync(dataDir, fs.constants.W_OK);
-        fs.accessSync(portfoliosDir, fs.constants.W_OK);
-        console.log('Data and portfolios directories are writable');
+        console.log('Data directory is writable');
     } catch (error) {
         console.error('Error with directory setup:', error);
         process.exit(1);
@@ -774,70 +731,6 @@ app.post('/register', async (req, res) => {
     }
 
     try {
-        // Ensure data directory exists in production
-        if (isProduction) {
-            const fs = require('fs');
-            const dataDir = '/opt/render/project/src/data';
-            const portfoliosDir = path.join(__dirname, 'portfolios', 'P4-1', 'Peter');
-            
-            try {
-                // Create data directory
-                if (!fs.existsSync(dataDir)) {
-                    console.log('Creating data directory...');
-                    fs.mkdirSync(dataDir, { recursive: true });
-                }
-                
-                // Create portfolios directory structure
-                if (!fs.existsSync(portfoliosDir)) {
-                    console.log('Creating portfolios directory structure...');
-                    fs.mkdirSync(portfoliosDir, { recursive: true, mode: 0o755 });
-                    
-                    // Create a basic portfolio HTML file
-                    const portfolioContent = `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Peter's Portfolio</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        .portfolio-container {
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            padding: 20px;
-            margin-bottom: 20px;
-        }
-    </style>
-</head>
-<body>
-    <div class="portfolio-container">
-        <h1>Peter's Portfolio</h1>
-        <p>Welcome to my portfolio! This is where I showcase my work.</p>
-    </div>
-</body>
-</html>`;
-                    
-                    fs.writeFileSync(path.join(portfoliosDir, 'Peter.html'), portfolioContent);
-                    console.log('Created basic portfolio file');
-                }
-
-                // Ensure we have write permissions
-                fs.accessSync(dataDir, fs.constants.W_OK);
-                fs.accessSync(portfoliosDir, fs.constants.W_OK);
-                console.log('Data and portfolios directories are writable');
-            } catch (error) {
-                console.error('Error with directory setup:', error);
-                process.exit(1);
-            }
-        }
-
         // Check if user already exists with more detailed error handling
         const existingUser = await new Promise((resolve, reject) => {
             db.get('SELECT id, username, portfolio_path FROM users WHERE username = ? OR portfolio_path = ?', 
@@ -1002,6 +895,13 @@ app.get('/portfolios/*', async (req, res, next) => {
     console.log('Accessing portfolio:', portfolioPath);
 
     try {
+        // First check if the file exists
+        const fullPath = path.join(__dirname, portfolioPath);
+        if (!fs.existsSync(fullPath)) {
+            console.log('Portfolio file not found:', fullPath);
+            return res.status(404).send('Portfolio not found');
+        }
+
         const result = await new Promise((resolve, reject) => {
             db.get('SELECT is_public, username FROM users WHERE portfolio_path = ?',
                 [portfolioPath],
@@ -1013,28 +913,26 @@ app.get('/portfolios/*', async (req, res, next) => {
 
         // If portfolio is not registered, deny access
         if (!result) {
-            console.log('Portfolio not found:', portfolioPath);
+            console.log('Portfolio not registered in database:', portfolioPath);
             return res.status(404).send('Portfolio not found');
         }
 
         // If user is logged in
         if (req.session?.user) {
+            console.log('Authenticated access attempt by:', req.session.user.username);
+            
             // Check if the user is a parent
             const isParent = req.session.user.username.toLowerCase().startsWith('parent-');
             
             if (isParent) {
-                // Get the student's name from parent's username (after 'parent-')
                 const childName = req.session.user.username.substring('parent-'.length);
-                // Parents can only see public portfolios and their child's portfolio
                 if (result.is_public || result.username === childName) {
                     return next();
                 }
             } else if (result.is_public || result.username === req.session.user.username) {
-                // Allow access if portfolio is public or user owns it
                 return next();
             }
         } else if (result.is_public) {
-            // Not logged in - only allow access to public portfolios
             return next();
         }
 
@@ -1096,60 +994,17 @@ const db = new sqlite3.Database(dbPath, (err) => {
         if (isProduction) {
             const fs = require('fs');
             const dataDir = '/opt/render/project/src/data';
-            const portfoliosDir = path.join(__dirname, 'portfolios', 'P4-1', 'Peter');
             
             try {
-                // Create data directory
+                // Create data directory only
                 if (!fs.existsSync(dataDir)) {
                     console.log('Creating data directory...');
-                    fs.mkdirSync(dataDir, { recursive: true });
-                }
-                
-                // Create portfolios directory structure
-                if (!fs.existsSync(portfoliosDir)) {
-                    console.log('Creating portfolios directory structure...');
-                    fs.mkdirSync(portfoliosDir, { recursive: true, mode: 0o755 });
-                    
-                    // Create a basic portfolio HTML file
-                    const portfolioContent = `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Peter's Portfolio</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        .portfolio-container {
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            padding: 20px;
-            margin-bottom: 20px;
-        }
-    </style>
-</head>
-<body>
-    <div class="portfolio-container">
-        <h1>Peter's Portfolio</h1>
-        <p>Welcome to my portfolio! This is where I showcase my work.</p>
-    </div>
-</body>
-</html>`;
-                    
-                    fs.writeFileSync(path.join(portfoliosDir, 'Peter.html'), portfolioContent);
-                    console.log('Created basic portfolio file');
+                    fs.mkdirSync(dataDir, { recursive: true, mode: 0o755 });
                 }
 
-                // Ensure we have write permissions
+                // Ensure we have write permissions for data directory
                 fs.accessSync(dataDir, fs.constants.W_OK);
-                fs.accessSync(portfoliosDir, fs.constants.W_OK);
-                console.log('Data and portfolios directories are writable');
+                console.log('Data directory is writable');
             } catch (error) {
                 console.error('Error with directory setup:', error);
                 process.exit(1);
