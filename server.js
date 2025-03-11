@@ -19,17 +19,63 @@ const dbPath = isProduction ? '/opt/render/project/src/data/users.db' : 'users.d
 if (isProduction) {
     const fs = require('fs');
     const dataDir = '/opt/render/project/src/data';
+    const portfoliosDir = path.join(__dirname, 'portfolios', 'P4-1', 'Peter');
+    
     try {
+        // Create data directory
         if (!fs.existsSync(dataDir)) {
             console.log('Creating data directory...');
             fs.mkdirSync(dataDir, { recursive: true, mode: 0o755 });
         }
+        
+        // Create portfolios directory structure
+        if (!fs.existsSync(portfoliosDir)) {
+            console.log('Creating portfolios directory structure...');
+            fs.mkdirSync(portfoliosDir, { recursive: true, mode: 0o755 });
+            
+            // Create a basic portfolio HTML file
+            const portfolioContent = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Peter's Portfolio</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .portfolio-container {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="portfolio-container">
+        <h1>Peter's Portfolio</h1>
+        <p>Welcome to my portfolio! This is where I showcase my work.</p>
+    </div>
+</body>
+</html>`;
+            
+            fs.writeFileSync(path.join(portfoliosDir, 'Peter.html'), portfolioContent);
+            console.log('Created basic portfolio file');
+        }
+
         // Ensure we have write permissions
         fs.accessSync(dataDir, fs.constants.W_OK);
-        console.log('Data directory is writable:', dataDir);
+        fs.accessSync(portfoliosDir, fs.constants.W_OK);
+        console.log('Data and portfolios directories are writable');
     } catch (error) {
-        console.error('Error with data directory:', error);
-        process.exit(1); // Exit if we can't access the data directory
+        console.error('Error with directory setup:', error);
+        process.exit(1);
     }
 }
 
@@ -315,7 +361,7 @@ async function initializeApp() {
 
         // Serve static files
         app.use(express.static(__dirname));
-        app.use(express.static(path.join(__dirname, 'public')));
+        app.use('/portfolios', express.static(path.join(__dirname, 'portfolios')));
 
         // Define routes that use the middleware
         app.post('/login', async (req, res) => {
@@ -732,17 +778,63 @@ app.post('/register', async (req, res) => {
         if (isProduction) {
             const fs = require('fs');
             const dataDir = '/opt/render/project/src/data';
+            const portfoliosDir = path.join(__dirname, 'portfolios', 'P4-1', 'Peter');
+            
             try {
+                // Create data directory
                 if (!fs.existsSync(dataDir)) {
                     console.log('Creating data directory...');
                     fs.mkdirSync(dataDir, { recursive: true });
                 }
+                
+                // Create portfolios directory structure
+                if (!fs.existsSync(portfoliosDir)) {
+                    console.log('Creating portfolios directory structure...');
+                    fs.mkdirSync(portfoliosDir, { recursive: true, mode: 0o755 });
+                    
+                    // Create a basic portfolio HTML file
+                    const portfolioContent = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Peter's Portfolio</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .portfolio-container {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="portfolio-container">
+        <h1>Peter's Portfolio</h1>
+        <p>Welcome to my portfolio! This is where I showcase my work.</p>
+    </div>
+</body>
+</html>`;
+                    
+                    fs.writeFileSync(path.join(portfoliosDir, 'Peter.html'), portfolioContent);
+                    console.log('Created basic portfolio file');
+                }
+
                 // Ensure we have write permissions
                 fs.accessSync(dataDir, fs.constants.W_OK);
-                console.log('Data directory is writable:', dataDir);
+                fs.accessSync(portfoliosDir, fs.constants.W_OK);
+                console.log('Data and portfolios directories are writable');
             } catch (error) {
-                console.error('Error with data directory:', error);
-                return res.status(500).json({ error: 'Server configuration error' });
+                console.error('Error with directory setup:', error);
+                process.exit(1);
             }
         }
 
@@ -906,69 +998,52 @@ app.get(['/', '/index.html'], (req, res) => {
 
 // Protected portfolio access
 app.get('/portfolios/*', async (req, res, next) => {
-    // Allow direct access to images
-    if (req.path.includes('/images/')) {
-        next();
-        return;
-    }
-
     const portfolioPath = req.path;
-    db.get('SELECT is_public, username FROM users WHERE portfolio_path = ?',
-        [portfolioPath],
-        (err, result) => {
-            if (err) {
-                res.status(500).send('Database error');
-                return;
-            }
-            
-            // If portfolio is not registered, deny access
-            if (!result) {
-                res.status(403).send('Access denied');
-                return;
-            }
+    console.log('Accessing portfolio:', portfolioPath);
 
-            // If user is logged in
-            if (req.session.user) {
-                // Check if the user is a parent
-                const isParent = req.session.user.username.toLowerCase().startsWith('parent-');
-                
-                if (isParent) {
-                    // Get the student's name from parent's username (after 'parent-')
-                    const childName = req.session.user.username.substring('parent-'.length);
-                    // Parents can only see public portfolios and their child's portfolio
-                    if (result.is_public || result.username === childName) {
-                        next();
-                    } else {
-                        res.status(403).send('Access denied');
-                    }
-                    return;
-                }
-
-                // For students, check if they own the portfolio
-                db.get('SELECT username FROM users WHERE id = ?', [req.session.user.id], (err, user) => {
-                    if (err) {
-                        res.status(500).send('Database error');
-                        return;
-                    }
-                    
-                    // Allow access if:
-                    // 1. Portfolio is public, OR
-                    // 2. User owns any portfolio (same username)
-                    if (result.is_public || (user && result.username === user.username)) {
-                        next();
-                    } else {
-                        res.status(403).send('Access denied');
-                    }
+    try {
+        const result = await new Promise((resolve, reject) => {
+            db.get('SELECT is_public, username FROM users WHERE portfolio_path = ?',
+                [portfolioPath],
+                (err, row) => {
+                    if (err) reject(err);
+                    else resolve(row);
                 });
-            } else {
-                // Not logged in, only allow access to public portfolios
-                if (result.is_public) {
-                    next();
-                } else {
-                    res.status(403).send('Access denied');
-                }
-            }
         });
+
+        // If portfolio is not registered, deny access
+        if (!result) {
+            console.log('Portfolio not found:', portfolioPath);
+            return res.status(404).send('Portfolio not found');
+        }
+
+        // If user is logged in
+        if (req.session?.user) {
+            // Check if the user is a parent
+            const isParent = req.session.user.username.toLowerCase().startsWith('parent-');
+            
+            if (isParent) {
+                // Get the student's name from parent's username (after 'parent-')
+                const childName = req.session.user.username.substring('parent-'.length);
+                // Parents can only see public portfolios and their child's portfolio
+                if (result.is_public || result.username === childName) {
+                    return next();
+                }
+            } else if (result.is_public || result.username === req.session.user.username) {
+                // Allow access if portfolio is public or user owns it
+                return next();
+            }
+        } else if (result.is_public) {
+            // Not logged in - only allow access to public portfolios
+            return next();
+        }
+
+        console.log('Access denied to portfolio:', portfolioPath);
+        res.status(403).send('Access denied');
+    } catch (error) {
+        console.error('Error checking portfolio access:', error);
+        res.status(500).send('Server error');
+    }
 });
 
 // Add session check middleware
@@ -1021,16 +1096,62 @@ const db = new sqlite3.Database(dbPath, (err) => {
         if (isProduction) {
             const fs = require('fs');
             const dataDir = '/opt/render/project/src/data';
+            const portfoliosDir = path.join(__dirname, 'portfolios', 'P4-1', 'Peter');
+            
             try {
+                // Create data directory
                 if (!fs.existsSync(dataDir)) {
                     console.log('Creating data directory...');
                     fs.mkdirSync(dataDir, { recursive: true });
                 }
+                
+                // Create portfolios directory structure
+                if (!fs.existsSync(portfoliosDir)) {
+                    console.log('Creating portfolios directory structure...');
+                    fs.mkdirSync(portfoliosDir, { recursive: true, mode: 0o755 });
+                    
+                    // Create a basic portfolio HTML file
+                    const portfolioContent = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Peter's Portfolio</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .portfolio-container {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="portfolio-container">
+        <h1>Peter's Portfolio</h1>
+        <p>Welcome to my portfolio! This is where I showcase my work.</p>
+    </div>
+</body>
+</html>`;
+                    
+                    fs.writeFileSync(path.join(portfoliosDir, 'Peter.html'), portfolioContent);
+                    console.log('Created basic portfolio file');
+                }
+
                 // Ensure we have write permissions
                 fs.accessSync(dataDir, fs.constants.W_OK);
-                console.log('Data directory is writable:', dataDir);
+                fs.accessSync(portfoliosDir, fs.constants.W_OK);
+                console.log('Data and portfolios directories are writable');
             } catch (error) {
-                console.error('Error with data directory:', error);
+                console.error('Error with directory setup:', error);
                 process.exit(1);
             }
         }
