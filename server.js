@@ -470,7 +470,7 @@ app.use(express.static(__dirname));
         // Admin routes
         app.get('/admin/users', requireAdmin, (req, res) => {
             console.log('\n=== Viewing All Users ===');
-            db.all('SELECT id, username, portfolio_path, is_public FROM users', [], (err, rows) => {
+            db.all('SELECT id, username, portfolio_path, avatar_path, is_public FROM users', [], (err, rows) => {
                 if (err) {
                     console.error('Database error when viewing users:', err);
                     res.status(500).json({ error: 'Database error' });
@@ -1131,12 +1131,12 @@ const db = new sqlite3.Database(dbPath, (err) => {
                     // Update Peter42's avatar path
                     await new Promise((resolve, reject) => {
                         db.run(
-                            'UPDATE users SET avatar_path = ? WHERE username = ?',
-                            ['/portfolios/P4-2/Peter/images/Peter42.jpg', 'Peter42'],
+                            'UPDATE users SET avatar_path = ?, portfolio_path = ? WHERE username = ?',
+                            ['/portfolios/P4-2/Peter/images/Peter42.jpg', '/portfolios/P4-2/Peter/Peter.html', 'Peter42'],
                             function(err) {
                                 if (err) reject(err);
                                 else {
-                                    console.log('Updated Peter42 avatar path');
+                                    console.log('Updated Peter42 avatar path and portfolio path');
                                     resolve();
                                 }
                             }
@@ -1144,12 +1144,12 @@ const db = new sqlite3.Database(dbPath, (err) => {
                     });
                 } else {
                     console.log('Peter42 not found, creating...');
-                    // Create Peter42 with hashed password
+                    // Create Peter42 with hashed password and avatar path
                     const hashedPassword = await bcrypt.hash('Peter2025BB', 10);
                     await new Promise((resolve, reject) => {
                         db.run(
-                            'INSERT INTO users (username, password, portfolio_path, is_public) VALUES (?, ?, ?, ?)',
-                            ['Peter42', hashedPassword, '/portfolios/P4-2/Peter/Peter.html', true],
+                            'INSERT INTO users (username, password, portfolio_path, avatar_path, is_public) VALUES (?, ?, ?, ?, ?)',
+                            ['Peter42', hashedPassword, '/portfolios/P4-2/Peter/Peter.html', '/portfolios/P4-2/Peter/images/Peter42.jpg', true],
                             function(err) {
                                 if (err) reject(err);
                                 else {
