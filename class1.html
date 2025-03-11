@@ -41,6 +41,13 @@
             
             const name = document.createElement('h3');
             name.textContent = username;
+
+            // Add class indicator (P4-1 or P4-2)
+            const classIndicator = document.createElement('div');
+            classIndicator.style.marginTop = '5px';
+            classIndicator.style.color = '#666';
+            classIndicator.style.fontSize = '0.9em';
+            classIndicator.textContent = portfolioPath.includes('/P4-1/') ? 'P4-1' : 'P4-2';
             
             const viewBtn = document.createElement('a');
             viewBtn.className = 'view-portfolio';
@@ -72,6 +79,7 @@
             card.appendChild(privacyBadge);
             card.appendChild(img);
             card.appendChild(name);
+            card.appendChild(classIndicator);
             card.appendChild(viewBtn);
             
             return card;
@@ -99,8 +107,8 @@
                 container.innerHTML = '';
                 
                 users.forEach(user => {
-                    // Only show Class 1 portfolios
-                    if (user.portfolio_path.includes('/Class1/')) {
+                    // Show both P4-1 and P4-2 portfolios
+                    if (user.portfolio_path.includes('/P4-1/') || user.portfolio_path.includes('/P4-2/')) {
                         const card = createPortfolioCard(
                             user.username,
                             user.avatar_path || null,
