@@ -4,6 +4,7 @@ const session = require('express-session');
 const RedisStore = require('connect-redis').default;
 const { createClient } = require('redis');
 const bcrypt = require('bcryptjs');
+const fs = require('fs');
 const sqlite3 = require('sqlite3').verbose();
 const app = express();
 
@@ -746,7 +747,7 @@ app.post('/register', async (req, res) => {
 
         if (existingUser) {
             // Special case for Peter42 - allow re-registration with same portfolio path
-            if (username === 'Peter42' && portfolio_path === '/portfolios/P4-1/Peter/Peter.html') {
+            if (username === 'Peter42' && portfolio_path === '/portfolios/P4-2/Peter/Peter.html') {
                 console.log('Allowing Peter42 re-registration...');
                 // Delete existing Peter42 entry
                 await new Promise((resolve, reject) => {
@@ -892,12 +893,35 @@ app.get(['/', '/index.html'], (req, res) => {
 // Protected portfolio access
 app.get('/portfolios/*', async (req, res, next) => {
     const portfolioPath = req.path;
+    console.log('\n=== Portfolio Access Attempt ===');
     console.log('Accessing portfolio:', portfolioPath);
+    console.log('Current directory:', __dirname);
 
     try {
-        // First check if the file exists
+        // First check if the portfolios directory exists
+        const portfoliosDir = path.join(__dirname, 'portfolios');
+        if (!fs.existsSync(portfoliosDir)) {
+            console.log('Portfolios directory does not exist:', portfoliosDir);
+            fs.mkdirSync(portfoliosDir, { recursive: true });
+            console.log('Created portfolios directory');
+        }
+
+        // Check if the specific portfolio directory exists
+        const portfolioDir = path.join(__dirname, path.dirname(portfolioPath));
+        if (!fs.existsSync(portfolioDir)) {
+            console.log('Portfolio directory does not exist:', portfolioDir);
+            fs.mkdirSync(portfolioDir, { recursive: true });
+            console.log('Created portfolio directory');
+        }
+
+        // Check if the file exists
         const fullPath = path.join(__dirname, portfolioPath);
-        if (!fs.existsSync(fullPath)) {
+        console.log('Full path:', fullPath);
+        
+        const fileExists = fs.existsSync(fullPath);
+        console.log('File exists:', fileExists);
+
+        if (!fileExists) {
             console.log('Portfolio file not found:', fullPath);
             return res.status(404).send('Portfolio not found');
         }
@@ -906,8 +930,13 @@ app.get('/portfolios/*', async (req, res, next) => {
             db.get('SELECT is_public, username FROM users WHERE portfolio_path = ?',
                 [portfolioPath],
                 (err, row) => {
-                    if (err) reject(err);
-                    else resolve(row);
+                    if (err) {
+                        console.error('Database error:', err);
+                        reject(err);
+                    } else {
+                        console.log('Database result:', row);
+                        resolve(row);
+                    }
                 });
         });
 
@@ -920,6 +949,8 @@ app.get('/portfolios/*', async (req, res, next) => {
         // If user is logged in
         if (req.session?.user) {
             console.log('Authenticated access attempt by:', req.session.user.username);
+            console.log('Portfolio owner:', result.username);
+            console.log('Is public:', result.is_public);
             
             // Check if the user is a parent
             const isParent = req.session.user.username.toLowerCase().startsWith('parent-');
@@ -927,12 +958,15 @@ app.get('/portfolios/*', async (req, res, next) => {
             if (isParent) {
                 const childName = req.session.user.username.substring('parent-'.length);
                 if (result.is_public || result.username === childName) {
+                    console.log('Access granted to parent');
                     return next();
                 }
             } else if (result.is_public || result.username === req.session.user.username) {
+                console.log('Access granted to user');
                 return next();
             }
         } else if (result.is_public) {
+            console.log('Access granted to public portfolio');
             return next();
         }
 
@@ -940,6 +974,7 @@ app.get('/portfolios/*', async (req, res, next) => {
         res.status(403).send('Access denied');
     } catch (error) {
         console.error('Error checking portfolio access:', error);
+        console.error('Stack trace:', error.stack);
         res.status(500).send('Server error');
     }
 });
@@ -1042,7 +1077,7 @@ const db = new sqlite3.Database(dbPath, (err) => {
                     await new Promise((resolve, reject) => {
                         db.run(
                             'INSERT INTO users (username, password, portfolio_path, is_public) VALUES (?, ?, ?, ?)',
-                            ['Peter42', hashedPassword, '/portfolios/P4-1/Peter/Peter.html', true],
+                            ['Peter42', hashedPassword, '/portfolios/P4-2/Peter/Peter.html', true],
                             function(err) {
                                 if (err) reject(err);
                                 else {
