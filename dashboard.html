@@ -7,89 +7,178 @@
     <style>
         body {
             font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 20px;
-            background-color: #f5f5f5;
-        }
-        .dashboard-container {
             max-width: 800px;
             margin: 0 auto;
-            background-color: white;
             padding: 20px;
+        }
+        .welcome-card {
+            background: white;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .welcome-message {
+            padding: 20px;
             margin-bottom: 20px;
-            padding-bottom: 20px;
-            border-bottom: 1px solid #eee;
         }
-        .btn {
+        .button {
             display: inline-block;
             padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            font-size: 16px;
+        }
+        .view-btn {
             background-color: #4CAF50;
             color: white;
-            text-decoration: none;
-            border-radius: 4px;
-            margin-right: 10px;
         }
-        .btn:hover {
-            background-color: #45a049;
-        }
-        .btn.logout {
+        .logout-btn {
             background-color: #f44336;
+            color: white;
         }
-        .btn.logout:hover {
-            background-color: #da190b;
+        .privacy-toggle {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
         }
-        .loading {
-            text-align: center;
-            padding: 20px;
-            font-style: italic;
-            color: #666;
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 34px;
+            margin-left: 10px;
+        }
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 34px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 26px;
+            width: 26px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .slider {
+            background-color: #2196F3;
+        }
+        input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+        #statusMessage {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+            display: none;
+        }
+        .success {
+            background-color: #dff0d8;
+            color: #3c763d;
+        }
+        .error {
+            background-color: #f2dede;
+            color: #a94442;
         }
     </style>
 </head>
 <body>
-    <div class="dashboard-container">
-        <div id="loading" class="loading">Loading...</div>
-        <div id="content" style="display: none;">
-            <div class="welcome-message">
-                <h1>Welcome, <span id="username">User</span>!</h1>
-                <p>You are successfully logged in.</p>
-            </div>
-            <div>
-                <a id="portfolioLink" href="#" class="btn">View My Portfolio</a>
-                <a href="/logout" class="btn logout">Logout</a>
-            </div>
+    <div class="welcome-card">
+        <h1>Welcome, <span id="username">!</span></h1>
+        <p>You are successfully logged in.</p>
+        
+        <div class="privacy-toggle">
+            <label>Make my portfolio public:</label>
+            <label class="toggle-switch">
+                <input type="checkbox" id="privacyToggle">
+                <span class="slider"></span>
+            </label>
+            <div id="statusMessage"></div>
+        </div>
+
+        <div style="margin-top: 20px;">
+            <a href="#" id="portfolioLink" class="button view-btn">View My Portfolio</a>
+            <a href="/logout" class="button logout-btn">Logout</a>
         </div>
     </div>
 
     <script>
-        // Check authentication status when page loads
-        window.addEventListener('load', async () => {
+        // Fetch user data and update the dashboard
+        async function initializeDashboard() {
             try {
-                const response = await fetch('/check-auth', {
-                    credentials: 'include'
-                });
+                const response = await fetch('/check-auth');
                 const data = await response.json();
-                
-                console.log('Auth check response:', data);
                 
                 if (data.authenticated) {
                     document.getElementById('username').textContent = data.username;
                     document.getElementById('portfolioLink').href = data.portfolio_path;
-                    document.getElementById('loading').style.display = 'none';
-                    document.getElementById('content').style.display = 'block';
+                    
+                    // Fetch and set initial privacy status
+                    const privacyResponse = await fetch('/get-privacy-status');
+                    const privacyData = await privacyResponse.json();
+                    document.getElementById('privacyToggle').checked = privacyData.is_public;
                 } else {
-                    // If not authenticated, redirect to login
                     window.location.href = '/login.html';
                 }
             } catch (error) {
-                console.error('Error checking auth:', error);
-                window.location.href = '/login.html';
+                console.error('Error:', error);
+                showStatus('Error loading dashboard data', false);
+            }
+        }
+
+        // Handle privacy toggle
+        document.getElementById('privacyToggle').addEventListener('change', async function() {
+            try {
+                const response = await fetch('/toggle-privacy', {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    showStatus('Privacy settings updated successfully', true);
+                    this.checked = data.is_public;
+                } else {
+                    showStatus('Failed to update privacy settings', false);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                showStatus('Error updating privacy settings', false);
+                this.checked = !this.checked; // Revert the toggle
             }
         });
+
+        function showStatus(message, isSuccess) {
+            const statusDiv = document.getElementById('statusMessage');
+            statusDiv.textContent = message;
+            statusDiv.className = isSuccess ? 'success' : 'error';
+            statusDiv.style.display = 'block';
+            setTimeout(() => {
+                statusDiv.style.display = 'none';
+            }, 3000);
+        }
+
+        // Initialize the dashboard when the page loads
+        initializeDashboard();
     </script>
 </body>
 </html> 

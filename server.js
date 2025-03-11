@@ -386,31 +386,46 @@ async function initializeApp() {
         });
 
         app.post('/toggle-privacy', requireAuth, (req, res) => {
+            if (!req.session || !req.session.user || !req.session.user.id) {
+                return res.status(401).json({ error: 'Not authenticated' });
+            }
+
             db.run('UPDATE users SET is_public = NOT is_public WHERE id = ?',
                 [req.session.user.id],
                 function(err) {
                     if (err) {
-                        res.status(500).json({ error: 'Error updating privacy settings' });
-                    } else {
-                        // Get the new status after toggle
-                        db.get('SELECT is_public FROM users WHERE id = ?', [req.session.user.id], (err, result) => {
-                            if (err) {
-                                res.status(500).json({ error: 'Error getting updated status' });
-                            } else {
-                                res.json({ success: true, is_public: result.is_public });
-                            }
-                        });
+                        console.error('Error updating privacy:', err);
+                        return res.status(500).json({ error: 'Error updating privacy settings' });
                     }
+
+                    // Get the new status after toggle
+                    db.get('SELECT is_public FROM users WHERE id = ?', [req.session.user.id], (err, result) => {
+                        if (err) {
+                            console.error('Error getting updated status:', err);
+                            return res.status(500).json({ error: 'Error getting updated status' });
+                        }
+                        if (!result) {
+                            return res.status(404).json({ error: 'User not found' });
+                        }
+                        res.json({ success: true, is_public: result.is_public });
+                    });
                 });
         });
 
         app.get('/get-privacy-status', requireAuth, (req, res) => {
+            if (!req.session || !req.session.user || !req.session.user.id) {
+                return res.status(401).json({ error: 'Not authenticated' });
+            }
+
             db.get('SELECT is_public FROM users WHERE id = ?', [req.session.user.id], (err, result) => {
                 if (err) {
-                    res.status(500).json({ error: 'Error getting privacy status' });
-                } else {
-                    res.json({ is_public: result.is_public });
+                    console.error('Error getting privacy status:', err);
+                    return res.status(500).json({ error: 'Error getting privacy status' });
                 }
+                if (!result) {
+                    return res.status(404).json({ error: 'User not found' });
+                }
+                res.json({ is_public: result.is_public });
             });
         });
 
