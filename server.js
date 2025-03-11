@@ -318,7 +318,7 @@ async function initializeApp() {
         });
 
         // Serve static files
-        app.use(express.static(__dirname));
+app.use(express.static(__dirname));
         app.use('/portfolios', express.static(path.join(__dirname, 'portfolios')));
 
         // Define routes that use the middleware
@@ -893,6 +893,14 @@ app.get(['/', '/index.html', '/login.html', '/register.html', '/dashboard.html',
 // Protected portfolio access
 app.get('/portfolios/*', async (req, res, next) => {
     const portfolioPath = req.path;
+    
+    // Check if this is a static file request (images, css, js, etc)
+    const staticFileExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.mp4', '.css', '.js', '.webp', '.ico', '.svg'];
+    if (staticFileExtensions.some(ext => portfolioPath.toLowerCase().endsWith(ext))) {
+        // Skip validation for static files
+        return next();
+    }
+    
     console.log('\n=== Portfolio Access Attempt ===');
     console.log('Accessing portfolio:', portfolioPath);
     console.log('Current directory:', __dirname);
