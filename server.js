@@ -214,27 +214,6 @@ async function initializeApp() {
             scanCount: 100
         });
 
-        // Add Redis store debugging
-        const originalGet = redisStore.get.bind(redisStore);
-        redisStore.get = function(sid, fn) {
-            console.log('Redis Store GET attempt for session:', sid);
-            originalGet(sid, function(err, session) {
-                if (err) console.error('Redis Store GET error:', err);
-                console.log('Redis Store GET result:', session ? 'Session found' : 'Session not found');
-                fn(err, session);
-            });
-        };
-
-        const originalSet = redisStore.set.bind(redisStore);
-        redisStore.set = function(sid, session, fn) {
-            console.log('Redis Store SET attempt for session:', sid);
-            originalSet(sid, session, function(err) {
-                if (err) console.error('Redis Store SET error:', err);
-                else console.log('Redis Store SET successful');
-                fn && fn(err);
-            });
-        };
-
         // Add Redis store error handler
         redisStore.on('error', function(err) {
             console.error('Redis Store Error:', err);
@@ -301,21 +280,13 @@ async function initializeApp() {
             next();
         });
 
-        // Simplified session debug middleware
+        // Remove the session store ready check middleware since Redis operations are working
+        // Add session debug middleware
         app.use((req, res, next) => {
             console.log('\n=== Session Status ===');
             console.log('URL:', req.url);
             console.log('Session ID:', req.sessionID);
             console.log('Session:', req.session);
-            next();
-        });
-
-        // Add session store ready check middleware
-        app.use((req, res, next) => {
-            if (!redisStore.client.isReady) {
-                console.error('Redis store not ready');
-                return res.status(500).json({ error: 'Session store not ready' });
-            }
             next();
         });
 
