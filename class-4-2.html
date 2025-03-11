@@ -3,195 +3,157 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Grade 4/2 Portfolios</title>
-    <link rel="stylesheet" href="styles.css">
+    <title>Class 4/2 Portfolios</title>
     <link rel="stylesheet" href="class-styles.css">
-    <style>
-        .nav-bar {
-            background-color: #333;
-            padding: 10px 20px;
-            color: white;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .nav-bar a {
-            color: white;
-            text-decoration: none;
-            margin-left: 20px;
-        }
-        .private-portfolio {
-            opacity: 0.5;
-        }
-        .portfolio-status {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            padding: 5px 10px;
-            border-radius: 3px;
-            font-size: 12px;
-            background-color: rgba(0, 0, 0, 0.7);
-        }
-        .status-public {
-            color: #4CAF50;
-        }
-        .status-private {
-            color: #f44336;
-        }
-        .student-card {
-            position: relative;
-            background: white;
-            padding: 15px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            text-align: center;
-            transition: transform 0.2s;
-        }
-        .student-card:hover {
-            transform: translateY(-5px);
-        }
-        .student-card img {
-            width: 100px;
-            height: 100px;
-            border-radius: 50%;
-            margin-bottom: 10px;
-            object-fit: cover;
-        }
-        .students-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-            gap: 20px;
-            padding: 20px;
-        }
-        .view-portfolio {
-            display: inline-block;
-            padding: 8px 16px;
-            background-color: #4CAF50;
-            color: white;
-            text-decoration: none;
-            border-radius: 4px;
-            margin-top: 10px;
-        }
-        .view-portfolio:hover {
-            background-color: #45a049;
-        }
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        h1 {
-            text-align: center;
-            margin-bottom: 30px;
-        }
-    </style>
 </head>
 <body>
-    <div class="nav-bar">
-        <div>Grade 4/2 Student Portfolios</div>
-        <div id="authLinks">
-            <a href="/login.html">Login</a>
-        </div>
+    <h1>Class 4/2 Student Portfolios</h1>
+    
+    <div class="login-container" id="loginPrompt" style="display: none;">
+        <p>Please <a href="/login.html">login</a> to view private portfolios</p>
     </div>
-    <div class="container">
-        <h1>Grade 4/2 Student Portfolios</h1>
-        <div class="students-grid">
-            <!-- Student cards will be populated here -->
-        </div>
+
+    <div class="navigation-links" style="text-align: center; margin-bottom: 20px;">
+        <a href="/class1.html" class="button" style="background-color: #2196F3; color: white;">Back to Class Selection</a>
+    </div>
+
+    <div id="portfoliosContainer" class="portfolios-grid">
+        <!-- Portfolios will be loaded here dynamically -->
     </div>
 
     <script>
-        // Function to update authentication links
-        async function updateAuthStatus() {
-            const authLinks = document.getElementById('authLinks');
-            try {
-                const response = await fetch('/check-auth');
-                const data = await response.json();
-                if (data.authenticated) {
-                    authLinks.innerHTML = `
-                        <span style="color: white; margin-right: 15px;">Welcome, ${data.username}</span>
-                        <a href="/dashboard">Dashboard</a>
-                        <a href="/logout">Logout</a>
-                    `;
-                }
-            } catch (error) {
-                console.error('Error checking auth status:', error);
+        // Function to create a portfolio card
+        function createPortfolioCard(username, imagePath, isPublic, portfolioPath) {
+            const card = document.createElement('div');
+            card.className = 'portfolio-card';
+            
+            const privacyBadge = document.createElement('span');
+            privacyBadge.className = `privacy-badge ${isPublic ? 'public' : 'private'}`;
+            privacyBadge.textContent = isPublic ? 'Public' : 'Private';
+            
+            const img = document.createElement('img');
+            img.src = imagePath || '/images/default-avatar.png';
+            img.alt = `${username}'s avatar`;
+            img.className = 'avatar';
+            img.onerror = function() {
+                this.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIwIiBoZWlnaHQ9IjEyMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTIwIiBoZWlnaHQ9IjEyMCIgZmlsbD0iI2YwZjBmMCIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTYiIGZpbGw9IiM2NjY2NjYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5ObyBJbWFnZTwvdGV4dD48L3N2Zz4=';
+            };
+            
+            const name = document.createElement('h3');
+            name.textContent = username;
+            
+            const viewBtn = document.createElement('a');
+            viewBtn.className = 'view-portfolio';
+            viewBtn.textContent = 'View Portfolio';
+            viewBtn.href = portfolioPath;
+            
+            if (!isPublic) {
+                viewBtn.style.opacity = '0.7';
+                viewBtn.style.backgroundColor = '#999';
+                viewBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const loginPrompt = document.getElementById('loginPrompt');
+                    loginPrompt.style.display = 'block';
+                    setTimeout(() => {
+                        loginPrompt.style.display = 'none';
+                    }, 3000);
+                });
             }
+            
+            card.appendChild(privacyBadge);
+            card.appendChild(img);
+            card.appendChild(name);
+            card.appendChild(viewBtn);
+            
+            return card;
         }
 
-        // Function to create student cards
-        async function createStudentCards() {
-            const students = [
-                { id: 'Tonmali', name: 'Tonmali', path: '/portfolios/P4-2/Tonmali/Tonmali.html', image: '/portfolios/P4-2/Tonmali/images/Tonmali.png' },
-                { id: 'Pi', name: 'Piyush', path: '/portfolios/P4-2/Pi/Pi.html', image: '/portfolios/P4-2/Pi/images/Pi.png' },
-                { id: 'Darin', name: 'Darin', path: '/portfolios/P4-2/Darin/Darin.html', image: '/portfolios/P4-2/Darin/images/Darin.png' },
-                { id: 'Ounjai', name: 'Ounjai', path: '/portfolios/P4-2/Ounjai/Ounjai.html', image: '/portfolios/P4-2/Ounjai/images/Ounjai.png' },
-                { id: 'Peso', name: 'Peso', path: '/portfolios/P4-2/Peso/Peso.html', image: '/portfolios/P4-2/Peso/images/Peso.png' },
-                { id: 'Paul', name: 'Paul', path: '/portfolios/P4-2/Paul/Paul.html', image: '/portfolios/P4-2/Paul/images/Paul.png' },
-                { id: 'PoonPoon', name: 'PoonPoon', path: '/portfolios/P4-2/PoonPoon/PoonPoon.html', image: '/portfolios/P4-2/PoonPoon/images/PoonPoon.jpg' },
-                { id: 'Trin', name: 'Trin', path: '/portfolios/P4-2/Trin/Trin.html', image: '/portfolios/P4-2/Trin/images/Trin.png' },
-                { id: 'Perth', name: 'Perth', path: '/portfolios/P4-2/Perth/Perth.html', image: '/portfolios/P4-2/Perth/images/Perth.png' },
-                { id: 'Pleng', name: 'Pleng', path: '/portfolios/P4-2/Pleng/Pleng.html', image: '/portfolios/P4-2/Pleng/images/Pleng.png' },
-                { id: 'Sky', name: 'Sky', path: '/portfolios/P4-2/Sky/Sky.html', image: '/portfolios/P4-2/Sky/images/Sky.jpg' },
-                { id: 'Jdi', name: 'Jdi', path: '/portfolios/P4-2/Jdi/Jdi.html', image: '/portfolios/P4-2/Jdi/images/Jdi.png' },
-                { id: 'Zeno', name: 'Zeno', path: '/portfolios/P4-2/Zeno/Zeno.html', image: '/portfolios/P4-2/Zeno/images/Zeno.jpg' },
-                { id: 'Peter', name: 'Peter', path: '/portfolios/P4-2/Peter/Peter.html', image: '/portfolios/P4-2/Peter/images/Peter.jpg' }
-            ];
+        // Function to load portfolios
+        async function loadPortfolios() {
+            try {
+                // Check authentication status
+                const authResponse = await fetch('/check-auth');
+                const authData = await authResponse.json();
+                
+                // Show login prompt if not authenticated
+                const loginPrompt = document.getElementById('loginPrompt');
+                if (!authData.authenticated) {
+                    loginPrompt.style.display = 'block';
+                }
 
-            const grid = document.querySelector('.students-grid');
-            grid.innerHTML = ''; // Clear existing cards
-            
-            // Get current user's authentication status
-            const authResponse = await fetch('/check-auth');
-            const authData = await authResponse.json();
-            
-            for (const student of students) {
-                try {
-                    let hasAccess = false; // Default to false
-                    
-                    // Check access for this portfolio
-                    const response = await fetch(`/check-access${student.path}`);
-                    if (response.ok) {
-                        const data = await response.json();
-                        hasAccess = data.hasAccess;
-                        
-                        // If authenticated, user should always have access to their own portfolio
-                        if (authData.authenticated && authData.username === student.id) {
-                            hasAccess = true;
+                // Define the default Class 4/2 students
+                const defaultStudents = [
+                    { username: 'Tonmali', portfolio_path: '/portfolios/P4-2/Tonmali/Tonmali.html', avatar_path: '/portfolios/P4-2/Tonmali/images/Tonmali.png', is_public: true },
+                    { username: 'Pi', portfolio_path: '/portfolios/P4-2/Pi/Pi.html', avatar_path: '/portfolios/P4-2/Pi/images/Pi.png', is_public: true },
+                    { username: 'Darin', portfolio_path: '/portfolios/P4-2/Darin/Darin.html', avatar_path: '/portfolios/P4-2/Darin/images/Darin.png', is_public: true },
+                    { username: 'Ounjai', portfolio_path: '/portfolios/P4-2/Ounjai/Ounjai.html', avatar_path: '/portfolios/P4-2/Ounjai/images/Ounjai.png', is_public: true },
+                    { username: 'Peso', portfolio_path: '/portfolios/P4-2/Peso/Peso.html', avatar_path: '/portfolios/P4-2/Peso/images/Peso.png', is_public: true },
+                    { username: 'Paul', portfolio_path: '/portfolios/P4-2/Paul/Paul.html', avatar_path: '/portfolios/P4-2/Paul/images/Paul.png', is_public: true },
+                    { username: 'PoonPoon', portfolio_path: '/portfolios/P4-2/PoonPoon/PoonPoon.html', avatar_path: '/portfolios/P4-2/PoonPoon/images/PoonPoon.jpg', is_public: true },
+                    { username: 'Trin', portfolio_path: '/portfolios/P4-2/Trin/Trin.html', avatar_path: '/portfolios/P4-2/Trin/images/Trin.png', is_public: true },
+                    { username: 'Perth', portfolio_path: '/portfolios/P4-2/Perth/Perth.html', avatar_path: '/portfolios/P4-2/Perth/images/Perth.png', is_public: true },
+                    { username: 'Pleng', portfolio_path: '/portfolios/P4-2/Pleng/Pleng.html', avatar_path: '/portfolios/P4-2/Pleng/images/Pleng.png', is_public: true },
+                    { username: 'Sky', portfolio_path: '/portfolios/P4-2/Sky/Sky.html', avatar_path: '/portfolios/P4-2/Sky/images/Sky.jpg', is_public: true },
+                    { username: 'Jdi', portfolio_path: '/portfolios/P4-2/Jdi/Jdi.html', avatar_path: '/portfolios/P4-2/Jdi/images/Jdi.png', is_public: true },
+                    { username: 'Zeno', portfolio_path: '/portfolios/P4-2/Zeno/Zeno.html', avatar_path: '/portfolios/P4-2/Zeno/images/Zeno.jpg', is_public: true }
+                ];
+                
+                // Load portfolios from the server
+                const response = await fetch('/admin/users');
+                const users = await response.json();
+                
+                // Combine default students with any additional users from the server
+                const allUsers = [...defaultStudents];
+                users.forEach(user => {
+                    if (user.portfolio_path && user.portfolio_path.includes('/P4-2/')) {
+                        // Only add users that aren't already in the default list
+                        if (!allUsers.some(u => u.username === user.username)) {
+                            allUsers.push(user);
                         }
                     }
-                    
-                    const card = document.createElement('div');
-                    card.className = `student-card${hasAccess ? '' : ' private-portfolio'}`;
-                    card.setAttribute('data-student-id', student.id);
-                    
-                    const imageUrl = student.image;
-                    // Using a data URL for the fallback image instead of external placeholder
-                    const fallbackImage = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDEwMCAxMDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjEwMCIgaGVpZ2h0PSIxMDAiIGZpbGw9IiNlZWUiLz48dGV4dCB4PSI1MCIgeT0iNTAiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPk5vIEltYWdlPC90ZXh0Pjwvc3ZnPg==';
-                    
-                    card.innerHTML = `
-                        <img src="${imageUrl}" alt="${student.name}" onerror="this.src='${fallbackImage}'">
-                        <h3>${student.name}</h3>
-                        <a href="${student.path}" class="view-portfolio" ${!hasAccess ? 'onclick="return false"' : ''}>
-                            View Portfolio
-                        </a>
-                        <div class="portfolio-status ${hasAccess ? 'status-public' : 'status-private'}">
-                            ${hasAccess ? 'Public' : 'Private'}
-                        </div>
-                    `;
-                    
-                    grid.appendChild(card);
-                } catch (error) {
-                    console.error(`Error checking access for ${student.name}:`, error);
+                });
+
+                // Sort portfolios
+                const sortedPortfolios = allUsers.sort((a, b) => {
+                    // Sort by visibility first (public on top)
+                    if (a.is_public !== b.is_public) {
+                        return b.is_public - a.is_public;
+                    }
+                    // Then sort by username
+                    return a.username.localeCompare(b.username);
+                });
+                
+                const container = document.getElementById('portfoliosContainer');
+                container.innerHTML = ''; // Clear existing content
+                
+                sortedPortfolios.forEach(user => {
+                    const card = createPortfolioCard(
+                        user.username,
+                        user.avatar_path || null,
+                        user.is_public,
+                        user.portfolio_path
+                    );
+                    container.appendChild(card);
+                });
+
+                // If no portfolios found, show message
+                if (container.children.length === 0) {
+                    const message = document.createElement('p');
+                    message.style.textAlign = 'center';
+                    message.style.gridColumn = '1 / -1';
+                    message.style.padding = '20px';
+                    message.textContent = 'No portfolios found for Class 4/2';
+                    container.appendChild(message);
                 }
+            } catch (error) {
+                console.error('Error loading portfolios:', error);
+                const container = document.getElementById('portfoliosContainer');
+                container.innerHTML = '<p style="text-align: center; grid-column: 1 / -1; padding: 20px; color: #721c24;">Error loading portfolios. Please try again later.</p>';
             }
         }
 
-        // Initialize the page
-        document.addEventListener('DOMContentLoaded', () => {
-            updateAuthStatus();
-            createStudentCards();
-        });
+        // Load portfolios when the page loads
+        document.addEventListener('DOMContentLoaded', loadPortfolios);
     </script>
 </body>
 </html> 
