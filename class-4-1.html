@@ -80,28 +80,52 @@
                 if (!authData.authenticated) {
                     loginPrompt.style.display = 'block';
                 }
+
+                // Define the default Class 4/1 students
+                const defaultStudents = [
+                    { username: 'Bonus', portfolio_path: '/portfolios/P4-1/Bonus/Bonus.html', avatar_path: '/portfolios/P4-1/Bonus/images/Bonus.png', is_public: false },
+                    { username: 'Nicha', portfolio_path: '/portfolios/P4-1/Nicha/index.html', avatar_path: '/portfolios/P4-1/Nicha/images/Nicha.png', is_public: false },
+                    { username: 'Copter', portfolio_path: '/portfolios/P4-1/Copter/Copter.html', avatar_path: '/portfolios/P4-1/Copter/images/Copter.png', is_public: false },
+                    { username: 'Khun', portfolio_path: '/portfolios/P4-1/Khun/Khun.html', avatar_path: '/portfolios/P4-1/Khun/images/Khun.png', is_public: false },
+                    { username: 'Kod', portfolio_path: '/portfolios/P4-1/Kod/Kod.html', avatar_path: '/portfolios/P4-1/Kod/images/Kod.png', is_public: false },
+                    { username: 'Phupha', portfolio_path: '/portfolios/P4-1/Phupha/Phupha.html', avatar_path: '/portfolios/P4-1/Phupha/images/Phupha.png', is_public: false },
+                    { username: 'Tar', portfolio_path: '/portfolios/P4-1/Tar+Jiajia/Tar.html', avatar_path: '/portfolios/P4-1/Tar+Jiajia/images/Tar.png', is_public: false },
+                    { username: 'Jiajia', portfolio_path: '/portfolios/P4-1/Tar+Jiajia/Jiajia.html', avatar_path: '/portfolios/P4-1/Tar+Jiajia/images/Jiajia.png', is_public: false },
+                    { username: 'Tigger', portfolio_path: '/portfolios/P4-1/Tigger/Tigger.html', avatar_path: '/portfolios/P4-1/Tigger/images/Tigger.png', is_public: false }
+                ];
                 
-                // Load portfolios
+                // Load portfolios from the server
                 const response = await fetch('/admin/users');
                 const users = await response.json();
-                const container = document.getElementById('portfoliosContainer');
                 
-                // Clear existing content
-                container.innerHTML = '';
-                
-                // Filter for P4-1 portfolios only and sort by visibility
-                const portfolios = users
-                    .filter(user => user.portfolio_path && user.portfolio_path.includes('/P4-1/'))
-                    .sort((a, b) => {
-                        // Sort by visibility first (public on top)
-                        if (a.is_public !== b.is_public) {
-                            return b.is_public - a.is_public;
+                // Combine default students with any additional users from the server
+                const allUsers = [...defaultStudents];
+                users.forEach(user => {
+                    if (user.portfolio_path && user.portfolio_path.includes('/P4-1/')) {
+                        // Only add users that aren't already in the default list
+                        if (!allUsers.some(u => u.username === user.username)) {
+                            allUsers.push(user);
                         }
-                        // Then sort by username
-                        return a.username.localeCompare(b.username);
-                    });
+                    }
+                });
+
+                // Sort portfolios
+                const sortedPortfolios = allUsers.sort((a, b) => {
+                    // Sort by visibility first (public on top)
+                    if (a.is_public !== b.is_public) {
+                        return b.is_public - a.is_public;
+                    }
+                    // Then sort by username
+                    return a.username.localeCompare(b.username);
+                });
                 
-                portfolios.forEach(user => {
+                const container = document.getElementById('portfoliosContainer');
+                container.innerHTML = ''; // Clear existing content
+                
+                // Display all portfolios, even if empty
+                console.log('Total portfolios:', sortedPortfolios.length);
+                sortedPortfolios.forEach(user => {
+                    console.log('Creating card for:', user.username);
                     const card = createPortfolioCard(
                         user.username,
                         user.avatar_path || null,
