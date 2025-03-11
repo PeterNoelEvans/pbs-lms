@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Class 1 Student Portfolios</title>
+    <link rel="stylesheet" href="class-styles.css">
+</head>
+<body>
+    <h1>Class 1 Student Portfolios</h1>
+    
+    <div class="login-container" id="loginPrompt" style="display: none;">
+        <p>Please <a href="/login.html">login</a> to view private portfolios</p>
+    </div>
+
+    <div class="navigation-links" style="text-align: center; margin-bottom: 20px;">
+        <a href="/dashboard.html" class="button" style="background-color: #2196F3; color: white;">Back to Dashboard</a>
+    </div>
+
+    <div id="portfoliosContainer" class="portfolios-grid">
+        <!-- Portfolios will be loaded here dynamically -->
+    </div>
+
+    <script>
+        // Function to create a portfolio card
+        function createPortfolioCard(username, imagePath, isPublic, portfolioPath) {
+            const card = document.createElement('div');
+            card.className = 'portfolio-card';
+            
+            const privacyBadge = document.createElement('span');
+            privacyBadge.className = `privacy-badge ${isPublic ? 'public' : 'private'}`;
+            privacyBadge.textContent = isPublic ? 'Public' : 'Private';
+            
+            const img = document.createElement('img');
+            img.src = imagePath || '/images/default-avatar.png';
+            img.alt = `${username}'s avatar`;
+            img.className = 'avatar';
+            img.onerror = function() {
+                this.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIwIiBoZWlnaHQ9IjEyMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTIwIiBoZWlnaHQ9IjEyMCIgZmlsbD0iI2YwZjBmMCIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTYiIGZpbGw9IiM2NjY2NjYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5ObyBJbWFnZTwvdGV4dD48L3N2Zz4=';
+            };
+            
+            const name = document.createElement('h3');
+            name.textContent = username;
+            
+            const viewBtn = document.createElement('a');
+            viewBtn.className = 'view-portfolio';
+            viewBtn.textContent = 'View Portfolio';
+            viewBtn.href = portfolioPath;
+            
+            if (!isPublic) {
+                viewBtn.addEventListener('click', async (e) => {
+                    e.preventDefault();
+                    try {
+                        const response = await fetch(`/check-access${portfolioPath}`);
+                        const data = await response.json();
+                        
+                        if (data.hasAccess) {
+                            window.location.href = portfolioPath;
+                        } else {
+                            const loginPrompt = document.getElementById('loginPrompt');
+                            loginPrompt.style.display = 'block';
+                            setTimeout(() => {
+                                loginPrompt.style.display = 'none';
+                            }, 3000);
+                        }
+                    } catch (error) {
+                        console.error('Error checking access:', error);
+                    }
+                });
+            }
+            
+            card.appendChild(privacyBadge);
+            card.appendChild(img);
+            card.appendChild(name);
+            card.appendChild(viewBtn);
+            
+            return card;
+        }
+
+        // Function to load portfolios
+        async function loadPortfolios() {
+            try {
+                // Check authentication status
+                const authResponse = await fetch('/check-auth');
+                const authData = await authResponse.json();
+                
+                // Show login prompt if not authenticated
+                const loginPrompt = document.getElementById('loginPrompt');
+                if (!authData.authenticated) {
+                    loginPrompt.style.display = 'block';
+                }
+                
+                // Load portfolios
+                const response = await fetch('/admin/users');
+                const users = await response.json();
+                const container = document.getElementById('portfoliosContainer');
+                
+                // Clear existing content
+                container.innerHTML = '';
+                
+                users.forEach(user => {
+                    // Only show Class 1 portfolios
+                    if (user.portfolio_path.includes('/Class1/')) {
+                        const card = createPortfolioCard(
+                            user.username,
+                            user.avatar_path || null,
+                            user.is_public,
+                            user.portfolio_path
+                        );
+                        container.appendChild(card);
+                    }
+                });
+
+                // If no portfolios found, show message
+                if (container.children.length === 0) {
+                    const message = document.createElement('p');
+                    message.style.textAlign = 'center';
+                    message.style.gridColumn = '1 / -1';
+                    message.style.padding = '20px';
+                    message.textContent = 'No portfolios found for Class 1';
+                    container.appendChild(message);
+                }
+            } catch (error) {
+                console.error('Error loading portfolios:', error);
+                const container = document.getElementById('portfoliosContainer');
+                container.innerHTML = '<p style="text-align: center; grid-column: 1 / -1; padding: 20px; color: #721c24;">Error loading portfolios. Please try again later.</p>';
+            }
+        }
+
+        // Load portfolios when the page loads
+        document.addEventListener('DOMContentLoaded', loadPortfolios);
+    </script>
+</body>
+</html> 
