@@ -290,11 +290,25 @@ async function initializeApp() {
                 sameSite: 'none',
                 path: '/',
                 maxAge: 24 * 60 * 60 * 1000 // 24 hours
-            },
-            // Add session store ready check
-            unset: 'keep',
-            rolling: true
+            }
         }));
+
+        // Add session initialization middleware
+        app.use((req, res, next) => {
+            if (!req.session) {
+                return next(new Error('Session initialization failed'));
+            }
+            next();
+        });
+
+        // Simplified session debug middleware
+        app.use((req, res, next) => {
+            console.log('\n=== Session Status ===');
+            console.log('URL:', req.url);
+            console.log('Session ID:', req.sessionID);
+            console.log('Session:', req.session);
+            next();
+        });
 
         // Add session store ready check middleware
         app.use((req, res, next) => {
@@ -334,20 +348,13 @@ async function initializeApp() {
 
         // Define routes that use the middleware
         app.post('/login', async (req, res) => {
-            console.log('\n=== Login Attempt ===');
-            console.log('Raw request body:', req.body);
-            console.log('Current session:', req.session);
-            console.log('Session ID:', req.sessionID);
-
             const { username, password } = req.body;
             
             if (!username || !password) {
-                console.log('Missing credentials');
                 return res.status(400).json({ error: 'Username and password are required' });
             }
 
             try {
-                // Get user data
                 const user = await new Promise((resolve, reject) => {
                     db.get('SELECT * FROM users WHERE username = ?', [username], (err, row) => {
                         if (err) reject(err);
@@ -356,75 +363,40 @@ async function initializeApp() {
                 });
 
                 if (!user) {
-                    console.log('User not found:', username);
                     return res.status(401).json({ error: 'Invalid credentials' });
                 }
 
-                // For Peter42, accept the hardcoded password
                 const validPassword = username === 'Peter42' ? 
                     password === 'Peter2025BB' : 
                     await bcrypt.compare(password, user.password);
 
                 if (!validPassword) {
-                    console.log('Invalid password for user:', username);
                     return res.status(401).json({ error: 'Invalid credentials' });
                 }
 
-                // Create a new session synchronously
-                req.session.regenerate(async (err) => {
-                    if (err) {
-                        console.error('Session regeneration error:', err);
-                        return res.status(500).json({ error: 'Session error' });
-                    }
+                // Set session data directly
+                req.session.user = {
+                    id: user.id,
+                    username: user.username,
+                    portfolio_path: user.portfolio_path
+                };
 
-                    req.session.user = {
-                        id: user.id,
+                // Save session and wait for it to be saved
+                await new Promise((resolve, reject) => {
+                    req.session.save((err) => {
+                        if (err) reject(err);
+                        else resolve();
+                    });
+                });
+
+                // Send response
+                res.json({
+                    success: true,
+                    redirect: '/dashboard',
+                    user: {
                         username: user.username,
                         portfolio_path: user.portfolio_path
-                    };
-
-                    // Save the session and wait for confirmation
-                    await new Promise((resolve, reject) => {
-                        req.session.save((err) => {
-                            if (err) {
-                                console.error('Session save error:', err);
-                                reject(err);
-                            } else {
-                                console.log('Session saved successfully');
-                                console.log('Final session state:', req.session);
-                                console.log('Session ID:', req.sessionID);
-                                resolve();
-                            }
-                        });
-                    });
-
-                    // Verify session was saved in Redis
-                    const sessionExists = await new Promise((resolve) => {
-                        redisStore.get(req.sessionID, (err, session) => {
-                            if (err || !session) {
-                                console.error('Session verification failed:', err || 'Session not found');
-                                resolve(false);
-                            } else {
-                                console.log('Session verified in Redis');
-                                resolve(true);
-                            }
-                        });
-                    });
-
-                    if (!sessionExists) {
-                        return res.status(500).json({ error: 'Session creation failed' });
                     }
-
-                    // Send success response with redirect
-                    res.json({
-                        success: true,
-                        redirect: '/dashboard',
-                        user: {
-                            username: user.username,
-                            portfolio_path: user.portfolio_path
-                        },
-                        sessionId: req.sessionID
-                    });
                 });
             } catch (error) {
                 console.error('Login error:', error);

@@ -194,57 +194,7 @@
                 
                 if (data.success) {
                     console.log('Login successful, redirecting to:', data.redirect);
-                    
-                    // Function to verify session
-                    const verifySession = async (sessionId, maxAttempts = 3) => {
-                        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-                            console.log(`Session verification attempt ${attempt}/${maxAttempts}`);
-                            
-                            // Wait between attempts
-                            if (attempt > 1) {
-                                await new Promise(resolve => setTimeout(resolve, 1000));
-                            }
-
-                            try {
-                                const response = await fetch('/check-session', {
-                                    method: 'GET',
-                                    credentials: 'include',
-                                    headers: {
-                                        'Cache-Control': 'no-cache',
-                                        'Pragma': 'no-cache'
-                                    }
-                                });
-
-                                if (!response.ok) {
-                                    console.error('Session check failed:', response.status);
-                                    continue;
-                                }
-
-                                const sessionData = await response.json();
-                                console.log('Session check response:', sessionData);
-
-                                if (sessionData.authenticated && 
-                                    sessionData.sessionID === sessionId && 
-                                    sessionData.user?.username === data.user.username) {
-                                    return true;
-                                }
-                            } catch (error) {
-                                console.error('Session verification error:', error);
-                            }
-                        }
-                        return false;
-                    };
-
-                    // Verify session before redirect
-                    const sessionVerified = await verifySession(data.sessionId);
-                    
-                    if (sessionVerified) {
-                        window.location.replace(data.redirect);
-                    } else {
-                        console.error('Session verification failed');
-                        errorDiv.textContent = 'Could not establish secure session. Please try again.';
-                        errorDiv.style.display = 'block';
-                    }
+                    window.location.replace(data.redirect);
                     return;
                 }
                 
