@@ -18,6 +18,27 @@
    - Public: Everyone can see your portfolio
    - Private: Only you and your parents can see your portfolio (default setting)
 
+### Portfolio Features
+
+#### Python Turtle Editor
+The system includes an interactive Python Turtle Editor that allows you to:
+1. Create beautiful graphics using Python's Turtle module
+2. Write and test Python code directly in your browser
+3. Try pre-made examples like stars, spirals, and flowers
+4. Add your creations to your portfolio
+
+To access the Turtle Editor:
+1. Log in to your dashboard
+2. Find the "Coding Tools" section
+3. Click on "Python Turtle Editor"
+4. Start creating!
+
+Tips for using the Turtle Editor:
+- Use the example buttons to learn from pre-made patterns
+- Experiment with different colors and shapes
+- Save your favorite code to add to your portfolio
+- The editor includes helpful tips and documentation
+
 ### Portfolio Structure
 When you register, the system automatically creates:
 1. Your portfolio directory at `/portfolios/P4-1/` or `/portfolios/P4-2/` (based on your class)
