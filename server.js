@@ -1102,7 +1102,8 @@ const db = new sqlite3.Database(dbPath, (err) => {
             password TEXT,
             portfolio_path TEXT UNIQUE,
             avatar_path TEXT,
-            is_public BOOLEAN DEFAULT 0
+            is_public BOOLEAN DEFAULT 0,
+            is_super_user BOOLEAN DEFAULT 0
         )`, async (err) => {
             if (err) {
                 console.error('Error creating users table:', err);
@@ -1110,6 +1111,20 @@ const db = new sqlite3.Database(dbPath, (err) => {
             }
             console.log('Users table ready');
             
+            // Add super_user column if it doesn't exist
+            db.run(`ALTER TABLE users ADD COLUMN is_super_user BOOLEAN DEFAULT 0;`, (err) => {
+                if (err && !err.message.includes('duplicate column')) {
+                    console.error('Error adding is_super_user column:', err);
+                }
+            });
+
+            // Set Peter42 as super user
+            db.run('UPDATE users SET is_super_user = 1 WHERE username = ?', ['Peter42'], (err) => {
+                if (err) {
+                    console.error('Error setting Peter42 as super user:', err);
+                }
+            });
+
             // Add avatar_path column if it doesn't exist
             db.run(`ALTER TABLE users ADD COLUMN avatar_path TEXT;`, (err) => {
                 if (err && !err.message.includes('duplicate column')) {
@@ -1165,4 +1180,44 @@ const db = new sqlite3.Database(dbPath, (err) => {
             }
         });
     });
+});
+
+// Modify the portfolio access check
+app.get('/check-portfolio-access', async (req, res) => {
+    const portfolioPath = req.query.path;
+    
+    if (!portfolioPath) {
+        return res.status(400).json({ error: 'Portfolio path is required' });
+    }
+
+    try {
+        const result = await new Promise((resolve, reject) => {
+            db.get('SELECT is_public, username FROM users WHERE portfolio_path = ?',
+                [portfolioPath], (err, row) => {
+                    if (err) reject(err);
+                    resolve(row);
+                });
+        });
+
+        if (!result) {
+            return res.json({ hasAccess: false });
+        }
+
+        // Check if current user is Peter42 (super user)
+        if (req.session?.user?.username === 'Peter42') {
+            return res.json({ hasAccess: true });
+        }
+
+        // Regular access checks
+        if (req.session && req.session.user) {
+            const user = req.session.user;
+            const hasAccess = result.is_public || result.username === user.username;
+            return res.json({ hasAccess });
+        }
+
+        res.json({ hasAccess: result.is_public });
+    } catch (error) {
+        console.error('Error checking portfolio access:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
 }); 

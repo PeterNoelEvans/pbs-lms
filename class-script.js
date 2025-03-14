@@ -127,4 +127,46 @@ async function initializePortfolios(classId) {
     } catch (error) {
         console.error('Error initializing portfolios:', error);
     }
+}
+
+async function loadPortfolios() {
+    try {
+        // Get all users
+        const usersResponse = await fetch('/admin/users');
+        if (!usersResponse.ok) {
+            throw new Error('Failed to fetch users');
+        }
+        const users = await usersResponse.json();
+
+        // Sort users: public portfolios first, then alphabetically by username
+        users.sort((a, b) => {
+            if (a.is_public !== b.is_public) {
+                return b.is_public - a.is_public;
+            }
+            return a.username.localeCompare(b.username);
+        });
+
+        const container = document.getElementById('portfoliosContainer');
+        container.innerHTML = ''; // Clear existing content
+
+        // Create and append portfolio cards
+        for (const user of users) {
+            // Check access for each portfolio
+            const accessResponse = await fetch(`/check-portfolio-access?path=${encodeURIComponent(user.portfolio_path)}`);
+            const accessData = await accessResponse.json();
+
+            if (accessData.hasAccess) {
+                createPortfolioCard(
+                    user.username,
+                    user.avatar_path,
+                    user.is_public,
+                    user.portfolio_path
+                );
+            }
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        document.getElementById('portfoliosContainer').innerHTML = 
+            '<p class="error">Error loading portfolios. Please try again later.</p>';
+    }
 } 
