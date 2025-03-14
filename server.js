@@ -1197,42 +1197,45 @@ app.get('/check-portfolio-access', async (req, res) => {
     }
 
     try {
+        // Get the user info from the database based on the portfolio path
         const result = await new Promise((resolve, reject) => {
-            db.get('SELECT is_public, username, is_super_user FROM users WHERE portfolio_path = ?',
-                [portfolioPath], (err, row) => {
+            db.get('SELECT is_public, username FROM users WHERE portfolio_path = ? OR username = ?',
+                [portfolioPath, req.session?.user?.username],
+                (err, row) => {
                     if (err) reject(err);
                     resolve(row);
                 });
         });
 
-        console.log('Database result:', result);
-
-        if (!result) {
-            console.log('Portfolio not found in database');
-            return res.json({ hasAccess: false });
-        }
-
-        // Check if current user is Peter42 (super user)
-        if (req.session?.user?.username === 'Peter42') {
-            console.log('Access granted: User is Peter42');
-            return res.json({ hasAccess: true });
-        }
-
-        // Regular access checks
-        if (req.session && req.session.user) {
-            const user = req.session.user;
-            const hasAccess = result.is_public || result.username === user.username;
-            console.log('Regular access check:', {
-                isPublic: result.is_public,
-                portfolioOwner: result.username,
-                currentUser: user.username,
-                hasAccess: hasAccess
-            });
+        // If user is logged in
+        if (req.session?.user) {
+            console.log('Authenticated access attempt by:', req.session.user.username);
+            
+            // If it's Peter42, grant access
+            if (req.session.user.username === 'Peter42') {
+                console.log('Access granted to Peter42');
+                return res.json({ hasAccess: true });
+            }
+            
+            // Check if the user is a parent
+            const isParent = req.session.user.username.toLowerCase().startsWith('parent-');
+            
+            if (isParent) {
+                const childName = req.session.user.username.substring('parent-'.length);
+                const hasAccess = result?.is_public || result?.username === childName;
+                console.log('Parent access check:', { hasAccess, isPublic: result?.is_public, child: childName });
+                return res.json({ hasAccess });
+            }
+            
+            // Regular user access check
+            const hasAccess = result?.is_public || result?.username === req.session.user.username;
+            console.log('Regular access check:', { hasAccess, isPublic: result?.is_public });
             return res.json({ hasAccess });
         }
 
-        console.log('No session, checking only public access');
-        res.json({ hasAccess: result.is_public });
+        // Not logged in, only allow access to public portfolios
+        console.log('Public access check:', { isPublic: result?.is_public });
+        return res.json({ hasAccess: result?.is_public || false });
     } catch (error) {
         console.error('Error checking portfolio access:', error);
         res.status(500).json({ error: 'Server error' });
