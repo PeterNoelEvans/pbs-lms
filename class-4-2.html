@@ -81,35 +81,51 @@
                     loginPrompt.style.display = 'block';
                 }
 
-                // Define the default Class 4/2 students
+                // Define the default Class 4/2 students (without hardcoding privacy settings)
                 const defaultStudents = [
-                    { username: 'Tonmali', portfolio_path: '/portfolios/P4-2/Tonmali/Tonmali.html', avatar_path: '/portfolios/P4-2/Tonmali/images/Tonmali.png', is_public: true },
-                    { username: 'Pi', portfolio_path: '/portfolios/P4-2/Pi/Pi.html', avatar_path: '/portfolios/P4-2/Pi/images/Pi.png', is_public: true },
-                    { username: 'Darin', portfolio_path: '/portfolios/P4-2/Darin/Darin.html', avatar_path: '/portfolios/P4-2/Darin/images/Darin.png', is_public: true },
-                    { username: 'Ounjai', portfolio_path: '/portfolios/P4-2/Ounjai/Ounjai.html', avatar_path: '/portfolios/P4-2/Ounjai/images/Ounjai.png', is_public: true },
-                    { username: 'Peso', portfolio_path: '/portfolios/P4-2/Peso/Peso.html', avatar_path: '/portfolios/P4-2/Peso/images/Peso.png', is_public: true },
-                    { username: 'Paul', portfolio_path: '/portfolios/P4-2/Paul/Paul.html', avatar_path: '/portfolios/P4-2/Paul/images/Paul.png', is_public: true },
-                    { username: 'PoonPoon', portfolio_path: '/portfolios/P4-2/PoonPoon/PoonPoon.html', avatar_path: '/portfolios/P4-2/PoonPoon/images/PoonPoon.jpg', is_public: true },
-                    { username: 'Trin', portfolio_path: '/portfolios/P4-2/Trin/Trin.html', avatar_path: '/portfolios/P4-2/Trin/images/Trin.png', is_public: true },
-                    { username: 'Perth', portfolio_path: '/portfolios/P4-2/Perth/Perth.html', avatar_path: '/portfolios/P4-2/Perth/images/Perth.png', is_public: true },
-                    { username: 'Pleng', portfolio_path: '/portfolios/P4-2/Pleng/Pleng.html', avatar_path: '/portfolios/P4-2/Pleng/images/Pleng.png', is_public: true },
-                    { username: 'Sky', portfolio_path: '/portfolios/P4-2/Sky/Sky.html', avatar_path: '/portfolios/P4-2/Sky/images/Sky.jpg', is_public: true },
-                    { username: 'Jdi', portfolio_path: '/portfolios/P4-2/Jdi/Jdi.html', avatar_path: '/portfolios/P4-2/Jdi/images/Jdi.png', is_public: true },
-                    { username: 'Zeno', portfolio_path: '/portfolios/P4-2/Zeno/Zeno.html', avatar_path: '/portfolios/P4-2/Zeno/images/Zeno.jpg', is_public: true }
+                    { username: 'Tonmali', portfolio_path: '/portfolios/P4-2/Tonmali/Tonmali.html', avatar_path: '/portfolios/P4-2/Tonmali/images/Tonmali.png' },
+                    { username: 'Pi', portfolio_path: '/portfolios/P4-2/Pi/Pi.html', avatar_path: '/portfolios/P4-2/Pi/images/Pi.png' },
+                    { username: 'Darin', portfolio_path: '/portfolios/P4-2/Darin/Darin.html', avatar_path: '/portfolios/P4-2/Darin/images/Darin.png' },
+                    { username: 'Ounjai', portfolio_path: '/portfolios/P4-2/Ounjai/Ounjai.html', avatar_path: '/portfolios/P4-2/Ounjai/images/Ounjai.png' },
+                    { username: 'Peso', portfolio_path: '/portfolios/P4-2/Peso/Peso.html', avatar_path: '/portfolios/P4-2/Peso/images/Peso.png' },
+                    { username: 'Paul', portfolio_path: '/portfolios/P4-2/Paul/Paul.html', avatar_path: '/portfolios/P4-2/Paul/images/Paul.png' },
+                    { username: 'PoonPoon', portfolio_path: '/portfolios/P4-2/PoonPoon/PoonPoon.html', avatar_path: '/portfolios/P4-2/PoonPoon/images/PoonPoon.jpg' },
+                    { username: 'Trin', portfolio_path: '/portfolios/P4-2/Trin/Trin.html', avatar_path: '/portfolios/P4-2/Trin/images/Trin.png' },
+                    { username: 'Perth', portfolio_path: '/portfolios/P4-2/Perth/Perth.html', avatar_path: '/portfolios/P4-2/Perth/images/Perth.png' },
+                    { username: 'Pleng', portfolio_path: '/portfolios/P4-2/Pleng/Pleng.html', avatar_path: '/portfolios/P4-2/Pleng/images/Pleng.png' },
+                    { username: 'Sky', portfolio_path: '/portfolios/P4-2/Sky/Sky.html', avatar_path: '/portfolios/P4-2/Sky/images/Sky.jpg' },
+                    { username: 'Jdi', portfolio_path: '/portfolios/P4-2/Jdi/Jdi.html', avatar_path: '/portfolios/P4-2/Jdi/images/Jdi.png' },
+                    { username: 'Zeno', portfolio_path: '/portfolios/P4-2/Zeno/Zeno.html', avatar_path: '/portfolios/P4-2/Zeno/images/Zeno.jpg' }
                 ];
                 
                 // Load portfolios from the server
                 const response = await fetch('/admin/users');
                 const users = await response.json();
                 
-                // Combine default students with any additional users from the server
-                const allUsers = [...defaultStudents];
+                // Create a map of server users for quick lookup
+                const userMap = new Map(users.map(user => [user.username, user]));
+                
+                // Update default students with server data or use defaults
+                const allUsers = defaultStudents.map(defaultUser => {
+                    const serverUser = userMap.get(defaultUser.username);
+                    if (serverUser) {
+                        // Use server data but keep default avatar if server has none
+                        return {
+                            ...defaultUser,
+                            is_public: serverUser.is_public,
+                            avatar_path: serverUser.avatar_path || defaultUser.avatar_path
+                        };
+                    }
+                    // If no server data, assume private
+                    return { ...defaultUser, is_public: false };
+                });
+                
+                // Add any additional P4-2 users from server that aren't in defaults
                 users.forEach(user => {
-                    if (user.portfolio_path && user.portfolio_path.includes('/P4-2/')) {
-                        // Only add users that aren't already in the default list
-                        if (!allUsers.some(u => u.username === user.username)) {
-                            allUsers.push(user);
-                        }
+                    if (user.portfolio_path && 
+                        user.portfolio_path.includes('/P4-2/') && 
+                        !allUsers.some(u => u.username === user.username)) {
+                        allUsers.push(user);
                     }
                 });
 
@@ -126,15 +142,22 @@
                 const container = document.getElementById('portfoliosContainer');
                 container.innerHTML = ''; // Clear existing content
                 
-                sortedPortfolios.forEach(user => {
-                    const card = createPortfolioCard(
-                        user.username,
-                        user.avatar_path || null,
-                        user.is_public,
-                        user.portfolio_path
-                    );
-                    container.appendChild(card);
-                });
+                // Create portfolio cards
+                for (const user of sortedPortfolios) {
+                    // Check access for each portfolio
+                    const accessResponse = await fetch(`/check-portfolio-access?path=${encodeURIComponent(user.portfolio_path)}`);
+                    const accessData = await accessResponse.json();
+
+                    if (accessData.hasAccess) {
+                        const card = createPortfolioCard(
+                            user.username,
+                            user.avatar_path || null,
+                            user.is_public,
+                            user.portfolio_path
+                        );
+                        container.appendChild(card);
+                    }
+                }
 
                 // If no portfolios found, show message
                 if (container.children.length === 0) {

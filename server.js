@@ -1186,25 +1186,35 @@ const db = new sqlite3.Database(dbPath, (err) => {
 app.get('/check-portfolio-access', async (req, res) => {
     const portfolioPath = req.query.path;
     
+    console.log('\n=== Portfolio Access Check ===');
+    console.log('Checking access for path:', portfolioPath);
+    console.log('Session:', req.session);
+    console.log('Current user:', req.session?.user);
+    
     if (!portfolioPath) {
+        console.log('No portfolio path provided');
         return res.status(400).json({ error: 'Portfolio path is required' });
     }
 
     try {
         const result = await new Promise((resolve, reject) => {
-            db.get('SELECT is_public, username FROM users WHERE portfolio_path = ?',
+            db.get('SELECT is_public, username, is_super_user FROM users WHERE portfolio_path = ?',
                 [portfolioPath], (err, row) => {
                     if (err) reject(err);
                     resolve(row);
                 });
         });
 
+        console.log('Database result:', result);
+
         if (!result) {
+            console.log('Portfolio not found in database');
             return res.json({ hasAccess: false });
         }
 
         // Check if current user is Peter42 (super user)
         if (req.session?.user?.username === 'Peter42') {
+            console.log('Access granted: User is Peter42');
             return res.json({ hasAccess: true });
         }
 
@@ -1212,9 +1222,16 @@ app.get('/check-portfolio-access', async (req, res) => {
         if (req.session && req.session.user) {
             const user = req.session.user;
             const hasAccess = result.is_public || result.username === user.username;
+            console.log('Regular access check:', {
+                isPublic: result.is_public,
+                portfolioOwner: result.username,
+                currentUser: user.username,
+                hasAccess: hasAccess
+            });
             return res.json({ hasAccess });
         }
 
+        console.log('No session, checking only public access');
         res.json({ hasAccess: result.is_public });
     } catch (error) {
         console.error('Error checking portfolio access:', error);
