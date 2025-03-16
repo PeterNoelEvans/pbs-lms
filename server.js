@@ -317,14 +317,30 @@ async function initializeApp() {
             next();
         });
 
-        // Set up static file serving with case-insensitive options
+        // Set up static file serving with enhanced options
         app.use(express.static(__dirname, {
-            caseInsensitive: true,
-            fallthrough: true
+            dotfiles: 'allow',
+            etag: true,
+            extensions: ['htm', 'html', 'png', 'jpg', 'jpeg', 'gif'],
+            index: false,
+            maxAge: '1d',
+            redirect: false,
+            setHeaders: function (res, path, stat) {
+                res.set('x-timestamp', Date.now());
+                res.set('Cache-Control', 'public, max-age=86400');
+            }
         }));
         app.use('/portfolios', express.static(path.join(__dirname, 'portfolios'), {
-            caseInsensitive: true,
-            fallthrough: true
+            dotfiles: 'allow',
+            etag: true,
+            extensions: ['htm', 'html', 'png', 'jpg', 'jpeg', 'gif'],
+            index: false,
+            maxAge: '1d',
+            redirect: false,
+            setHeaders: function (res, path, stat) {
+                res.set('x-timestamp', Date.now());
+                res.set('Cache-Control', 'public, max-age=86400');
+            }
         }));
 
         // Define routes that use the middleware
@@ -1102,184 +1118,4 @@ const db = new sqlite3.Database(dbPath, (err) => {
             }
         }
 
-        db.run(`CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE,
-            password TEXT,
-            portfolio_path TEXT UNIQUE,
-            avatar_path TEXT,
-            is_public BOOLEAN DEFAULT 0,
-            is_super_user BOOLEAN DEFAULT 0
-        )`, async (err) => {
-            if (err) {
-                console.error('Error creating users table:', err);
-                return;
-            }
-            console.log('Users table ready');
-            
-            // Add super_user column if it doesn't exist
-            db.run(`ALTER TABLE users ADD COLUMN is_super_user BOOLEAN DEFAULT 0;`, (err) => {
-                if (err && !err.message.includes('duplicate column')) {
-                    console.error('Error adding is_super_user column:', err);
-                }
-            });
-
-            // Set Peter42 as super user
-            db.run('UPDATE users SET is_super_user = 1 WHERE username = ?', ['Peter42'], (err) => {
-                if (err) {
-                    console.error('Error setting Peter42 as super user:', err);
-                }
-            });
-
-            // Add avatar_path column if it doesn't exist
-            db.run(`ALTER TABLE users ADD COLUMN avatar_path TEXT;`, (err) => {
-                if (err && !err.message.includes('duplicate column')) {
-                    console.error('Error adding avatar_path column:', err);
-                }
-            });
-            
-            try {
-                // Check if Peter42 exists
-                const row = await new Promise((resolve, reject) => {
-                    db.get('SELECT id, username FROM users WHERE username = ?', ['Peter42'], (err, row) => {
-                        if (err) reject(err);
-                        else resolve(row);
-                    });
-                });
-
-                if (row) {
-                    console.log('Peter42 exists with ID:', row.id);
-                    // Update Peter42's avatar path
-                    await new Promise((resolve, reject) => {
-                        db.run(
-                            'UPDATE users SET avatar_path = ?, portfolio_path = ? WHERE username = ?',
-                            ['/portfolios/P4-2/Peter/images/Peter42.jpg', '/portfolios/P4-2/Peter/Peter.html', 'Peter42'],
-                            function(err) {
-                                if (err) reject(err);
-                                else {
-                                    console.log('Updated Peter42 avatar path and portfolio path');
-                                    resolve();
-                                }
-                            }
-                        );
-                    });
-                } else {
-                    console.log('Peter42 not found, creating...');
-                    // Create Peter42 with hashed password and avatar path
-                    const hashedPassword = await bcrypt.hash('Peter2025BB', 10);
-                    await new Promise((resolve, reject) => {
-                        db.run(
-                            'INSERT INTO users (username, password, portfolio_path, avatar_path, is_public) VALUES (?, ?, ?, ?, ?)',
-                            ['Peter42', hashedPassword, '/portfolios/P4-2/Peter/Peter.html', '/portfolios/P4-2/Peter/images/Peter42.jpg', true],
-                            function(err) {
-                                if (err) reject(err);
-                                else {
-                                    console.log('Peter42 created successfully with ID:', this.lastID);
-                                    resolve(this.lastID);
-                                }
-                            }
-                        );
-                    });
-                }
-            } catch (error) {
-                console.error('Error handling Peter42 user:', error);
-            }
-        });
-    });
-});
-
-// Modify the portfolio access check
-app.get('/check-portfolio-access', async (req, res) => {
-    const portfolioPath = req.query.path;
-    
-    console.log('\n=== Portfolio Access Check ===');
-    console.log('Checking access for path:', portfolioPath);
-    console.log('Session:', req.session);
-    console.log('Current user:', req.session?.user);
-    
-    if (!portfolioPath) {
-        console.log('No portfolio path provided');
-        return res.status(400).json({ error: 'Portfolio path is required' });
-    }
-
-    try {
-        // Get the user info from the database based on the portfolio path
-        const result = await new Promise((resolve, reject) => {
-            db.get('SELECT is_public, username FROM users WHERE portfolio_path = ? OR username = ?',
-                [portfolioPath, req.session?.user?.username],
-                (err, row) => {
-                    if (err) reject(err);
-                    resolve(row);
-                });
-        });
-
-        // If user is logged in
-        if (req.session?.user) {
-            console.log('Authenticated access attempt by:', req.session.user.username);
-            
-            // If it's Peter42, grant access
-            if (req.session.user.username === 'Peter42') {
-                console.log('Access granted to Peter42');
-                return res.json({ hasAccess: true });
-            }
-            
-            // Check if the user is a parent
-            const isParent = req.session.user.username.toLowerCase().startsWith('parent-');
-            
-            if (isParent) {
-                const childName = req.session.user.username.substring('parent-'.length);
-                const hasAccess = result?.is_public || result?.username === childName;
-                console.log('Parent access check:', { hasAccess, isPublic: result?.is_public, child: childName });
-                return res.json({ hasAccess });
-            }
-            
-            // Regular user access check
-            const hasAccess = result?.is_public || result?.username === req.session.user.username;
-            console.log('Regular access check:', { hasAccess, isPublic: result?.is_public });
-            return res.json({ hasAccess });
-        }
-
-        // Not logged in, only allow access to public portfolios
-        console.log('Public access check:', { isPublic: result?.is_public });
-        return res.json({ hasAccess: result?.is_public || false });
-    } catch (error) {
-        console.error('Error checking portfolio access:', error);
-        res.status(500).json({ error: 'Server error' });
-    }
-});
-
-// Add endpoint for getting portfolio information
-app.get('/portfolios-info', async (req, res) => {
-    console.log('\n=== Getting Portfolio Information ===');
-    console.log('Session:', req.session);
-    console.log('Current user:', req.session?.user);
-
-    try {
-        // Get all users from database
-        const users = await new Promise((resolve, reject) => {
-            db.all('SELECT username, portfolio_path, avatar_path, is_public FROM users', [], (err, rows) => {
-                if (err) reject(err);
-                else resolve(rows);
-            });
-        });
-
-        // If user is Peter42, return all portfolios
-        if (req.session?.user?.username === 'Peter42') {
-            console.log('Returning all portfolios for Peter42');
-            return res.json(users);
-        }
-
-        // For other users, only return public portfolios and their own
-        const filteredUsers = users.filter(user => {
-            if (user.is_public) return true;
-            if (req.session?.user?.username === user.username) return true;
-            return false;
-        });
-
-        console.log('Returning filtered portfolios');
-        res.json(filteredUsers);
-    } catch (error) {
-        console.error('Error getting portfolio information:', error);
-        res.status(500).json({ error: 'Server error' });
-    }
-}); 
+        db.run(`
