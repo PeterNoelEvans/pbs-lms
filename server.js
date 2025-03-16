@@ -1240,4 +1240,40 @@ app.get('/check-portfolio-access', async (req, res) => {
         console.error('Error checking portfolio access:', error);
         res.status(500).json({ error: 'Server error' });
     }
+});
+
+// Add endpoint for getting portfolio information
+app.get('/portfolios-info', async (req, res) => {
+    console.log('\n=== Getting Portfolio Information ===');
+    console.log('Session:', req.session);
+    console.log('Current user:', req.session?.user);
+
+    try {
+        // Get all users from database
+        const users = await new Promise((resolve, reject) => {
+            db.all('SELECT username, portfolio_path, avatar_path, is_public FROM users', [], (err, rows) => {
+                if (err) reject(err);
+                else resolve(rows);
+            });
+        });
+
+        // If user is Peter42, return all portfolios
+        if (req.session?.user?.username === 'Peter42') {
+            console.log('Returning all portfolios for Peter42');
+            return res.json(users);
+        }
+
+        // For other users, only return public portfolios and their own
+        const filteredUsers = users.filter(user => {
+            if (user.is_public) return true;
+            if (req.session?.user?.username === user.username) return true;
+            return false;
+        });
+
+        console.log('Returning filtered portfolios');
+        res.json(filteredUsers);
+    } catch (error) {
+        console.error('Error getting portfolio information:', error);
+        res.status(500).json({ error: 'Server error' });
+    }
 }); 

@@ -99,7 +99,7 @@
                 ];
                 
                 // Load portfolios from the server
-                const response = await fetch('/admin/users');
+                const response = await fetch('/portfolios-info');
                 const users = await response.json();
                 
                 // Create a map of server users for quick lookup
@@ -144,19 +144,14 @@
                 
                 // Create portfolio cards
                 for (const user of sortedPortfolios) {
-                    // Check access for each portfolio
-                    const accessResponse = await fetch(`/check-portfolio-access?path=${encodeURIComponent(user.portfolio_path)}`);
-                    const accessData = await accessResponse.json();
-
-                    if (accessData.hasAccess) {
-                        const card = createPortfolioCard(
-                            user.username,
-                            user.avatar_path || null,
-                            user.is_public,
-                            user.portfolio_path
-                        );
-                        container.appendChild(card);
-                    }
+                    // Since we already have access info from /portfolios-info, no need to check again
+                    const card = createPortfolioCard(
+                        user.username,
+                        user.avatar_path || null,
+                        user.is_public,
+                        user.portfolio_path
+                    );
+                    container.appendChild(card);
                 }
 
                 // If no portfolios found, show message
