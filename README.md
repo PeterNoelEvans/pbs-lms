@@ -121,4 +121,60 @@ If you have any issues:
 - Keep your password secure
 - Don't share your login credentials
 - Log out when you're done
-- Use the dashboard to manage your portfolio visibility 
+- Use the dashboard to manage your portfolio visibility
+
+### Features
+
+#### Portfolio Management
+- Create and manage student portfolios
+- Set portfolio privacy (public/private)
+- Upload and manage avatar images
+- Parent access to child portfolios
+
+#### Code Showcase
+- Upload and display coding project videos
+- Share static code images
+- Direct file linking from portfolio pages
+- Supports various video formats (MP4, WebM)
+
+#### Getting Started
+1. Register for an account
+2. Set up your portfolio
+3. Upload your avatar image
+4. Add your coding projects:
+   - Create a videos/ folder in your portfolio directory
+   - Add your project videos and code images
+   - Link them in your portfolio HTML file
+
+#### File Organization
+Each student's portfolio should have the following structure:
+```
+portfolios/
+  P4-1/ or P4-2/
+    StudentName/
+      StudentName.html
+      images/
+        StudentName.png (avatar)
+      videos/
+        project1.mp4
+        project2.mp4
+      code-images/
+        project1-code.png
+        project2-code.png
+```
+
+#### Adding Videos and Code Images
+1. Create the necessary folders in your portfolio directory
+2. Upload your video files (MP4, WebM) to the videos/ folder
+3. Take screenshots or export images of your code
+4. Add them to your portfolio HTML using standard HTML tags:
+```html
+<!-- Video example -->
+<video controls width="100%">
+    <source src="videos/my-project.mp4" type="video/mp4">
+    Your browser does not support the video tag.
+</video>
+
+<!-- Code image example -->
+<img src="code-images/my-code.png" alt="My Project Code">
+``` 

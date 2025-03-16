@@ -317,9 +317,15 @@ async function initializeApp() {
             next();
         });
 
-        // Serve static files
-app.use(express.static(__dirname));
-        app.use('/portfolios', express.static(path.join(__dirname, 'portfolios')));
+        // Set up static file serving with case-insensitive options
+        app.use(express.static(__dirname, {
+            caseInsensitive: true,
+            fallthrough: true
+        }));
+        app.use('/portfolios', express.static(path.join(__dirname, 'portfolios'), {
+            caseInsensitive: true,
+            fallthrough: true
+        }));
 
         // Define routes that use the middleware
         app.post('/login', async (req, res) => {
