@@ -1118,4 +1118,88 @@ const db = new sqlite3.Database(dbPath, (err) => {
             }
         }
 
-        db.run(`
+        db.run(`CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE,
+            password TEXT,
+            portfolio_path TEXT UNIQUE,
+            avatar_path TEXT,
+            is_public BOOLEAN DEFAULT 0,
+            is_super_user BOOLEAN DEFAULT 0
+        )`, async (err) => {
+            if (err) {
+                console.error('Error creating users table:', err);
+                return;
+            }
+            console.log('Users table ready');
+            
+            // Add super_user column if it doesn't exist
+            db.run(`ALTER TABLE users ADD COLUMN is_super_user BOOLEAN DEFAULT 0;`, (err) => {
+                if (err && !err.message.includes('duplicate column')) {
+                    console.error('Error adding is_super_user column:', err);
+                }
+            });
+
+            // Set Peter42 as super user
+            db.run('UPDATE users SET is_super_user = 1 WHERE username = ?', ['Peter42'], (err) => {
+                if (err) {
+                    console.error('Error setting Peter42 as super user:', err);
+                }
+            });
+
+            // Add avatar_path column if it doesn't exist
+            db.run(`ALTER TABLE users ADD COLUMN avatar_path TEXT;`, (err) => {
+                if (err && !err.message.includes('duplicate column')) {
+                    console.error('Error adding avatar_path column:', err);
+                }
+            });
+            
+            try {
+                // Check if Peter42 exists
+                const row = await new Promise((resolve, reject) => {
+                    db.get('SELECT id, username FROM users WHERE username = ?', ['Peter42'], (err, row) => {
+                        if (err) reject(err);
+                        else resolve(row);
+                    });
+                });
+
+                if (row) {
+                    console.log('Peter42 exists with ID:', row.id);
+                    // Update Peter42's avatar path
+                    await new Promise((resolve, reject) => {
+                        db.run(
+                            'UPDATE users SET avatar_path = ?, portfolio_path = ? WHERE username = ?',
+                            ['/portfolios/P4-2/Peter/images/Peter42.jpg', '/portfolios/P4-2/Peter/Peter.html', 'Peter42'],
+                            function(err) {
+                                if (err) reject(err);
+                                else {
+                                    console.log('Updated Peter42 avatar path and portfolio path');
+                                    resolve();
+                                }
+                            }
+                        );
+                    });
+                } else {
+                    console.log('Peter42 not found, creating...');
+                    // Create Peter42 with hashed password and avatar path
+                    const hashedPassword = await bcrypt.hash('Peter2025BB', 10);
+                    await new Promise((resolve, reject) => {
+                        db.run(
+                            'INSERT INTO users (username, password, portfolio_path, avatar_path, is_public) VALUES (?, ?, ?, ?, ?)',
+                            ['Peter42', hashedPassword, '/portfolios/P4-2/Peter/Peter.html', '/portfolios/P4-2/Peter/images/Peter42.jpg', true],
+                            function(err) {
+                                if (err) reject(err);
+                                else {
+                                    console.log('Peter42 created successfully with ID:', this.lastID);
+                                    resolve(this.lastID);
+                                }
+                            }
+                        );
+                    });
+                }
+            } catch (error) {
+                console.error('Error handling Peter42 user:', error);
+            }
+        });
+    });
+});
