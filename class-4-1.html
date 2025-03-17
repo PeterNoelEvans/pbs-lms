@@ -83,19 +83,19 @@
 
                 // Define the default Class 4/1 students (with default privacy settings)
                 const defaultStudents = [
-                    { username: 'Bonus', portfolio_path: '/portfolios/P4-1/Bonus/Bonus.html', avatar_path: '/portfolios/P4-1/Bonus/images/Bonus.png', is_public: false },
-                    { username: 'Nicha', portfolio_path: '/portfolios/P4-1/Nicha/index.html', avatar_path: '/portfolios/P4-1/Nicha/images/Nicha.png', is_public: false },
-                    { username: 'Copter', portfolio_path: '/portfolios/P4-1/Copter/Copter.html', avatar_path: '/portfolios/P4-1/Copter/images/Copter.png', is_public: false },
-                    { username: 'Khun', portfolio_path: '/portfolios/P4-1/Khun/Khun.html', avatar_path: '/portfolios/P4-1/Khun/images/Khun.png', is_public: false },
-                    { username: 'Kod', portfolio_path: '/portfolios/P4-1/Kod/Kod.html', avatar_path: '/portfolios/P4-1/Kod/images/Kod.png', is_public: false },
-                    { username: 'Phupha', portfolio_path: '/portfolios/P4-1/Phupha/Phupha.html', avatar_path: '/portfolios/P4-1/Phupha/images/Phupha.png', is_public: false },
-                    { username: 'Tar', portfolio_path: '/portfolios/P4-1/Tar/Tar.html', avatar_path: '/portfolios/P4-1/Tar/images/Tar.png', is_public: false },
-                    { username: 'Jiajia', portfolio_path: '/portfolios/P4-1/Jiajia/Jiajia.html', avatar_path: '/portfolios/P4-1/Jiajia/images/Jiajia.png', is_public: false },
-                    { username: 'Tigger', portfolio_path: '/portfolios/P4-1/Tigger/Tigger.html', avatar_path: '/portfolios/P4-1/Tigger/images/Tigger.png', is_public: false }
+                    { username: 'Bonus', portfolio_path: '/portfolios/P4-1/Bonus/Bonus.html', avatar_path: '/portfolios/P4-1/Bonus/images/Bonus.png', is_public: true },
+                    { username: 'Nicha', portfolio_path: '/portfolios/P4-1/Nicha/index.html', avatar_path: '/portfolios/P4-1/Nicha/images/Nicha.png', is_public: true },
+                    { username: 'Copter', portfolio_path: '/portfolios/P4-1/Copter/Copter.html', avatar_path: '/portfolios/P4-1/Copter/images/Copter.png', is_public: true },
+                    { username: 'Khun', portfolio_path: '/portfolios/P4-1/Khun/Khun.html', avatar_path: '/portfolios/P4-1/Khun/images/Khun.png', is_public: true },
+                    { username: 'Kod', portfolio_path: '/portfolios/P4-1/Kod/Kod.html', avatar_path: '/portfolios/P4-1/Kod/images/Kod.png', is_public: true },
+                    { username: 'Phupha', portfolio_path: '/portfolios/P4-1/Phupha/Phupha.html', avatar_path: '/portfolios/P4-1/Phupha/images/Phupha.png', is_public: true },
+                    { username: 'Tar', portfolio_path: '/portfolios/P4-1/Tar/Tar.html', avatar_path: '/portfolios/P4-1/Tar/images/Tar.png', is_public: true },
+                    { username: 'Jiajia', portfolio_path: '/portfolios/P4-1/Jiajia/Jiajia.html', avatar_path: '/portfolios/P4-1/Jiajia/images/Jiajia.png', is_public: true },
+                    { username: 'Tigger', portfolio_path: '/portfolios/P4-1/Tigger/Tigger.html', avatar_path: '/portfolios/P4-1/Tigger/images/Tigger.png', is_public: true }
                 ];
                 
                 // Load portfolios from the server
-                const response = await fetch('/admin/users');
+                const response = await fetch('/portfolios-info');
                 const users = await response.json();
                 console.log('Server users:', users);
                 
