@@ -81,49 +81,43 @@
                     loginPrompt.style.display = 'block';
                 }
 
-                // Define the default Class 4/1 students (without hardcoding privacy settings)
+                // Define the default Class 4/1 students (with default privacy settings)
                 const defaultStudents = [
-                    { username: 'Bonus', portfolio_path: '/portfolios/P4-1/Bonus/Bonus.html', avatar_path: '/portfolios/P4-1/Bonus/images/Bonus.png' },
-                    { username: 'Nicha', portfolio_path: '/portfolios/P4-1/Nicha/index.html', avatar_path: '/portfolios/P4-1/Nicha/images/Nicha.png' },
-                    { username: 'Copter', portfolio_path: '/portfolios/P4-1/Copter/Copter.html', avatar_path: '/portfolios/P4-1/Copter/images/Copter.png' },
-                    { username: 'Khun', portfolio_path: '/portfolios/P4-1/Khun/Khun.html', avatar_path: '/portfolios/P4-1/Khun/images/Khun.png' },
-                    { username: 'Kod', portfolio_path: '/portfolios/P4-1/Kod/Kod.html', avatar_path: '/portfolios/P4-1/Kod/images/Kod.png' },
-                    { username: 'Phupha', portfolio_path: '/portfolios/P4-1/Phupha/Phupha.html', avatar_path: '/portfolios/P4-1/Phupha/images/Phupha.png' },
-                    { username: 'Tar', portfolio_path: '/portfolios/P4-1/Tar/Tar.html', avatar_path: '/portfolios/P4-1/Tar/images/Tar.png' },
-                    { username: 'Jiajia', portfolio_path: '/portfolios/P4-1/Jiajia/Jiajia.html', avatar_path: '/portfolios/P4-1/Jiajia/images/Jiajia.png' },
-                    { username: 'Tigger', portfolio_path: '/portfolios/P4-1/Tigger/Tigger.html', avatar_path: '/portfolios/P4-1/Tigger/images/Tigger.png' }
+                    { username: 'Bonus', portfolio_path: '/portfolios/P4-1/Bonus/Bonus.html', avatar_path: '/portfolios/P4-1/Bonus/images/Bonus.png', is_public: false },
+                    { username: 'Nicha', portfolio_path: '/portfolios/P4-1/Nicha/index.html', avatar_path: '/portfolios/P4-1/Nicha/images/Nicha.png', is_public: false },
+                    { username: 'Copter', portfolio_path: '/portfolios/P4-1/Copter/Copter.html', avatar_path: '/portfolios/P4-1/Copter/images/Copter.png', is_public: false },
+                    { username: 'Khun', portfolio_path: '/portfolios/P4-1/Khun/Khun.html', avatar_path: '/portfolios/P4-1/Khun/images/Khun.png', is_public: false },
+                    { username: 'Kod', portfolio_path: '/portfolios/P4-1/Kod/Kod.html', avatar_path: '/portfolios/P4-1/Kod/images/Kod.png', is_public: false },
+                    { username: 'Phupha', portfolio_path: '/portfolios/P4-1/Phupha/Phupha.html', avatar_path: '/portfolios/P4-1/Phupha/images/Phupha.png', is_public: false },
+                    { username: 'Tar', portfolio_path: '/portfolios/P4-1/Tar/Tar.html', avatar_path: '/portfolios/P4-1/Tar/images/Tar.png', is_public: false },
+                    { username: 'Jiajia', portfolio_path: '/portfolios/P4-1/Jiajia/Jiajia.html', avatar_path: '/portfolios/P4-1/Jiajia/images/Jiajia.png', is_public: false },
+                    { username: 'Tigger', portfolio_path: '/portfolios/P4-1/Tigger/Tigger.html', avatar_path: '/portfolios/P4-1/Tigger/images/Tigger.png', is_public: false }
                 ];
                 
                 // Load portfolios from the server
-                const response = await fetch('/portfolios-info');
+                const response = await fetch('/admin/users');
                 const users = await response.json();
+                console.log('Server users:', users);
                 
-                // Create a map of server users for quick lookup
-                const userMap = new Map(users.map(user => [user.username, user]));
-                
-                // Update default students with server data or use defaults
-                const allUsers = defaultStudents.map(defaultUser => {
-                    const serverUser = userMap.get(defaultUser.username);
-                    if (serverUser) {
-                        // Use server data but keep default avatar if server has none
-                        return {
-                            ...defaultUser,
-                            is_public: serverUser.is_public,
-                            avatar_path: serverUser.avatar_path || defaultUser.avatar_path
-                        };
-                    }
-                    // If no server data, assume private
-                    return { ...defaultUser, is_public: false };
-                });
-                
-                // Add any additional P4-1 users from server that aren't in defaults
+                // Combine default students with any additional users from the server
+                const allUsers = [...defaultStudents];
                 users.forEach(user => {
-                    if (user.portfolio_path && 
-                        user.portfolio_path.includes('/P4-1/') && 
-                        !allUsers.some(u => u.username === user.username)) {
-                        allUsers.push(user);
+                    if (user.portfolio_path && user.portfolio_path.includes('/P4-1/')) {
+                        // Update existing user or add new one
+                        const existingUserIndex = allUsers.findIndex(u => u.username === user.username);
+                        if (existingUserIndex !== -1) {
+                            allUsers[existingUserIndex] = {
+                                ...allUsers[existingUserIndex],
+                                is_public: user.is_public,
+                                avatar_path: user.avatar_path || allUsers[existingUserIndex].avatar_path
+                            };
+                        } else {
+                            allUsers.push(user);
+                        }
                     }
                 });
+
+                console.log('All users:', allUsers);
 
                 // Sort portfolios
                 const sortedPortfolios = allUsers.sort((a, b) => {
