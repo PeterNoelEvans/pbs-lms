@@ -63,7 +63,7 @@ const students42 = [
     { username: 'Sky', password: 'Sky2025D', portfolio_path: '/portfolios/P4-2/Sky/Sky.html' },
     { username: 'Perth', password: 'Perth2025E', portfolio_path: '/portfolios/P4-2/Perth/Perth.html' },
     { username: 'Tin', password: 'Tin2025F', portfolio_path: '/portfolios/P4-2/Tin/Tin.html' },
-    { username: 'Poonpoon', password: 'Poonpoon2025G', portfolio_path: '/portfolios/P4-2/Poonpoon/Poonpoon.html' },
+    { username: 'PoonPoon', password: 'Poonpoon2025G', portfolio_path: '/portfolios/P4-2/PoonPoon/PoonPoon.html' },
     { username: 'Paul', password: 'Paul2025H', portfolio_path: '/portfolios/P4-2/Paul/Paul.html' },
     { username: 'Peso', password: 'Peso2025I', portfolio_path: '/portfolios/P4-2/Peso/Peso.html' },
     { username: 'Ounjai', password: 'Ounjai2025J', portfolio_path: '/portfolios/P4-2/Ounjai/Ounjai.html' },
