@@ -81,7 +81,7 @@
                     loginPrompt.style.display = 'block';
                 }
 
-                // Define the default Class 4/2 students (without hardcoding privacy settings)
+                // Define the default Class 4/2 students (with default privacy settings)
                 const defaultStudents = [
                     { username: 'Tonmali', portfolio_path: '/portfolios/P4-2/Tonmali/Tonmali.html', avatar_path: '/portfolios/P4-2/Tonmali/images/Tonmali.png', is_public: true },
                     { username: 'Pi', portfolio_path: '/portfolios/P4-2/Pi/Pi.html', avatar_path: '/portfolios/P4-2/Pi/images/Pi.png', is_public: true },
@@ -89,7 +89,7 @@
                     { username: 'Ounjai', portfolio_path: '/portfolios/P4-2/Ounjai/Ounjai.html', avatar_path: '/portfolios/P4-2/Ounjai/images/Ounjai.png', is_public: true },
                     { username: 'Peso', portfolio_path: '/portfolios/P4-2/Peso/Peso.html', avatar_path: '/portfolios/P4-2/Peso/images/Peso.png', is_public: true },
                     { username: 'Paul', portfolio_path: '/portfolios/P4-2/Paul/Paul.html', avatar_path: '/portfolios/P4-2/Paul/images/Paul.png', is_public: true },
-                    { username: 'PoonPoon', portfolio_path: '/portfolios/P4-2/Poonpoon/PoonPoon.html', avatar_path: '/portfolios/P4-2/Poonpoon/images/PoonPoon.png', is_public: true },
+                    { username: 'PoonPoon', portfolio_path: '/portfolios/P4-2/PoonPoon/PoonPoon.html', avatar_path: '/portfolios/P4-2/PoonPoon/images/PoonPoon.png', is_public: true },
                     { username: 'Trin', portfolio_path: '/portfolios/P4-2/Tin/Tin.html', avatar_path: '/portfolios/P4-2/Tin/images/Tin.png', is_public: true },
                     { username: 'Perth', portfolio_path: '/portfolios/P4-2/Perth/Perth.html', avatar_path: '/portfolios/P4-2/Perth/images/Perth.png', is_public: true },
                     { username: 'Pleng', portfolio_path: '/portfolios/P4-2/Pleng/Pleng.html', avatar_path: '/portfolios/P4-2/Pleng/images/Pleng.png', is_public: true },
@@ -98,39 +98,8 @@
                     { username: 'Zeno', portfolio_path: '/portfolios/P4-2/Zeno/Zeno.html', avatar_path: '/portfolios/P4-2/Zeno/images/Zeno.jpg', is_public: true }
                 ];
                 
-                // Load portfolios from the server
-                const response = await fetch('/portfolios-info');
-                const users = await response.json();
-                
-                // Create a map of server users for quick lookup
-                const userMap = new Map(users.map(user => [user.username, user]));
-                
-                // Update default students with server data or use defaults
-                const allUsers = defaultStudents.map(defaultUser => {
-                    const serverUser = userMap.get(defaultUser.username);
-                    if (serverUser) {
-                        // Use server data but keep default avatar if server has none
-                        return {
-                            ...defaultUser,
-                            is_public: serverUser.is_public,
-                            avatar_path: serverUser.avatar_path || defaultUser.avatar_path
-                        };
-                    }
-                    // If no server data, assume private
-                    return { ...defaultUser, is_public: false };
-                });
-                
-                // Add any additional P4-2 users from server that aren't in defaults
-                users.forEach(user => {
-                    if (user.portfolio_path && 
-                        user.portfolio_path.includes('/P4-2/') && 
-                        !allUsers.some(u => u.username === user.username)) {
-                        allUsers.push(user);
-                    }
-                });
-
                 // Sort portfolios
-                const sortedPortfolios = allUsers.sort((a, b) => {
+                const sortedPortfolios = defaultStudents.sort((a, b) => {
                     // Sort by visibility first (public on top)
                     if (a.is_public !== b.is_public) {
                         return b.is_public - a.is_public;
@@ -144,7 +113,6 @@
                 
                 // Create portfolio cards
                 for (const user of sortedPortfolios) {
-                    // Since we already have access info from /portfolios-info, no need to check again
                     const card = createPortfolioCard(
                         user.username,
                         user.avatar_path || null,

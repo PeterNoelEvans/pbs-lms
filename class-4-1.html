@@ -95,33 +95,8 @@
                     { username: 'Earth', portfolio_path: '/portfolios/P4-1/Earth/Earth.html', avatar_path: '/portfolios/P4-1/Earth/images/Earth.png', is_public: true }                    
                 ];
                 
-                // Load portfolios from the server
-                const response = await fetch('/portfolios-info');
-                const users = await response.json();
-                console.log('Server users:', users);
-                
-                // Combine default students with any additional users from the server
-                const allUsers = [...defaultStudents];
-                users.forEach(user => {
-                    if (user.portfolio_path && user.portfolio_path.includes('/P4-1/')) {
-                        // Update existing user or add new one
-                        const existingUserIndex = allUsers.findIndex(u => u.username === user.username);
-                        if (existingUserIndex !== -1) {
-                            allUsers[existingUserIndex] = {
-                                ...allUsers[existingUserIndex],
-                                is_public: user.is_public,
-                                avatar_path: user.avatar_path || allUsers[existingUserIndex].avatar_path
-                            };
-                        } else {
-                            allUsers.push(user);
-                        }
-                    }
-                });
-
-                console.log('All users:', allUsers);
-
                 // Sort portfolios
-                const sortedPortfolios = allUsers.sort((a, b) => {
+                const sortedPortfolios = defaultStudents.sort((a, b) => {
                     // Sort by visibility first (public on top)
                     if (a.is_public !== b.is_public) {
                         return b.is_public - a.is_public;
@@ -135,7 +110,6 @@
                 
                 // Create portfolio cards
                 for (const user of sortedPortfolios) {
-                    // Since we already have access info from /portfolios-info, no need to check again
                     const card = createPortfolioCard(
                         user.username,
                         user.avatar_path || null,
