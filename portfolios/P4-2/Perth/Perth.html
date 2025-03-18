@@ -1,0 +1,61 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+    <title>My Portfolio</title>
+
+
+    <style>
+/* Style for the whole page */                                        
+        body {
+            background-color:#13EAC9
+			
+        }
+
+        /* Optional: Style the image to make it look nice */
+        #familyImage {
+            display: none; 
+			
+		/* Hide the image by default */
+            margin-top: 20px;
+            max-width: 25%;
+            height: auto;
+        }
+    </style>
+</head>
+
+<body>
+
+WELCOME TO Portfolio
+    <h1></h1>
+    <ul>
+        <li onclick="showFamilyImage()">Family</li>
+        <li>School
+            <ul>
+                <li>English</li>
+                <li>Math</li>
+            </ul>
+        </li>
+    </ul>
+
+    <!-- Image to display when "Family" is clicked -->
+    <img id="familyImage" src="images/Perth.jpg" alt="Family Picture">
+
+    <script>
+        function showFamilyImage() {
+            // Get the image element
+            var image = document.getElementById('familyImage');
+            
+            // Toggle visibility: If the image is hidden, show it. If it's visible, hide it.
+            if (image.style.display === "none") {
+                image.style.display = "block";
+            } else {
+                image.style.display = "none";
+            }
+        }
+    </script>
+
+</body>
+
+</html>
