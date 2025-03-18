@@ -94,16 +94,14 @@
                     { username: 'Tigger', portfolio_path: '/portfolios/P4-1/Tigger/Tigger.html', avatar_path: '/portfolios/P4-1/Tigger/images/Tigger.png', is_public: false },
                     { username: 'Earth', portfolio_path: '/portfolios/P4-1/Earth/Earth.html', avatar_path: '/portfolios/P4-1/Earth/images/Earth.png', is_public: false }
                 ];
+
+                // If not authenticated, only show public portfolios
+                const portfoliosToShow = authData.authenticated 
+                    ? defaultStudents 
+                    : defaultStudents.filter(student => student.is_public);
                 
                 // Sort portfolios
-                const sortedPortfolios = defaultStudents.sort((a, b) => {
-                    // Sort by visibility first (public on top)
-                    if (a.is_public !== b.is_public) {
-                        return b.is_public - a.is_public;
-                    }
-                    // Then sort by username
-                    return a.username.localeCompare(b.username);
-                });
+                const sortedPortfolios = portfoliosToShow.sort((a, b) => a.username.localeCompare(b.username));
                 
                 const container = document.getElementById('portfoliosContainer');
                 container.innerHTML = ''; // Clear existing content
