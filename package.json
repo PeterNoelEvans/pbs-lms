@@ -8,7 +8,7 @@
     "register": "node register-students.js",
     "init-db": "node scripts/initializeDatabase.js",
     "dev": "nodemon server.js",
-    "postinstall": "node scripts/initializeDatabase.js"
+    "postinstall": "echo 'Build completed. Run init-db script after deployment to initialize the database.'"
   },
   "engines": {
     "node": ">=16.0.0"

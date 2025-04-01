@@ -2,75 +2,121 @@ const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 
 class CredentialManager {
+    /**
+     * Initialize the credential manager with an encryption key
+     * @param {string} encryptionKey - 32-byte hex string for encryption
+     */
     constructor(encryptionKey) {
-        if (!encryptionKey || typeof encryptionKey !== 'string') {
-            throw new Error('Encryption key is required');
+        if (!encryptionKey) {
+            console.warn('Warning: No encryption key provided, using default key for development');
+            this.encryptionKey = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+        } else {
+            this.encryptionKey = encryptionKey;
         }
-        this.algorithm = 'aes-256-gcm';
-        this.key = Buffer.from(encryptionKey, 'hex');
+        
+        // Convert hex string to Buffer
+        this.key = Buffer.from(this.encryptionKey, 'hex');
+        
+        // Validate key length for AES-256
+        if (this.key.length !== 32) {
+            throw new Error('Invalid encryption key length. Must be 32 bytes (64 hex characters)');
+        }
     }
 
-    // Encrypt student credentials for storage
-    async encryptCredentials(credentials) {
+    /**
+     * Encrypt student credentials
+     * @param {Object} credentials - Student credentials object
+     * @returns {Object} - Encrypted credentials with IV and auth tag
+     */
+    encryptCredentials(credentials) {
+        // Generate a random initialization vector (IV)
         const iv = crypto.randomBytes(16);
-        const cipher = crypto.createCipheriv(this.algorithm, this.key, iv);
         
-        const encrypted = Buffer.concat([
-            cipher.update(JSON.stringify(credentials), 'utf8'),
+        // Create cipher with AES-256-GCM algorithm
+        const cipher = crypto.createCipheriv('aes-256-gcm', this.key, iv);
+        
+        // Encrypt credentials
+        const credentialsStr = JSON.stringify(credentials);
+        const encryptedData = Buffer.concat([
+            cipher.update(credentialsStr, 'utf8'),
             cipher.final()
         ]);
-
+        
+        // Get authentication tag
         const authTag = cipher.getAuthTag();
-
+        
+        // Return encrypted data with IV and auth tag as hex strings
         return {
             iv: iv.toString('hex'),
-            encryptedData: encrypted.toString('hex'),
+            encryptedData: encryptedData.toString('hex'),
             authTag: authTag.toString('hex')
         };
     }
 
-    // Decrypt student credentials
-    async decryptCredentials(encryptedData) {
+    /**
+     * Decrypt student credentials
+     * @param {Object} encryptedCredentials - Encrypted credentials with IV and auth tag
+     * @returns {Object} - Decrypted credentials object
+     */
+    decryptCredentials(encryptedCredentials) {
         try {
-            const decipher = crypto.createDecipheriv(
-                this.algorithm,
-                this.key,
-                Buffer.from(encryptedData.iv, 'hex')
-            );
-
-            decipher.setAuthTag(Buffer.from(encryptedData.authTag, 'hex'));
-
+            // Extract encrypted data, IV, and auth tag
+            const iv = Buffer.from(encryptedCredentials.iv, 'hex');
+            const encryptedData = Buffer.from(encryptedCredentials.encryptedData, 'hex');
+            const authTag = Buffer.from(encryptedCredentials.authTag, 'hex');
+            
+            // Create decipher
+            const decipher = crypto.createDecipheriv('aes-256-gcm', this.key, iv);
+            decipher.setAuthTag(authTag);
+            
+            // Decrypt the data
             const decrypted = Buffer.concat([
-                decipher.update(Buffer.from(encryptedData.encryptedData, 'hex')),
+                decipher.update(encryptedData),
                 decipher.final()
             ]);
-
+            
+            // Parse and return the decrypted credentials
             return JSON.parse(decrypted.toString('utf8'));
         } catch (error) {
-            console.error('Decryption failed:', error);
-            return null;
+            throw new Error(`Decryption failed: ${error.message}`);
         }
     }
 
-    // Hash password for storage
+    /**
+     * Hash a password using bcrypt
+     * @param {string} password - Plain text password
+     * @returns {Promise<string>} - Hashed password
+     */
     async hashPassword(password) {
-        return await bcrypt.hash(password, 10);
+        const saltRounds = 10;
+        return bcrypt.hash(password, saltRounds);
     }
 
-    // Verify password
-    async verifyPassword(password, hashedPassword) {
-        return await bcrypt.compare(password, hashedPassword);
+    /**
+     * Verify a password against a hash
+     * @param {string} password - Plain text password to verify
+     * @param {string} hash - Hashed password
+     * @returns {Promise<boolean>} - True if password matches
+     */
+    async verifyPassword(password, hash) {
+        return bcrypt.compare(password, hash);
     }
 
-    // Generate a secure random password
-    generateSecurePassword() {
-        const length = 12;
-        const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*';
+    /**
+     * Generate a secure random password
+     * @param {number} length - Length of the password
+     * @returns {string} - Secure random password
+     */
+    generateSecurePassword(length = 12) {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()-_=+';
         let password = '';
+        const randomBytes = crypto.randomBytes(length);
+        
         for (let i = 0; i < length; i++) {
-            const randomIndex = crypto.randomInt(0, charset.length);
-            password += charset[randomIndex];
+            const randomIndex = randomBytes[i] % chars.length;
+            password += chars.charAt(randomIndex);
         }
+        
         return password;
     }
 }

@@ -15,6 +15,8 @@ services:
         generateValue: true
       - key: CREDENTIAL_KEY
         generateValue: true
+        # This will generate a secure random 64-character hex string (32 bytes)
+        # Make sure to keep this value secure and don't share it
       - key: PORT
         value: 10000
       - key: SESSION_STORE

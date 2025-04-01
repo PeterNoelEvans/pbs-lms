@@ -40,7 +40,12 @@ You can verify these values in your service settings after deployment.
 
 The application uses SQLite, which will be stored in the persistent disk specified in `render.yaml`.
 
-After the first deployment, the database will be automatically initialized via the `postinstall` script in package.json.
+**Important:** For security reasons, the database is not automatically initialized during deployment. After your service is deployed, follow these steps:
+
+1. In your service dashboard, click on the "Shell" tab
+2. Run the command: `npm run init-db`
+3. This will create and initialize the database with student accounts
+4. See INIT-GUIDE.md for detailed instructions and troubleshooting
 
 ### 5. Verify Deployment
 
