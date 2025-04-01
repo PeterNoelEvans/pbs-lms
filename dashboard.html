@@ -196,25 +196,69 @@
         // Handle privacy toggle
         document.getElementById('privacyToggle').addEventListener('change', async function() {
             try {
+                const toggleButton = this;
+                const statusDiv = document.getElementById('statusMessage');
+                statusDiv.textContent = 'Updating privacy settings...';
+                statusDiv.className = 'info';
+                statusDiv.style.display = 'block';
+                
+                console.log('Toggling privacy, current value:', toggleButton.checked);
+                
                 const response = await fetch('/toggle-privacy', {
                     method: 'POST',
                     credentials: 'include',
                     headers: {
-                        'Content-Type': 'application/json'
-                    }
+                        'Content-Type': 'application/json',
+                        'Cache-Control': 'no-cache',
+                        'Pragma': 'no-cache'
+                    },
+                    cache: 'no-store'
                 });
                 
+                console.log('Toggle response status:', response.status);
+                
+                if (!response.ok) {
+                    throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+                }
+                
                 const data = await response.json();
+                console.log('Toggle response data:', data);
+                
                 if (data.success) {
-                    showStatus('Privacy settings updated successfully', true);
-                    this.checked = data.is_public;
+                    showStatus(`Privacy settings updated successfully (${data.is_public ? 'Public' : 'Private'})`, true);
+                    // Force the checkbox to match the server state
+                    toggleButton.checked = !!data.is_public;
+                    
+                    // Force refresh of all privacy states in other open tabs after a small delay
+                    setTimeout(() => {
+                        localStorage.setItem('privacy_updated', Date.now());
+                    }, 500);
                 } else {
-                    showStatus('Failed to update privacy settings', false);
+                    showStatus(`Failed to update privacy settings: ${data.error || 'Unknown error'}`, false);
+                    // Revert the toggle to match the server state
+                    const privacyResponse = await fetch('/get-privacy-status', { 
+                        cache: 'no-store',
+                        headers: { 'Cache-Control': 'no-cache' }
+                    });
+                    const privacyData = await privacyResponse.json();
+                    toggleButton.checked = !!privacyData.is_public;
                 }
             } catch (error) {
-                console.error('Error:', error);
-                showStatus('Error updating privacy settings', false);
-                this.checked = !this.checked; // Revert the toggle
+                console.error('Error updating privacy:', error);
+                showStatus(`Error: ${error.message}`, false);
+                
+                // Revert the toggle to its original state
+                try {
+                    const privacyResponse = await fetch('/get-privacy-status', { 
+                        cache: 'no-store',
+                        headers: { 'Cache-Control': 'no-cache' }
+                    });
+                    const privacyData = await privacyResponse.json();
+                    this.checked = !!privacyData.is_public;
+                } catch (e) {
+                    // If we can't fetch the current state, just toggle back
+                    this.checked = !this.checked;
+                }
             }
         });
 

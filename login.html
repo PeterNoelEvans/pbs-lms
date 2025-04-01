@@ -66,8 +66,7 @@
 <body>
     <div class="nav-buttons">
         <a href="/" class="btn">Home</a>
-        <a href="/class-4-1.html" class="btn">Grade 4/1</a>
-        <a href="/class-4-2.html" class="btn">Grade 4/2</a>
+        <a href="/class1.html" class="btn">Class Portfolios</a>
     </div>
 
     <div class="auth-container">
@@ -177,31 +176,25 @@
             try {
                 const response = await fetch('/login', {
                     method: 'POST',
-                    credentials: 'include',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json',
-                        'Cache-Control': 'no-cache'
+                        'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ 
-                        username: username, 
-                        password: password 
-                    })
+                    body: JSON.stringify({ username, password })
                 });
-                
-                console.log('Response status:', response.status);
-                const data = await response.json();
-                console.log('Response data:', data);
-                
-                if (data.success) {
-                    console.log('Login successful, redirecting to:', data.redirect);
-                    window.location.replace(data.redirect);
+
+                if (response.status === 429) {
+                    const data = await response.json();
+                    errorDiv.textContent = data.error || 'Too many login attempts. Please try again later.';
+                    errorDiv.style.display = 'block';
                     return;
                 }
+
+                const data = await response.json();
                 
-                if (data.error) {
-                    console.error('Login error:', data.error);
-                    errorDiv.textContent = data.error;
+                if (response.ok) {
+                    window.location.href = '/dashboard.html';
+                } else {
+                    errorDiv.textContent = data.error || 'Invalid username or password';
                     errorDiv.style.display = 'block';
                 }
             } catch (error) {

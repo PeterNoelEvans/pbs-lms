@@ -1,12 +1,15 @@
 const express = require('express');
 const path = require('path');
 const session = require('express-session');
-const RedisStore = require('connect-redis').default;
-const { createClient } = require('redis');
 const bcrypt = require('bcryptjs');
 const fs = require('fs');
 const sqlite3 = require('sqlite3').verbose();
 const app = express();
+const SQLiteStore = require('connect-sqlite3')(session);
+require('dotenv').config();
+
+const CredentialManager = require('./utils/credentialManager');
+const StudentManager = require('./utils/studentManager');
 
 // Use environment variables or defaults
 const port = process.env.PORT || 10000;
@@ -18,17 +21,12 @@ const dbPath = isProduction ? '/opt/render/project/src/data/users.db' : 'users.d
 
 // Create data directory in production
 if (isProduction) {
-    const fs = require('fs');
     const dataDir = '/opt/render/project/src/data';
-    
     try {
-        // Create data directory only
         if (!fs.existsSync(dataDir)) {
             console.log('Creating data directory...');
             fs.mkdirSync(dataDir, { recursive: true, mode: 0o755 });
         }
-
-        // Ensure we have write permissions for data directory
         fs.accessSync(dataDir, fs.constants.W_OK);
         console.log('Data directory is writable');
     } catch (error) {
@@ -37,11 +35,33 @@ if (isProduction) {
     }
 }
 
-// Initialize Redis client first
-let redisClient;
-let redisStore;
+// Initialize managers
+const credentialManager = new CredentialManager(process.env.CREDENTIAL_KEY);
+const studentManager = new StudentManager(credentialManager);
 
-// Initialize Redis and create store
+// Create data directory for SQLite session store
+const sessionDir = './data';
+if (!fs.existsSync(sessionDir)) {
+    fs.mkdirSync(sessionDir, { recursive: true });
+}
+
+// Session configuration with better security
+const sessionConfig = {
+    store: new SQLiteStore({
+        db: 'sessions.db',
+        dir: sessionDir
+    }),
+    secret: process.env.SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+        secure: process.env.NODE_ENV === 'production',
+        httpOnly: true,
+        maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    }
+};
+
+// Initialize application
 async function initializeApp() {
     console.log('Initializing application...');
     try {
@@ -65,9 +85,11 @@ async function initializeApp() {
             next();
         });
 
-        // Health check endpoint - MUST be defined before any async initialization
+        // Initialize session middleware
+        app.use(session(sessionConfig));
+
+        // Health check endpoint
         app.get('/health', (req, res) => {
-            // Simple synchronous health check
             res.status(200).json({
                 status: 'ok',
                 timestamp: new Date().toISOString()
@@ -119,204 +141,6 @@ async function initializeApp() {
             }
         };
 
-        // Initialize Redis client with better error handling
-        console.log('Connecting to Redis...');
-        
-        // Get Redis configuration from environment variables
-        const redisUrl = process.env.REDIS_URL || process.env.REDIS_INTERNAL_URL;
-        if (!redisUrl) {
-            throw new Error('Redis URL not configured');
-        }
-
-        console.log('Redis URL protocol:', new URL(redisUrl).protocol);
-
-        const redisConfig = {
-            url: redisUrl,
-            socket: {
-                reconnectStrategy: (retries) => {
-                    console.log(`Redis reconnection attempt ${retries}`);
-                    if (retries > 10) {
-                        console.error('Max Redis reconnection attempts reached');
-                        return new Error('Max Redis reconnection attempts reached');
-                    }
-                    return Math.min(retries * 1000, 3000);
-                },
-                connectTimeout: 60000, // 60 seconds
-                keepAlive: 30000, // 30 seconds
-                tls: false // Disable TLS for redis:// URLs
-            },
-            // Remove retry_strategy as it's redundant with reconnectStrategy
-        };
-
-        // Log Redis connection attempt (but hide sensitive URL)
-        console.log('Attempting to connect to Redis with config:', {
-            hasUrl: !!redisConfig.url,
-            urlProtocol: new URL(redisConfig.url).protocol,
-            tls: redisConfig.socket.tls,
-            timeout: redisConfig.socket.connectTimeout,
-            keepAlive: redisConfig.socket.keepAlive
-        });
-
-        // Initialize Redis client
-        redisClient = createClient(redisConfig);
-
-        // Enhanced error logging
-        redisClient.on('error', err => {
-            console.error('Redis Client Error:', err);
-            console.error('Redis connection details:', {
-                ready: redisClient?.isReady,
-                connected: redisClient?.isOpen,
-                error: err.message
-            });
-
-            // If connection times out, log additional information
-            if (err.message.includes('timeout')) {
-                console.error('Connection timeout details:', {
-                    url: redisUrl ? 'Configured' : 'Missing',
-                    protocol: redisUrl ? new URL(redisUrl).protocol : 'N/A',
-                    socketConfig: redisConfig.socket
-                });
-            }
-        });
-
-        redisClient.on('connect', () => {
-            console.log('Redis client connecting...', {
-                ready: redisClient?.isReady,
-                connected: redisClient?.isOpen
-            });
-        });
-
-        redisClient.on('ready', () => {
-            console.log('Redis client ready and connected');
-        });
-
-        // Connect to Redis with timeout
-        try {
-            await Promise.race([
-                redisClient.connect(),
-                new Promise((_, reject) => 
-                    setTimeout(() => reject(new Error('Redis connection timeout after 60s')), 60000)
-                )
-            ]);
-            console.log('Redis connected successfully');
-
-            // Test Redis connection
-            const pingResult = await redisClient.ping();
-            console.log('Redis PING result:', pingResult);
-        } catch (err) {
-            console.error('Redis connection failed:', err);
-            throw err;
-        }
-
-        // Initialize Redis store with better configuration
-        redisStore = new RedisStore({
-            client: redisClient,
-            prefix: 'sess:',
-            ttl: 24 * 60 * 60,
-            disableTouch: false,
-            logErrors: true,
-            scanCount: 100
-        });
-
-        // Add Redis store error handler
-        redisStore.on('error', function(err) {
-            console.error('Redis Store Error:', err);
-            if (err.code === 'ECONNREFUSED') {
-                console.error('Redis connection refused. Attempting to reconnect...');
-                redisClient.connect().catch(console.error);
-            }
-        });
-
-        // Add Redis store connect handler
-        redisStore.on('connect', function() {
-            console.log('Redis Store connected and ready');
-        });
-
-        // CORS configuration BEFORE session middleware
-        app.use((req, res, next) => {
-            const origin = req.headers.origin || 'https://codinghtml-presentation.onrender.com';
-            res.header('Access-Control-Allow-Origin', origin);
-            res.header('Access-Control-Allow-Methods', 'GET,HEAD,PUT,PATCH,POST,DELETE');
-            res.header('Access-Control-Allow-Credentials', 'true');
-            res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control');
-            res.header('Access-Control-Expose-Headers', 'Set-Cookie');
-            res.header('Access-Control-Max-Age', '86400');
-            
-            // Handle preflight
-            if (req.method === 'OPTIONS') {
-                return res.status(204).end();
-            }
-            next();
-        });
-
-        // Security headers
-        app.use((req, res, next) => {
-            res.set({
-                'X-Content-Type-Options': 'nosniff',
-                'X-Frame-Options': 'DENY',
-                'X-XSS-Protection': '1; mode=block'
-            });
-            next();
-        });
-
-        // Session middleware configuration
-        app.use(session({
-            store: redisStore,
-            secret: process.env.SESSION_SECRET || 'your-secret-key',
-            resave: true,
-            saveUninitialized: false,
-            name: 'connect.sid',
-            proxy: true,
-            cookie: {
-                secure: true,
-                httpOnly: true,
-                sameSite: 'none',
-                path: '/',
-                maxAge: 24 * 60 * 60 * 1000 // 24 hours
-            }
-        }));
-
-        // Add session initialization middleware
-        app.use((req, res, next) => {
-            if (!req.session) {
-                return next(new Error('Session initialization failed'));
-            }
-            next();
-        });
-
-        // Remove the session store ready check middleware since Redis operations are working
-        // Add session debug middleware
-        app.use((req, res, next) => {
-            console.log('\n=== Session Status ===');
-            console.log('URL:', req.url);
-            console.log('Session ID:', req.sessionID);
-            console.log('Session:', req.session);
-            next();
-        });
-
-        // Single consolidated debug middleware - AFTER session initialization
-        app.use((req, res, next) => {
-            // Wait for session to be fully initialized
-            process.nextTick(() => {
-                console.log('\n=== Request and Session Debug ===');
-                console.log('URL:', req.url);
-                console.log('Method:', req.method);
-                console.log('Session Status:', {
-                    exists: !!req.session,
-                    id: req.sessionID,
-                    user: req.session?.user,
-                    cookie: req.session?.cookie
-                });
-                console.log('Headers:', {
-                    origin: req.headers.origin,
-                    cookie: req.headers.cookie,
-                    'cf-visitor': req.headers['cf-visitor']
-                });
-                console.log('==============================\n');
-            });
-            next();
-        });
-
         // Set up static file serving with enhanced options
         app.use(express.static(__dirname, {
             dotfiles: 'allow',
@@ -343,42 +167,41 @@ async function initializeApp() {
             }
         }));
 
-        // Define routes that use the middleware
-        app.post('/login', async (req, res) => {
-            const { username, password } = req.body;
-            
-            if (!username || !password) {
-                return res.status(400).json({ error: 'Username and password are required' });
+        // Rate limiting for login attempts
+        const rateLimit = require('express-rate-limit');
+        const loginLimiter = rateLimit({
+            windowMs: 5 * 60 * 1000, // 5 minutes instead of 15
+            max: 20, // Allow 20 requests instead of 5
+            message: { error: 'Too many login attempts, please try again later' },
+            standardHeaders: true,
+            legacyHeaders: false,
+            handler: (req, res) => {
+                res.status(429).json({
+                    error: 'Too many login attempts. Please wait 5 minutes before trying again.',
+                    retryAfter: Math.ceil(req.rateLimit.resetTime / 1000)
+                });
             }
+        });
+
+        // Login route with rate limiting
+        app.post('/login', loginLimiter, async (req, res) => {
+            const { username, password } = req.body;
 
             try {
-                const user = await new Promise((resolve, reject) => {
-                    db.get('SELECT * FROM users WHERE username = ?', [username], (err, row) => {
-                        if (err) reject(err);
-                        resolve(row);
-                    });
-                });
-
-                if (!user) {
+                const student = await studentManager.verifyStudent(username, password);
+                
+                if (!student) {
                     return res.status(401).json({ error: 'Invalid credentials' });
                 }
 
-                const validPassword = username === 'Peter42' ? 
-                    password === 'Peter2025BB' : 
-                    await bcrypt.compare(password, user.password);
-
-                if (!validPassword) {
-                    return res.status(401).json({ error: 'Invalid credentials' });
-                }
-
-                // Set session data directly
+                // Set session data
                 req.session.user = {
-                    id: user.id,
-                    username: user.username,
-                    portfolio_path: user.portfolio_path
+                    id: student.id,
+                    username: student.username,
+                    portfolio_path: student.portfolio_path
                 };
 
-                // Save session and wait for it to be saved
+                // Save session
                 await new Promise((resolve, reject) => {
                     req.session.save((err) => {
                         if (err) reject(err);
@@ -386,13 +209,12 @@ async function initializeApp() {
                     });
                 });
 
-                // Send response
                 res.json({
                     success: true,
                     redirect: '/dashboard',
                     user: {
-                        username: user.username,
-                        portfolio_path: user.portfolio_path
+                        username: student.username,
+                        portfolio_path: student.portfolio_path
                     }
                 });
             } catch (error) {
@@ -412,30 +234,58 @@ async function initializeApp() {
         });
 
         app.post('/toggle-privacy', requireAuth, (req, res) => {
+            console.log('Toggle privacy request received');
+            console.log('Session:', req.session);
+            
             if (!req.session || !req.session.user || !req.session.user.id) {
+                console.log('Not authenticated:', req.session);
                 return res.status(401).json({ error: 'Not authenticated' });
             }
 
-            db.run('UPDATE users SET is_public = NOT is_public WHERE id = ?',
-                [req.session.user.id],
-                function(err) {
-                    if (err) {
-                        console.error('Error updating privacy:', err);
-                        return res.status(500).json({ error: 'Error updating privacy settings' });
-                    }
-
-                    // Get the new status after toggle
-                    db.get('SELECT is_public FROM users WHERE id = ?', [req.session.user.id], (err, result) => {
+            console.log('Updating privacy for user:', req.session.user.username);
+            
+            const db = new sqlite3.Database(dbPath);
+            
+            // First, get the current state
+            db.get('SELECT is_public FROM users WHERE id = ?', [req.session.user.id], (err, currentState) => {
+                if (err) {
+                    console.error('Error getting current state:', err);
+                    return res.status(500).json({ error: 'Error getting current privacy state' });
+                }
+                
+                if (!currentState) {
+                    console.log('User not found when getting current state');
+                    return res.status(404).json({ error: 'User not found' });
+                }
+                
+                console.log('Current privacy state:', currentState.is_public);
+                
+                // Now toggle the state
+                db.run('UPDATE users SET is_public = ? WHERE id = ?',
+                    [currentState.is_public ? 0 : 1, req.session.user.id],
+                    function(err) {
                         if (err) {
-                            console.error('Error getting updated status:', err);
-                            return res.status(500).json({ error: 'Error getting updated status' });
+                            console.error('Error updating privacy:', err);
+                            return res.status(500).json({ error: 'Error updating privacy settings' });
                         }
-                        if (!result) {
-                            return res.status(404).json({ error: 'User not found' });
-                        }
-                        res.json({ success: true, is_public: result.is_public });
+
+                        console.log('Privacy updated, rows affected:', this.changes);
+
+                        // Get the new status after toggle
+                        db.get('SELECT is_public FROM users WHERE id = ?', [req.session.user.id], (err, result) => {
+                            if (err) {
+                                console.error('Error getting updated status:', err);
+                                return res.status(500).json({ error: 'Error getting updated status' });
+                            }
+                            if (!result) {
+                                console.log('User not found after update');
+                                return res.status(404).json({ error: 'User not found' });
+                            }
+                            console.log('New privacy status:', result.is_public);
+                            res.json({ success: true, is_public: result.is_public });
+                        });
                     });
-                });
+            });
         });
 
         app.get('/get-privacy-status', requireAuth, (req, res) => {
@@ -443,6 +293,7 @@ async function initializeApp() {
                 return res.status(401).json({ error: 'Not authenticated' });
             }
 
+            const db = new sqlite3.Database(dbPath);
             db.get('SELECT is_public FROM users WHERE id = ?', [req.session.user.id], (err, result) => {
                 if (err) {
                     console.error('Error getting privacy status:', err);
@@ -452,6 +303,31 @@ async function initializeApp() {
                     return res.status(404).json({ error: 'User not found' });
                 }
                 res.json({ is_public: result.is_public });
+            });
+        });
+
+        app.get('/get-all-privacy-states', async (req, res) => {
+            console.log('\n=== Get All Privacy States ===');
+            const db = new sqlite3.Database(dbPath);
+            db.all('SELECT id, username, portfolio_path, is_public FROM users', [], (err, rows) => {
+                if (err) {
+                    console.error('Error getting privacy states:', err);
+                    return res.status(500).json({ error: 'Error getting privacy states' });
+                }
+                
+                console.log('Privacy states from database:');
+                rows.forEach(row => {
+                    console.log(`${row.id}: ${row.username} - ${row.portfolio_path}: ${row.is_public}`);
+                });
+                
+                // Convert array of rows to object with portfolio_path as key
+                const privacyStates = rows.reduce((acc, row) => {
+                    acc[row.portfolio_path] = row.is_public === 1;
+                    return acc;
+                }, {});
+                
+                console.log('Sending privacy states to client:', privacyStates);
+                res.json(privacyStates);
             });
         });
 
@@ -536,44 +412,27 @@ async function initializeApp() {
             });
         });
 
-        app.post('/admin/reset-password', requireAdmin, async (req, res) => {
-            console.log('Password reset attempt for:', req.body.username);
+        // Admin routes with secure token verification
+        const adminLimiter = rateLimit({
+            windowMs: 60 * 60 * 1000, // 1 hour
+            max: 10 // limit each IP to 10 requests per windowMs
+        });
+
+        app.post('/admin/reset-password', adminLimiter, async (req, res) => {
+            const adminToken = req.headers['admin-token'];
             
-            if (!req.body.username || !req.body.password) {
-                return res.status(400).json({ error: 'Username and password are required' });
+            if (adminToken !== process.env.ADMIN_TOKEN) {
+                return res.status(403).json({ error: 'Unauthorized' });
             }
 
-            const { username, password } = req.body;
-            
+            const { username, newPassword } = req.body;
+
             try {
-                const user = await new Promise((resolve, reject) => {
-                    db.get('SELECT id FROM users WHERE username = ?', [username], (err, row) => {
-                        if (err) reject(err);
-                        resolve(row);
-                    });
-                });
-
-                if (!user) {
-                    console.log('User not found:', username);
-                    return res.status(404).json({ error: 'User not found' });
-                }
-
-                const hashedPassword = await bcrypt.hash(password, 10);
-                
-                await new Promise((resolve, reject) => {
-                    db.run('UPDATE users SET password = ? WHERE username = ?',
-                        [hashedPassword, username],
-                        function(err) {
-                            if (err) reject(err);
-                            else resolve(this);
-                        });
-                });
-
-                console.log('Password reset successful for:', username);
+                await studentManager.resetPassword(username, newPassword);
                 res.json({ success: true, message: 'Password reset successful' });
             } catch (error) {
                 console.error('Password reset error:', error);
-                res.status(500).json({ error: 'Internal server error during password reset' });
+                res.status(500).json({ error: 'Internal server error' });
             }
         });
 
@@ -587,61 +446,12 @@ async function initializeApp() {
                 status: 'ok',
                 timestamp: new Date().toISOString(),
                 environment: isProduction ? 'production' : 'development',
-                redis: {
-                    status: 'unknown',
-                    connected: false,
-                    error: null,
-                    client: {
-                        ready: redisClient?.isReady || false,
-                        connected: redisClient?.isOpen || false
-                    }
-                },
                 session: {
                     exists: !!req.session,
                     id: req.sessionID || null,
                     cookie: req.session?.cookie || null
                 }
             };
-
-            try {
-                console.log('Testing Redis connection...');
-                if (!redisClient) {
-                    throw new Error('Redis client is not initialized');
-                }
-
-                // Test Redis connection
-                const pingResult = await redisClient.ping();
-                console.log('Redis PING result:', pingResult);
-                
-                // Test Redis operations
-                await redisClient.set('health_check', 'ok');
-                const testValue = await redisClient.get('health_check');
-                console.log('Redis test value:', testValue);
-
-                health.redis = {
-                    status: 'connected',
-                    connected: true,
-                    ping: pingResult,
-                    testValue: testValue,
-                    client: {
-                        ready: redisClient.isReady,
-                        connected: redisClient.isOpen
-                    }
-                };
-            } catch (error) {
-                console.error('Health check Redis error:', error);
-                health.redis = {
-                    status: 'error',
-                    connected: false,
-                    error: error.message,
-                    stack: error.stack,
-                    client: {
-                        ready: redisClient?.isReady || false,
-                        connected: redisClient?.isOpen || false
-                    }
-                };
-                // Don't change overall status - Redis issues shouldn't fail the health check
-            }
 
             // Log the complete health status
             console.log('Health check result:', JSON.stringify(health, null, 2));
@@ -694,21 +504,6 @@ process.on('SIGTERM', () => {
                 resolve();
             });
         }),
-        // Close Redis connection
-        new Promise((resolve) => {
-            if (!redisClient) {
-                resolve();
-                return;
-            }
-            console.log('Closing Redis connection...');
-            redisClient.quit().then(() => {
-                console.log('Redis connection closed');
-                resolve();
-            }).catch((err) => {
-                console.error('Error closing Redis connection:', err);
-                resolve();
-            });
-        }),
         // Close database connection
         new Promise((resolve) => {
             if (!db) {
@@ -740,148 +535,32 @@ process.on('SIGTERM', () => {
 
 // Routes
 app.post('/register', async (req, res) => {
-    console.log('\n=== Registration Attempt ===');
-    console.log('Registration data:', {
-        username: req.body.username,
-        class: req.body.class || 'Class1' // Default to Class1 for current students
-    });
-
-    const { username, password, class: studentClass = 'Class1' } = req.body;
-    
-    if (!username || !password) {
-        console.log('Missing registration data');
-        return res.status(400).json({ error: 'All fields are required' });
-    }
-
-    // Construct portfolio path based on class
-    const portfolio_path = `/portfolios/${studentClass}/${username}/${username}.html`;
+    const { username, password, portfolio_path } = req.body;
 
     try {
-        // Check if user already exists
-        const existingUser = await new Promise((resolve, reject) => {
-            db.get('SELECT id, username, portfolio_path FROM users WHERE username = ? OR portfolio_path = ?', 
-                [username, portfolio_path], 
-                (err, row) => {
-                    if (err) {
-                        console.error('Database error checking existing user:', err);
-                        reject(err);
-                    }
-                    resolve(row);
-                });
-        });
-
-        if (existingUser) {
-            // Special case for Peter42
-            if (username === 'Peter42' && portfolio_path === '/portfolios/Class1/Peter/Peter.html') {
-                console.log('Allowing Peter42 re-registration...');
-                await new Promise((resolve, reject) => {
-                    db.run('DELETE FROM users WHERE username = ?', ['Peter42'], (err) => {
-                        if (err) reject(err);
-                        else resolve();
-                    });
-                });
-            } else {
-                const errorMessage = existingUser.username === username ? 
-                    'Username already exists' : 
-                    'Portfolio path already exists';
-                console.log('Registration conflict:', errorMessage);
-                return res.status(400).json({ error: errorMessage });
-            }
-        }
-
-        // Create user's portfolio directory if it doesn't exist
-        const portfolioDir = path.join(__dirname, 'portfolios', studentClass, username);
-        if (!fs.existsSync(portfolioDir)) {
-            fs.mkdirSync(portfolioDir, { recursive: true });
-            console.log('Created portfolio directory:', portfolioDir);
-            
-            // Create images directory for new users
-            const imagesDir = path.join(portfolioDir, 'images');
-            fs.mkdirSync(imagesDir, { recursive: true });
-            console.log('Created images directory:', imagesDir);
-        }
-
-        // Set the avatar path
-        const avatar_path = `/portfolios/${studentClass}/${username}/images/${username}.jpg`;
-
-        // Hash password and create user with avatar_path
-        const hashedPassword = await bcrypt.hash(password, 10);
+        const studentId = await studentManager.addStudent(username, password, portfolio_path);
         
-        const result = await new Promise((resolve, reject) => {
-            db.run('INSERT INTO users (username, password, portfolio_path, avatar_path, is_public) VALUES (?, ?, ?, ?, ?)',
-                [username, hashedPassword, portfolio_path, avatar_path, false],
-                function(err) {
-                    if (err) {
-                        console.error('Database error during insert:', err);
-                        reject(err);
-                    } else {
-                        console.log('User inserted with ID:', this.lastID);
-                        resolve(this.lastID);
-                    }
-                });
-        });
-
-        // Create initial portfolio file
-        const portfolioFile = path.join(portfolioDir, `${username}.html`);
-        if (!fs.existsSync(portfolioFile)) {
-            const initialContent = `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>${username}'s Portfolio</title>
-    <link rel="stylesheet" href="/styles.css">
-</head>
-<body>
-    <div class="portfolio-container">
-        <h1>Welcome to ${username}'s Portfolio</h1>
-        <p>This is my learning journey portfolio.</p>
-        <!-- Add your content here -->
-    </div>
-</body>
-</html>`;
-            fs.writeFileSync(portfolioFile, initialContent);
-            console.log('Created initial portfolio file:', portfolioFile);
+        if (!studentId) {
+            return res.status(400).json({ error: 'Registration failed' });
         }
+
+        const student = await studentManager.getStudentById(studentId);
 
         // Set session
         req.session.user = {
-            id: result,
-            username: username,
-            portfolio_path: portfolio_path
+            id: student.id,
+            username: student.username,
+            portfolio_path: student.portfolio_path
         };
 
-        // Save session
-        await new Promise((resolve, reject) => {
-            req.session.save((err) => {
-                if (err) {
-                    console.error('Session save error:', err);
-                    reject(err);
-                } else {
-                    console.log('Session saved after registration');
-                    resolve();
-                }
-            });
-        });
-
-        // Send success response
         res.json({ 
             success: true, 
             message: 'Registration successful',
-            redirect: '/login.html',
-            user: {
-                id: result,
-                username: username,
-                portfolio_path: portfolio_path
-            }
+            redirect: '/dashboard'
         });
     } catch (error) {
         console.error('Registration error:', error);
-        res.status(500).json({ 
-            error: 'Error creating user. Please try again.',
-            details: isProduction ? undefined : error.message
-        });
+        res.status(500).json({ error: 'Error creating user' });
     }
 });
 
@@ -1201,5 +880,23 @@ const db = new sqlite3.Database(dbPath, (err) => {
                 console.error('Error handling Peter42 user:', error);
             }
         });
+    });
+});
+
+app.get('/debug-privacy/:username', (req, res) => {
+    const username = req.params.username;
+    console.log('\n=== Debug Privacy Status ===');
+    console.log('Checking privacy for:', username);
+    
+    const db = new sqlite3.Database(dbPath);
+    db.get('SELECT username, is_public, portfolio_path FROM users WHERE username = ?', [username], (err, result) => {
+        if (err) {
+            console.error('Error getting privacy status:', err);
+            return res.status(500).json({ error: 'Error getting privacy status' });
+        }
+        if (!result) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        res.json(result);
     });
 });
