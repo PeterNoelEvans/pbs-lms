@@ -1637,14 +1637,38 @@ app.get('/api/filesystem-portfolios/:classId', (req, res) => {
                             console.log(`   Error finding avatar for ${studentName}: ${err.message}`);
                         }
                         
+                        // Format student name from directory
+                        const nameParts = studentName.split('_');
+                        let firstName = '', lastName = '', nickname = '';
+                        
+                        if (nameParts.length >= 2) {
+                            // If format is like "firstname_lastname_id"
+                            firstName = nameParts[0].charAt(0).toUpperCase() + nameParts[0].slice(1);
+                            lastName = nameParts[1].charAt(0).toUpperCase() + nameParts[1].slice(1);
+                            // Try to extract nickname from HTML file content
+                            try {
+                                const htmlContent = fs.readFileSync(path.join(studentPath, htmlFile), 'utf8');
+                                const nicknameMatch = htmlContent.match(/<h1[^>]*>([^<]+)<\/h1>/);
+                                if (nicknameMatch) {
+                                    nickname = nicknameMatch[1].trim();
+                                }
+                            } catch (err) {
+                                console.log(`Error reading HTML for nickname: ${err.message}`);
+                            }
+                        } else {
+                            // Single word name
+                            firstName = studentName.charAt(0).toUpperCase() + studentName.slice(1);
+                        }
+
+                        // Add student to list
                         students.push({
                             username: studentName,
                             portfolio_path: `/portfolios/${baseFolderName}/${studentName}/${htmlFile}`,
                             avatar_path: avatarPath || '/images/default-avatar.png',
-                            is_public: false,  // Set all to PRIVATE by default
-                            first_name: studentName,
-                            last_name: '',
-                            nickname: studentName
+                            is_public: false, // Default to private like other classes
+                            first_name: firstName,
+                            last_name: lastName,
+                            nickname: nickname || firstName
                         });
                     }
                 } catch (err) {
@@ -1656,14 +1680,25 @@ app.get('/api/filesystem-portfolios/:classId', (req, res) => {
                 
                 console.log(`   Adding HTML file: ${entry.name}`);
                 
+                // Format student name from directory
+                const nameParts = studentName.split('_');
+                let firstName = '', lastName = '';
+                
+                if (nameParts.length >= 2) {
+                    firstName = nameParts[0].charAt(0).toUpperCase() + nameParts[0].slice(1);
+                    lastName = nameParts[1].charAt(0).toUpperCase() + nameParts[1].slice(1);
+                } else {
+                    firstName = studentName.charAt(0).toUpperCase() + studentName.slice(1);
+                }
+
                 students.push({
                     username: studentName,
                     portfolio_path: `/portfolios/${baseFolderName}/${entry.name}`,
                     avatar_path: '/images/default-avatar.png',
                     is_public: false, // Default to private like other classes
-                    first_name: studentName,
-                    last_name: '',
-                    nickname: studentName
+                    first_name: firstName,
+                    last_name: lastName,
+                    nickname: firstName
                 });
             }
         });
@@ -1824,15 +1859,38 @@ app.get('/api/m2-students', (req, res) => {
                                     }
                                 }
                                 
+                                // Format student name from directory
+                                const nameParts = studentName.split('_');
+                                let firstName = '', lastName = '', nickname = '';
+                                
+                                if (nameParts.length >= 2) {
+                                    // If format is like "firstname_lastname_id"
+                                    firstName = nameParts[0].charAt(0).toUpperCase() + nameParts[0].slice(1);
+                                    lastName = nameParts[1].charAt(0).toUpperCase() + nameParts[1].slice(1);
+                                    // Try to extract nickname from HTML file content
+                                    try {
+                                        const htmlContent = fs.readFileSync(path.join(studentPath, htmlFile), 'utf8');
+                                        const nicknameMatch = htmlContent.match(/<h1[^>]*>([^<]+)<\/h1>/);
+                                        if (nicknameMatch) {
+                                            nickname = nicknameMatch[1].trim();
+                                        }
+                                    } catch (err) {
+                                        console.log(`Error reading HTML for nickname: ${err.message}`);
+                                    }
+                                } else {
+                                    // Single word name
+                                    firstName = studentName.charAt(0).toUpperCase() + studentName.slice(1);
+                                }
+
                                 // Add student to list
                                 students.push({
                                     username: studentName,
                                     portfolio_path: `/portfolios/${folderName}/${studentName}/${htmlFile}`,
                                     avatar_path: avatarPath || '/images/default-avatar.png',
                                     is_public: false, // Default to private like other classes
-                                    first_name: studentName,
-                                    last_name: '',
-                                    nickname: studentName
+                                    first_name: firstName,
+                                    last_name: lastName,
+                                    nickname: nickname || firstName
                                 });
                             }
                         } catch (err) {
@@ -1842,14 +1900,25 @@ app.get('/api/m2-students', (req, res) => {
                         // Handle HTML files at root level
                         const studentName = entry.name.replace('.html', '');
                         
+                        // Format student name from directory
+                        const nameParts = studentName.split('_');
+                        let firstName = '', lastName = '';
+                        
+                        if (nameParts.length >= 2) {
+                            firstName = nameParts[0].charAt(0).toUpperCase() + nameParts[0].slice(1);
+                            lastName = nameParts[1].charAt(0).toUpperCase() + nameParts[1].slice(1);
+                        } else {
+                            firstName = studentName.charAt(0).toUpperCase() + studentName.slice(1);
+                        }
+
                         students.push({
                             username: studentName,
                             portfolio_path: `/portfolios/${folderName}/${entry.name}`,
                             avatar_path: '/images/default-avatar.png',
                             is_public: false, // Default to private like other classes
-                            first_name: studentName,
-                            last_name: '',
-                            nickname: studentName
+                            first_name: firstName,
+                            last_name: lastName,
+                            nickname: firstName
                         });
                     }
                 }
