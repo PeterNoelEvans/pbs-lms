@@ -703,6 +703,12 @@ app.get(['/class-4-1.html', '/class-4-2.html'], (req, res) => {
     res.sendFile(filePath);
 });
 
+// Redirect direct class-viewer.html access to /classes
+app.get('/class-viewer.html', (req, res) => {
+    const { school, class: classId } = req.query;
+    return res.redirect(`/classes?school=${school}&class=${classId}`);
+});
+
 // Class viewer route - only for non-dedicated pages
 app.get('/classes', (req, res) => {
     // Get query parameters
@@ -712,6 +718,9 @@ app.get('/classes', (req, res) => {
     console.log(`\n==== CLASS VIEWER REQUEST ====`);
     console.log(`URL: ${req.url}`);
     console.log(`Query parameters: school=${schoolId}, class=${classId}`);
+    console.log('Session:', req.session);
+    console.log('User type:', req.session?.userType);
+    console.log('Authenticated:', req.session?.authenticated);
     
     // Check if this is a dedicated class page request
     if (classId === 'Class4-1') {
@@ -719,6 +728,12 @@ app.get('/classes', (req, res) => {
     }
     if (classId === 'Class4-2') {
         return res.redirect('/class-4-2.html');
+    }
+    
+    // Allow access for both regular users and authenticated visitors
+    if (!req.session?.authenticated && !req.session?.user) {
+        console.log('Unauthorized access attempt - redirecting to login');
+        return res.redirect('/login.html');
     }
     
     // Validate the parameters if provided
@@ -729,17 +744,17 @@ app.get('/classes', (req, res) => {
         const school = schoolConfig.getSchool(schoolId);
         if (!school) {
             console.log(`School not found: ${schoolId}`);
-        } else {
-            console.log(`School found: ${school.name}`);
-            
-            // Check if the class exists in the school
-            const cls = schoolConfig.getClass(schoolId, classId);
-            if (!cls) {
-                console.log(`Class not found: ${classId} in school ${schoolId}`);
-            } else {
-                console.log(`Class found: ${cls.displayName} (${cls.id})`);
-            }
+            return res.status(404).send('School not found');
         }
+        console.log(`School found: ${school.name}`);
+        
+        // Check if the class exists in the school
+        const cls = schoolConfig.getClass(schoolId, classId);
+        if (!cls) {
+            console.log(`Class not found: ${classId} in school ${schoolId}`);
+            return res.status(404).send('Class not found');
+        }
+        console.log(`Class found: ${cls.displayName} (${cls.id})`);
     }
     
     // Send the HTML file
@@ -1344,12 +1359,20 @@ app.post('/public-login', async (req, res) => {
             [visitor.id]
         );
         
-        // Set session
+        // Set session with all necessary flags
         req.session.authenticated = true;
         req.session.userType = 'visitor';
         req.session.visitorId = visitor.id;
         req.session.fullName = visitor.full_name;
         req.session.email = visitor.email;
+        
+        // Save session explicitly
+        await new Promise((resolve, reject) => {
+            req.session.save((err) => {
+                if (err) reject(err);
+                else resolve();
+            });
+        });
         
         // Success
         res.json({ 
@@ -1357,7 +1380,8 @@ app.post('/public-login', async (req, res) => {
             user: { 
                 id: visitor.id, 
                 fullName: visitor.full_name, 
-                email: visitor.email 
+                email: visitor.email,
+                userType: 'visitor'
             }
         });
     } catch (error) {
