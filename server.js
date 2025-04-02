@@ -17,7 +17,7 @@ const isProduction = process.env.NODE_ENV === 'production';
 console.log('Running in', isProduction ? 'production mode' : 'development mode');
 
 // Set database path based on environment
-const dbPath = isProduction ? '/opt/render/project/src/data/users.db' : 'users.db';
+const dbPath = process.env.DATABASE_PATH || path.join(__dirname, 'data', 'users.db');
 
 // Create data directory in production
 if (isProduction) {
