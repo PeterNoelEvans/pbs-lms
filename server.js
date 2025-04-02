@@ -996,8 +996,8 @@ const db = new sqlite3.Database(dbPath, (err) => {
             password TEXT,
             portfolio_path TEXT UNIQUE,
             avatar_path TEXT,
-            is_public BOOLEAN DEFAULT 0,
-            is_super_user BOOLEAN DEFAULT 0,
+            is_public INTEGER DEFAULT 0,
+            is_super_user INTEGER DEFAULT 0,
             first_name TEXT,
             last_name TEXT,
             nickname TEXT,
@@ -1010,72 +1010,86 @@ const db = new sqlite3.Database(dbPath, (err) => {
             }
             console.log('Users table ready');
             
-            // Add email column if it doesn't exist (for backward compatibility)
-            db.run(`PRAGMA table_info(users)`, (err, rows) => {
+            // Check for missing columns
+            db.all(`PRAGMA table_info(users)`, (err, rows) => {
                 if (err) {
                     console.error('Error checking table info:', err);
                     return;
                 }
                 
-                const hasEmail = rows.some(row => row.name === 'email');
-                if (!hasEmail) {
+                if (!rows) {
+                    console.error('No table info returned');
+                    return;
+                }
+
+                const columns = rows.map(row => row.name.toLowerCase());
+                
+                // Add email column if it doesn't exist
+                if (!columns.includes('email')) {
                     db.run(`ALTER TABLE users ADD COLUMN email TEXT UNIQUE`, (err) => {
-                        if (err) {
+                        if (err && !err.message.includes('duplicate column')) {
                             console.error('Error adding email column:', err);
                         } else {
                             console.log('Added email column to users table');
                         }
                     });
                 }
-            });
 
-            // Add super_user column if it doesn't exist
-            db.run(`ALTER TABLE users ADD COLUMN is_super_user BOOLEAN DEFAULT 0;`, (err) => {
-                if (err && !err.message.includes('duplicate column')) {
-                    console.error('Error adding is_super_user column:', err);
-                }
-            });
-
-            // Set Peter42 as super user
-            db.run('UPDATE users SET is_super_user = 1 WHERE username = ?', ['Peter42'], (err) => {
-                if (err) {
-                    console.error('Error setting Peter42 as super user:', err);
-                }
-            });
-
-            // Add avatar_path column if it doesn't exist
-            db.run(`ALTER TABLE users ADD COLUMN avatar_path TEXT;`, (err) => {
-                if (err && !err.message.includes('duplicate column')) {
-                    console.error('Error adding avatar_path column:', err);
-                }
-            });
-            
-                // Check if Peter42 exists
-            db.get('SELECT id FROM users WHERE username = ?', ['Peter42'], (err, result) => {
-                if (err) {
-                    console.error('Error checking for Peter42:', err);
-                    return;
-                }
-                
-                if (!result) {
-                    console.log('Peter42 not found, creating...');
-                    // Create Peter42 with hashed password and avatar path
-                    bcrypt.hash('Peter2025BB', 10).then(hashedPassword => {
-                        db.run(
-                            'INSERT INTO users (username, password, portfolio_path, avatar_path, is_public) VALUES (?, ?, ?, ?, ?)',
-                            ['Peter42', hashedPassword, '/portfolios/P4-2/Peter/Peter.html', '/portfolios/P4-2/Peter/images/Peter42.jpg', true],
-                            function(err) {
-                                if (err) {
-                                    console.error('Error creating Peter42:', err);
-                                } else {
-                                    console.log('Peter42 created successfully with ID:', this.lastID);
-                                }
-                            }
-                        );
-                    }).catch(err => {
-                        console.error('Error hashing password:', err);
+                // Add is_super_user column if it doesn't exist
+                if (!columns.includes('is_super_user')) {
+                    db.run(`ALTER TABLE users ADD COLUMN is_super_user INTEGER DEFAULT 0`, (err) => {
+                        if (err && !err.message.includes('duplicate column')) {
+                            console.error('Error adding is_super_user column:', err);
+                        } else {
+                            console.log('Added is_super_user column to users table');
+                        }
                     });
                 }
+
+                // Set Peter42 as super user
+                db.run('UPDATE users SET is_super_user = 1 WHERE username = ?', ['Peter42'], (err) => {
+                    if (err) {
+                        console.error('Error setting Peter42 as super user:', err);
+                    } else {
+                        console.log('Updated Peter42 super user status');
+                    }
+                });
+
+                // Check if Peter42 exists and create if not
+                db.get('SELECT id FROM users WHERE username = ?', ['Peter42'], (err, result) => {
+                    if (err) {
+                        console.error('Error checking for Peter42:', err);
+                        return;
+                    }
+                    
+                    if (!result) {
+                        console.log('Peter42 not found, creating...');
+                        // Create Peter42 with hashed password and all required fields
+                        bcrypt.hash('Peter2025BB', 10).then(hashedPassword => {
+                            db.run(
+                                'INSERT INTO users (username, password, portfolio_path, avatar_path, is_public, is_super_user, email) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                                [
+                                    'Peter42',
+                                    hashedPassword,
+                                    '/portfolios/P4-2/Peter/Peter.html',
+                                    '/portfolios/P4-2/Peter/images/Peter42.jpg',
+                                    1,
+                                    1,
+                                    'peter42@example.com'
+                                ],
+                                function(err) {
+                                    if (err) {
+                                        console.error('Error creating Peter42:', err);
+                                    } else {
+                                        console.log('Peter42 created successfully with ID:', this.lastID);
+                                    }
+                                }
+                            );
+                        }).catch(err => {
+                            console.error('Error hashing password:', err);
+                        });
+                    }
+                });
             });
         });
         
@@ -1786,271 +1800,13 @@ app.get('/api/filesystem-portfolios/:classId', (req, res) => {
         console.log(`\nReturning ${students.length} portfolios from filesystem`);
         if (students.length > 0) {
             for (let i = 0; i < Math.min(5, students.length); i++) {
-                console.log(` - ${students[i].username}: ${students[i].portfolio_path}`);
+                console.log(` - ${students[i].username}: ${students[i].portfolio_path} (${students[i].is_public ? 'Public' : 'Private'})`);
             }
         }
         
-        // Also check the database for any relevant entries
-        const db = new sqlite3.Database(dbPath);
-        db.all('SELECT * FROM users WHERE portfolio_path LIKE ?', [`%${baseFolderName}%`], (err, dbRows) => {
-            db.close();
-            
-            if (err) {
-                console.log(`Error checking database: ${err.message}`);
-                console.log(`==== END FILESYSTEM CHECK ====\n`);
-                return res.json(students);
-            }
-            
-            const portfolioPathMap = {};
-            students.forEach(s => {
-                portfolioPathMap[s.portfolio_path.toLowerCase()] = true;
-            });
-            
-            // Add any additional students from database
-            console.log(`Found ${dbRows.length} students in database`);
-            let dbAdded = 0;
-            
-            dbRows.forEach(row => {
-                // Check if we already have this path in our results
-                if (!portfolioPathMap[row.portfolio_path.toLowerCase()]) {
-                    students.push({
-                        username: row.username,
-                        portfolio_path: row.portfolio_path,
-                        avatar_path: row.avatar_path || '/images/default-avatar.png',
-                        is_public: row.is_public === 1,
-                        first_name: row.first_name || row.username,
-                        last_name: row.last_name || '',
-                        nickname: row.nickname || row.username
-                    });
-                    dbAdded++;
-                }
-            });
-            
-            console.log(`Added ${dbAdded} additional students from database`);
-            console.log(`==== END FILESYSTEM CHECK ====\n`);
-            res.json(students);
-        });
-            } catch (error) {
-        console.error('Error reading portfolios from filesystem:', error);
-        console.log(`==== END FILESYSTEM CHECK (ERROR) ====\n`);
-        res.status(500).json({ error: 'Failed to read portfolios from filesystem' });
-    }
-});
-
-// Direct folder list API for debugging
-app.get('/api/folder-list/:folderName', (req, res) => {
-    const folderName = req.params.folderName;
-    const folderPath = path.join(__dirname, 'portfolios', folderName);
-    
-    console.log(`\n=== Direct Folder List: ${folderName} ===`);
-    console.log(`Looking in: ${folderPath}`);
-    
-    try {
-        // Check if the directory exists
-        if (!fs.existsSync(folderPath)) {
-            console.log(`Directory not found: ${folderPath}`);
-            return res.json({ error: 'Directory not found', folders: [] });
-        }
-        
-        // Read directory with EXACT case from filesystem
-        const items = fs.readdirSync(folderPath, { withFileTypes: true });
-        console.log(`Found ${items.length} items in ${folderPath}`);
-        
-        const folders = items
-            .filter(item => item.isDirectory())
-            .map(dir => dir.name);
-            
-        const files = items
-            .filter(item => !item.isDirectory())
-            .map(file => file.name);
-        
-        console.log(`Folders: ${folders.join(', ')}`);
-        console.log(`Files: ${files.join(', ')}`);
-        
-        res.json({
-            path: folderPath,
-            totalItems: items.length,
-            folders: folders,
-            files: files
-        });
+        res.json(students);
     } catch (error) {
-        console.error('Error reading directory:', error);
-        res.status(500).json({ error: 'Error reading directory' });
-    }
-});
-
-// Special endpoint to fetch M2 student portfolios
-app.get('/api/m2-students', (req, res) => {
-    console.log(`\n==== FETCHING M2 STUDENTS ====`);
-    
-    // Look in all possible M2 folders
-    const possibleFolders = ['ClassM2-001', 'M2', 'M2-001'];
-    const students = [];
-    
-    try {
-        // Try each possible folder path
-        for (const folderName of possibleFolders) {
-            const folderPath = path.join(__dirname, 'portfolios', folderName);
-            console.log(`Checking folder: ${folderPath}`);
-            
-            if (fs.existsSync(folderPath)) {
-                console.log(`Found directory: ${folderPath}`);
-                
-                // Read directory
-                const files = fs.readdirSync(folderPath, { withFileTypes: true });
-                console.log(`Found ${files.length} items in ${folderPath}`);
-                
-                // Process directories as student portfolios
-                for (const entry of files) {
-                    if (entry.isDirectory()) {
-                        const studentName = entry.name;
-                        const studentPath = path.join(folderPath, studentName);
-                        
-                        console.log(`Found student folder: ${studentName}`);
-                        
-                        // Find HTML files
-                        try {
-                            const studentFiles = fs.readdirSync(studentPath);
-                            const htmlFiles = studentFiles.filter(file => 
-                                file.toLowerCase().endsWith('.html') || 
-                                file.toLowerCase() === 'index.html'
-                            );
-                            
-                            if (htmlFiles.length > 0) {
-                                // Prefer index.html if available
-                                let htmlFile = htmlFiles[0];
-                                const indexHtml = htmlFiles.find(file => file.toLowerCase() === 'index.html');
-                                if (indexHtml) {
-                                    htmlFile = indexHtml;
-                                }
-                                
-                                // Look for avatar
-                                let avatarPath = null;
-                                const imagesPath = path.join(studentPath, 'images');
-                                if (fs.existsSync(imagesPath)) {
-                                    const imageFiles = fs.readdirSync(imagesPath).filter(file => 
-                                        file.toLowerCase().endsWith('.jpg') || 
-                                        file.toLowerCase().endsWith('.png') || 
-                                        file.toLowerCase().endsWith('.jpeg')
-                                    );
-                                    
-                                    if (imageFiles.length > 0) {
-                                        avatarPath = `/portfolios/${folderName}/${studentName}/images/${imageFiles[0]}`;
-                                    }
-                                }
-                                
-                                // Format student name from directory
-                                const nameParts = studentName.split('_');
-                                let firstName = '', lastName = '', nickname = '';
-                                
-                                if (nameParts.length >= 2) {
-                                    // If format is like "firstname_lastname_id"
-                                    firstName = nameParts[0].charAt(0).toUpperCase() + nameParts[0].slice(1);
-                                    lastName = nameParts[1].charAt(0).toUpperCase() + nameParts[1].slice(1);
-                                    // Try to extract nickname from HTML file content
-                                    try {
-                                        const htmlContent = fs.readFileSync(path.join(studentPath, htmlFile), 'utf8');
-                                        const nicknameMatch = htmlContent.match(/<h1[^>]*>([^<]+)<\/h1>/);
-                                        if (nicknameMatch) {
-                                            nickname = nicknameMatch[1].trim();
-                                        }
-                                    } catch (err) {
-                                        console.log(`Error reading HTML for nickname: ${err.message}`);
-                                    }
-                                } else {
-                                    // Single word name
-                                    firstName = studentName.charAt(0).toUpperCase() + studentName.slice(1);
-                                }
-
-                                // Add student to list
-                                students.push({
-                                    username: studentName,
-                                    portfolio_path: `/portfolios/${folderName}/${studentName}/${htmlFile}`,
-                                    avatar_path: avatarPath || '/images/default-avatar.png',
-                                    is_public: false, // Default to private like other classes
-                                    first_name: firstName,
-                                    last_name: lastName,
-                                    nickname: nickname || firstName
-                                });
-                            }
-                        } catch (err) {
-                            console.log(`Error processing student ${studentName}: ${err.message}`);
-                        }
-                    } else if (entry.name.toLowerCase().endsWith('.html')) {
-                        // Handle HTML files at root level
-                        const studentName = entry.name.replace('.html', '');
-                        
-                        // Format student name from directory
-                        const nameParts = studentName.split('_');
-                        let firstName = '', lastName = '';
-                        
-                        if (nameParts.length >= 2) {
-                            firstName = nameParts[0].charAt(0).toUpperCase() + nameParts[0].slice(1);
-                            lastName = nameParts[1].charAt(0).toUpperCase() + nameParts[1].slice(1);
-                        } else {
-                            firstName = studentName.charAt(0).toUpperCase() + studentName.slice(1);
-                        }
-
-                        students.push({
-                            username: studentName,
-                            portfolio_path: `/portfolios/${folderName}/${entry.name}`,
-                            avatar_path: '/images/default-avatar.png',
-                            is_public: false, // Default to private like other classes
-                            first_name: firstName,
-                            last_name: lastName,
-                            nickname: firstName
-                        });
-                    }
-                }
-            } else {
-                console.log(`Directory not found: ${folderPath}`);
-            }
-        }
-        
-        // Also check the database for M2 students
-        const db = new sqlite3.Database(dbPath);
-        db.all('SELECT * FROM users WHERE portfolio_path LIKE ? OR portfolio_path LIKE ? OR portfolio_path LIKE ?', 
-            ['%ClassM2-001%', '%M2%', '%M2-001%'], 
-            (err, dbRows) => {
-                db.close();
-                
-                if (err) {
-                    console.log(`Error checking database: ${err.message}`);
-                } else {
-                    console.log(`Found ${dbRows.length} M2 students in database`);
-                    
-                    // Create a map of existing portfolio paths (lowercase for case-insensitive comparison)
-                    const existingPaths = {};
-                    students.forEach(student => {
-                        existingPaths[student.portfolio_path.toLowerCase()] = true;
-                    });
-                    
-                    // Add any students from database that aren't already in our list
-                    let dbAdded = 0;
-                    dbRows.forEach(row => {
-                        if (!existingPaths[row.portfolio_path.toLowerCase()]) {
-                            students.push({
-                                username: row.username,
-                                portfolio_path: row.portfolio_path,
-                                avatar_path: row.avatar_path || '/images/default-avatar.png',
-                                is_public: row.is_public === 1,
-                                first_name: row.first_name || row.username,
-                                last_name: row.last_name || '',
-                                nickname: row.nickname || row.username
-                            });
-                            dbAdded++;
-                        }
-                    });
-                    
-                    console.log(`Added ${dbAdded} additional M2 students from database`);
-                }
-                
-                console.log(`Total M2 students found: ${students.length}`);
-                console.log(`==== END M2 STUDENTS FETCH ====\n`);
-                res.json(students);
-            });
-    } catch (error) {
-        console.error('Error fetching M2 students:', error);
-        res.status(500).json({ error: 'Error fetching M2 students' });
+        console.error('Error in filesystem-based endpoint:', error);
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
