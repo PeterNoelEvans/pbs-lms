@@ -982,7 +982,7 @@ const db = new sqlite3.Database(dbPath, (err) => {
         if (isProduction) {
             const fs = require('fs');
             const dataDir = path.dirname(dbPath);
-                if (!fs.existsSync(dataDir)) {
+            if (!fs.existsSync(dataDir)) {
                 console.log(`Creating data directory: ${dataDir}`);
                 fs.mkdirSync(dataDir, { recursive: true });
             }
@@ -992,7 +992,7 @@ const db = new sqlite3.Database(dbPath, (err) => {
         db.run(`CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE,
-            email TEXT UNIQUE,
+            email TEXT,
             password TEXT,
             portfolio_path TEXT UNIQUE,
             avatar_path TEXT,
@@ -1011,83 +1011,91 @@ const db = new sqlite3.Database(dbPath, (err) => {
             console.log('Users table ready');
             
             // Check for missing columns
-            db.all(`PRAGMA table_info(users)`, (err, rows) => {
+            db.all("PRAGMA table_info(users)", [], (err, rows) => {
                 if (err) {
-                    console.error('Error checking table info:', err);
+                    console.error('Error checking table schema:', err);
                     return;
                 }
                 
-                if (!rows) {
-                    console.error('No table info returned');
-                    return;
-                }
-
-                const columns = rows.map(row => row.name.toLowerCase());
+                const columns = rows.map(row => row.name);
+                console.log('Checking for missing columns in users table...');
                 
                 // Add email column if it doesn't exist
                 if (!columns.includes('email')) {
-                    db.run(`ALTER TABLE users ADD COLUMN email TEXT UNIQUE`, (err) => {
-                        if (err && !err.message.includes('duplicate column')) {
+                    console.log('Adding email column...');
+                    db.run('ALTER TABLE users ADD COLUMN email TEXT', (err) => {
+                        if (err) {
                             console.error('Error adding email column:', err);
                         } else {
-                            console.log('Added email column to users table');
+                            // After adding the column, make it unique if it doesn't have data
+                            db.run('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email) WHERE email IS NOT NULL');
                         }
                     });
                 }
-
+                
                 // Add is_super_user column if it doesn't exist
                 if (!columns.includes('is_super_user')) {
-                    db.run(`ALTER TABLE users ADD COLUMN is_super_user INTEGER DEFAULT 0`, (err) => {
-                        if (err && !err.message.includes('duplicate column')) {
+                    console.log('Adding is_super_user column...');
+                    db.run('ALTER TABLE users ADD COLUMN is_super_user INTEGER DEFAULT 0', (err) => {
+                        if (err) {
                             console.error('Error adding is_super_user column:', err);
-                        } else {
-                            console.log('Added is_super_user column to users table');
                         }
                     });
                 }
-
-                // Set Peter42 as super user
-                db.run('UPDATE users SET is_super_user = 1 WHERE username = ?', ['Peter42'], (err) => {
-                    if (err) {
-                        console.error('Error setting Peter42 as super user:', err);
-                    } else {
-                        console.log('Updated Peter42 super user status');
+                
+                // Add other columns if they don't exist
+                ['first_name', 'last_name', 'nickname'].forEach(col => {
+                    if (!columns.includes(col)) {
+                        console.log(`Adding ${col} column...`);
+                        db.run(`ALTER TABLE users ADD COLUMN ${col} TEXT`);
                     }
                 });
-
+                
                 // Check if Peter42 exists and create if not
-                db.get('SELECT id FROM users WHERE username = ?', ['Peter42'], (err, result) => {
+                db.get('SELECT * FROM users WHERE username = ?', ['Peter42'], (err, row) => {
                     if (err) {
                         console.error('Error checking for Peter42:', err);
                         return;
                     }
                     
-                    if (!result) {
+                    if (!row) {
                         console.log('Peter42 not found, creating...');
-                        // Create Peter42 with hashed password and all required fields
-                        bcrypt.hash('Peter2025BB', 10).then(hashedPassword => {
-                            db.run(
-                                'INSERT INTO users (username, password, portfolio_path, avatar_path, is_public, is_super_user, email) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                                [
-                                    'Peter42',
-                                    hashedPassword,
-                                    '/portfolios/P4-2/Peter/Peter.html',
-                                    '/portfolios/P4-2/Peter/images/Peter42.jpg',
-                                    1,
-                                    1,
-                                    'peter42@example.com'
-                                ],
-                                function(err) {
-                                    if (err) {
-                                        console.error('Error creating Peter42:', err);
-                                    } else {
-                                        console.log('Peter42 created successfully with ID:', this.lastID);
-                                    }
+                        const hashedPassword = bcrypt.hashSync('Peter2025BB', 10);
+                        db.run(
+                            `INSERT INTO users (
+                                username, password, portfolio_path, avatar_path, 
+                                is_public, is_super_user, email
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                            [
+                                'Peter42',
+                                hashedPassword,
+                                '/portfolios/P4-2/Peter/Peter.html',
+                                '/portfolios/P4-2/Peter/images/Peter42.jpg',
+                                1,
+                                1,
+                                'peter42@example.com'
+                            ],
+                            function(err) {
+                                if (err) {
+                                    console.error('Error creating Peter42:', err);
+                                } else {
+                                    console.log('Peter42 created successfully');
                                 }
-                            );
-                        }).catch(err => {
-                            console.error('Error hashing password:', err);
-                        });
+                            }
+                        );
+                    } else {
+                        // Update Peter42 to be a super user if they exist
+                        db.run(
+                            'UPDATE users SET is_super_user = 1 WHERE username = ?',
+                            ['Peter42'],
+                            (err) => {
+                                if (err) {
+                                    console.error('Error setting Peter42 as super user:', err);
+                                } else {
+                                    console.log('Peter42 updated to super user');
+                                }
+                            }
+                        );
                     }
                 });
             });
