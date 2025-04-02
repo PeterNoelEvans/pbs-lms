@@ -208,11 +208,28 @@
         // Function to validate stored school and class
         async function validateStoredSelections() {
             try {
+                // Check if the URL has parameters
+                const urlParams = new URLSearchParams(window.location.search);
+                const schoolParam = urlParams.get('school');
+                const classParam = urlParams.get('class');
+                
+                console.log('URL parameters:', { school: schoolParam, class: classParam });
+                
+                // If URL has parameters, use them instead of stored values
+                if (schoolParam && classParam) {
+                    currentSchoolId = schoolParam;
+                    currentClassId = classParam;
+                    localStorage.setItem('selectedSchoolId', currentSchoolId);
+                    localStorage.setItem('selectedClassId', currentClassId);
+                    console.log('Using URL parameters:', { school: currentSchoolId, class: currentClassId });
+                    return;
+                }
+                
                 // Check if the stored school exists
                 const schoolResponse = await fetch(`/api/schools/${currentSchoolId}`);
                 if (!schoolResponse.ok) {
                     console.log('Stored school not found, resetting to default');
-                    currentSchoolId = 'PBSChonburi';
+                    currentSchoolId = 'PhumdhamPrimary';  // Changed default to Phumdham
                     localStorage.setItem('selectedSchoolId', currentSchoolId);
                 }
                 
@@ -226,15 +243,15 @@
                     if (classes && classes.length > 0) {
                         currentClassId = classes[0].id;
                     } else {
-                        currentClassId = ''; // No classes available
+                        currentClassId = currentSchoolId === 'PhumdhamPrimary' ? 'Class4-1' : 'ClassM2-001';
                     }
                     localStorage.setItem('selectedClassId', currentClassId);
                 }
             } catch (error) {
                 console.error('Error validating stored selections:', error);
-                // Reset to safe defaults
-                currentSchoolId = 'PBSChonburi';
-                currentClassId = 'ClassM2-001';
+                // Reset to Phumdham defaults instead of M2
+                currentSchoolId = 'PhumdhamPrimary';
+                currentClassId = 'Class4-1';
                 localStorage.setItem('selectedSchoolId', currentSchoolId);
                 localStorage.setItem('selectedClassId', currentClassId);
             }
@@ -391,215 +408,110 @@
         }
 
         // Function to check authentication status
-        async function checkAuthStatus() {
+        async function checkAuth() {
             try {
-                const authResponse = await fetch('/check-auth', {
-                    cache: 'no-store',
-                    headers: {
-                        'Cache-Control': 'no-cache',
-                        'Pragma': 'no-cache'
+                const response = await fetch('/check-session');
+                const data = await response.json();
+                
+                const loginButton = document.getElementById('loginButton');
+                const userInfo = document.getElementById('userInfo');
+                const username = document.getElementById('username');
+                
+                if (data.authenticated || data.user) {
+                    loginButton.style.display = 'none';
+                    userInfo.style.display = 'block';
+                    
+                    // Handle both regular users and visitors
+                    if (data.user) {
+                        if (data.user.username) {
+                            username.textContent = data.user.username;
+                        } else if (data.user.fullName) {
+                            username.textContent = `Visitor: ${data.user.fullName}`;
+                        }
+                    } else if (data.fullName) {
+                        username.textContent = `Visitor: ${data.fullName}`;
                     }
-                });
-                const authData = await authResponse.json();
-                
-                isAuthenticated = authData.authenticated;
-                isSuperUser = authData.isSuperUser || false;
-                
-                if (isAuthenticated) {
-                    // Update UI for authenticated user
-                    document.getElementById('loginButton').style.display = 'none';
-                    document.getElementById('userInfo').style.display = 'block';
-                    document.getElementById('username').textContent = authData.username || 'User';
-                    currentUsername = authData.username;
                 } else {
-                    // Update UI for unauthenticated user
-                    document.getElementById('loginButton').style.display = 'block';
-                    document.getElementById('userInfo').style.display = 'none';
+                    loginButton.style.display = 'block';
+                    userInfo.style.display = 'none';
                 }
-                
-                return authData;
             } catch (error) {
-                console.error('Error checking authentication:', error);
-                return { authenticated: false, isSuperUser: false };
+                console.error('Error checking auth:', error);
             }
         }
 
-        // Function to load portfolios for a class
+        // Function to load portfolios
         async function loadPortfolios(schoolId, classId) {
             try {
-                console.log(`\n======= LOADING PORTFOLIOS =======`);
-                console.log(`School: ${schoolId}, Class: ${classId}`);
+                // First check authentication status
+                const authResponse = await fetch('/check-session');
+                const authData = await authResponse.json();
+                const isVisitor = authData.user?.userType === 'visitor' || authData.userType === 'visitor';
                 
-                // Check authentication status
-                const authData = await checkAuthStatus();
+                console.log('Auth status:', authData);
+                console.log('Is visitor:', isVisitor);
                 
-                // Show login prompt if not authenticated
-                const loginPrompt = document.getElementById('loginPrompt');
-                if (!authData.authenticated) {
-                    loginPrompt.style.display = 'block';
-                } else {
-                    loginPrompt.style.display = 'none';
-                }
-
-                // Update class title
+                // Clear existing content
+                const container = document.getElementById('portfoliosContainer');
+                container.innerHTML = '';
+                
+                // Update page title
                 const classResponse = await fetch(`/api/schools/${schoolId}/classes/${classId}`);
-                if (!classResponse.ok) {
-                    throw new Error(`Failed to fetch class data: ${classResponse.status}`);
-                }
-                
                 const classData = await classResponse.json();
                 document.getElementById('classTitle').textContent = `${classData.displayName} Portfolios`;
-                document.title = `${classData.displayName} Portfolios`;
                 
-                console.log(`Loading portfolios for school:${schoolId}, class:${classId}, path:${classData.portfolioPath}`);
-
-                // Initialize our students array
-                let studentsArray = [];
-                
-                // Customize the approach based on specific class ID patterns
-                console.log(`Selecting approach for class ID: ${classId}`);
-
-                // SPECIAL HANDLING FOR DIFFERENT CLASS TYPES
-                if (classId === 'ClassM2-001') {
-                    console.log('Special handling for M2 students');
-                    
-                    // Try database query with multiple patterns
-                    const m2Response = await fetch(`/api/classes/${classId}/students?portfolioPath=${encodeURIComponent(classData.portfolioPath)}`);
-                    
-                    if (m2Response.ok) {
-                        const m2Data = await m2Response.json();
-                        console.log(`Found ${m2Data.length} M2 students via API endpoint`);
-                        
-                        if (m2Data.length > 0) {
-                            studentsArray = m2Data;
-                        } else {
-                            // Fallback - check database directly with SQL LIKE pattern for ClassM2-001
-                            console.log('No students from API, trying direct database query');
-                            
-                            // Try filesystem approach for M2
-                            const filesystemResponse = await fetch(`/api/filesystem-portfolios/${classId}`);
-                            if (filesystemResponse.ok) {
-                                const filesystemStudents = await filesystemResponse.json();
-                                console.log(`Found ${filesystemStudents.length} M2 students from filesystem`);
-                                
-                                if (filesystemStudents.length > 0) {
-                                    studentsArray = filesystemStudents;
-                                }
-                            }
-                        }
-                    }
-                } else if (classId.startsWith('Class4-')) {
-                    console.log(`Special handling for Phumdham class: ${classId}`);
-                    
-                    // Use the standard API with the class-specific path
-                    const studentsResponse = await fetch(`/api/classes/${classId}/students?portfolioPath=${encodeURIComponent(classData.portfolioPath)}`);
-                    if (studentsResponse.ok) {
-                        const phumdhamStudents = await studentsResponse.json();
-                        console.log(`Found ${phumdhamStudents.length} Phumdham students via API`);
-                        
-                        if (phumdhamStudents.length > 0) {
-                            studentsArray = phumdhamStudents;
-                        } else {
-                            // Fallback - try filesystem approach for Phumdham
-                            console.log('No students from API, trying filesystem');
-                            const folderName = classId === 'Class4-1' ? 'P4-1' : 'P4-2';
-                            const filesystemResponse = await fetch(`/api/filesystem-portfolios/${classId}`);
-                            
-                            if (filesystemResponse.ok) {
-                                const filesystemStudents = await filesystemResponse.json();
-                                console.log(`Found ${filesystemStudents.length} students from filesystem ${folderName}`);
-                                
-                                if (filesystemStudents.length > 0) {
-                                    studentsArray = filesystemStudents;
-                                }
-                            }
-                        }
-                    }
+                // Determine which API endpoint to use based on the class
+                let apiUrl;
+                if (classId === 'Class4-1' || classId === 'Class4-2') {
+                    apiUrl = `/api/phumdham-students/${classId}`;
+                } else if (classId === 'ClassM2-001') {
+                    apiUrl = '/api/m2-students';
                 } else {
-                    // Default approach for other classes
-                    console.log('Using standard approach for class');
-                    const studentsResponse = await fetch(`/api/classes/${classId}/students?portfolioPath=${encodeURIComponent(classData.portfolioPath)}`);
-                    if (studentsResponse.ok) {
-                        studentsArray = await studentsResponse.json();
-                        console.log(`Found ${studentsArray.length} students via standard API`);
-                    }
+                    apiUrl = `/api/classes/${classId}/students?portfolioPath=/portfolios/${classId}`;
                 }
-
-                // Fetch privacy states from server with no caching
-                const privacyResponse = await fetch('/get-all-privacy-states', {
-                    cache: 'no-store',
-                    headers: {
-                        'Cache-Control': 'no-cache',
-                        'Pragma': 'no-cache'
-                    }
-                });
-                const privacyStates = await privacyResponse.json();
                 
-                console.log('Privacy states received. Total:', Object.keys(privacyStates).length);
+                const response = await fetch(apiUrl);
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch portfolios: ${response.status}`);
+                }
                 
-                // Update privacy states from server data
-                const studentsWithPrivacy = studentsArray.map(student => {
-                    // Always default to private (false) unless explicitly set to public
-                    let isPublic = false;
-                    
-                    // Check if there's a privacy state for this portfolio path
-                    if (student.portfolio_path && typeof privacyStates[student.portfolio_path] !== 'undefined') {
-                        // Use stored privacy state, convert to boolean
-                        isPublic = privacyStates[student.portfolio_path] === true;
-                    } else if (student.hasOwnProperty('is_public')) {
-                        // If student already has is_public, make sure it's a boolean (true only if explicitly true)
-                        isPublic = student.is_public === true || student.is_public === 1;
+                const students = await response.json();
+                console.log(`Loaded ${students.length} students`);
+                
+                // Sort students by username
+                students.sort((a, b) => a.username.localeCompare(b.username));
+                
+                students.forEach(student => {
+                    // For visitors, only show public portfolios
+                    if (isVisitor && !student.is_public) {
+                        return; // Skip private portfolios for visitors
                     }
                     
-                    return {
-                        ...student,
-                        is_public: isPublic
-                    };
-                });
-                
-                console.log(`Final student count with privacy states: ${studentsWithPrivacy.length}`);
-                
-                // Determine which portfolios to show based on authentication
-                // Always show ALL portfolios in the listing, regardless of privacy status
-                // The access restriction only applies when trying to view a portfolio
-                const portfoliosToShow = studentsWithPrivacy;
-                
-                // Sort portfolios
-                const sortedPortfolios = portfoliosToShow.sort((a, b) => a.username.localeCompare(b.username));
-                
-                const container = document.getElementById('portfoliosContainer');
-                container.innerHTML = ''; // Clear existing content
-                
-                // Create portfolio cards
-                for (const user of sortedPortfolios) {
                     const card = createPortfolioCard(
-                        user.username,
-                        user.avatar_path || null,
-                        user.is_public,
-                        user.portfolio_path,
-                        user.first_name,
-                        user.last_name,
-                        user.nickname
+                        student.username,
+                        student.avatar_path,
+                        student.is_public,
+                        student.portfolio_path,
+                        student.first_name,
+                        student.last_name,
+                        student.nickname
                     );
                     container.appendChild(card);
-                }
-
-                // If no portfolios found, show message
+                });
+                
                 if (container.children.length === 0) {
                     const message = document.createElement('p');
                     message.style.textAlign = 'center';
-                    message.style.gridColumn = '1 / -1';
                     message.style.padding = '20px';
-                    message.textContent = `No portfolios found for ${classData.displayName}`;
+                    message.textContent = isVisitor ? 
+                        'No public portfolios available in this class.' :
+                        'No portfolios available in this class.';
                     container.appendChild(message);
                 }
-                
-                console.log(`Portfolio cards created: ${container.children.length}`);
-                console.log(`======= PORTFOLIOS LOADED =======\n`);
             } catch (error) {
                 console.error('Error loading portfolios:', error);
                 const container = document.getElementById('portfoliosContainer');
-                container.innerHTML = '<p style="text-align: center; grid-column: 1 / -1; padding: 20px; color: #721c24;">Error loading portfolios. Please try again later.</p>';
+                container.innerHTML = `<p style="color: red; text-align: center;">Error loading portfolios: ${error.message}</p>`;
             }
         }
 
@@ -700,7 +612,7 @@
             }
             
             // Check authentication status
-            await checkAuthStatus();
+            await checkAuth();
             
             // Update document title with the actual class name
             try {

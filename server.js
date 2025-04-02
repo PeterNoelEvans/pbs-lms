@@ -731,7 +731,7 @@ app.get('/classes', (req, res) => {
     }
     
     // Allow access for both regular users and authenticated visitors
-    if (!req.session?.authenticated && !req.session?.user) {
+    if (!req.session?.authenticated && !req.session?.user && !req.session?.visitorId) {
         console.log('Unauthorized access attempt - redirecting to login');
         return res.redirect('/login.html');
     }
@@ -1309,9 +1309,9 @@ app.post('/public-register', async (req, res) => {
                             function(err) {
                                 if (err) reject(err);
                     else resolve(this.lastID);
-                }
-            );
-        });
+                            }
+                        );
+                    });
         
         // Success
         res.status(201).json({ success: true, message: 'Registration successful' });
@@ -1354,7 +1354,7 @@ app.post('/public-login', async (req, res) => {
         }
         
         // Log activity
-        db.run(
+                        db.run(
             'INSERT INTO visitor_logins (visitor_id, login_date) VALUES (?, CURRENT_TIMESTAMP)',
             [visitor.id]
         );
@@ -1369,7 +1369,7 @@ app.post('/public-login', async (req, res) => {
         // Save session explicitly
         await new Promise((resolve, reject) => {
             req.session.save((err) => {
-                if (err) reject(err);
+                                if (err) reject(err);
                 else resolve();
             });
         });
