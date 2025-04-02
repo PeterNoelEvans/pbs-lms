@@ -80,7 +80,7 @@
         <h1>Login</h1>
         <form id="loginForm">
             <div>
-                <label for="username">Username:</label>
+                <label for="username">Username or Email:</label>
                 <input type="text" id="username" name="username" required>
             </div>
 
@@ -89,45 +89,67 @@
                 <input type="password" id="password" name="password" required>
             </div>
 
-            <button type="submit">Login</button>
-            <div id="errorMessage" style="color: red; margin-top: 10px; display: none;"></div>
-        </form>
+            <div class="remember-me">
+                <input type="checkbox" id="remember" name="remember">
+                <label for="remember">Remember me for 30 days</label>
+            </div>
 
-        <button onclick="location.href='register.html'" style="margin-top: 20px;">Register Instead</button>
+            <button type="submit">Login</button>
+            <div id="errorMessage" style="color: red; margin: 10px 0; display: none;"></div>
+
+            <div class="links">
+                <a href="forgot-password.html">Forgot Password?</a>
+                <a href="register.html">Register New Account</a>
+            </div>
+        </form>
     </div>
 
     <script>
         document.getElementById('loginForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             
-            const username = document.getElementById('username').value;
+            const username = document.getElementById('username').value.trim();
             const password = document.getElementById('password').value;
+            const remember = document.getElementById('remember').checked;
             const errorDiv = document.getElementById('errorMessage');
+            
+            // Reset error message
             errorDiv.style.display = 'none';
+            errorDiv.textContent = '';
+            
+            if (!username || !password) {
+                errorDiv.textContent = 'Please enter both username/email and password';
+                errorDiv.style.display = 'block';
+                return;
+            }
             
             try {
                 const response = await fetch('/login', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'Cache-Control': 'no-cache'
                     },
-                    body: JSON.stringify({ username, password })
+                    body: JSON.stringify({ 
+                        username, 
+                        password,
+                        remember
+                    })
                 });
-
-                if (response.status === 429) {
-                    const data = await response.json();
-                    errorDiv.textContent = data.error || 'Too many login attempts. Please try again later.';
-                    errorDiv.style.display = 'block';
+                
+                if (response.redirected) {
+                    window.location.href = response.url;
                     return;
                 }
-
+                
                 const data = await response.json();
                 
-                if (response.ok) {
-                    window.location.href = '/dashboard.html';
-                } else {
-                    errorDiv.textContent = data.error || 'Invalid username or password';
+                if (!response.ok) {
+                    errorDiv.textContent = data.error || 'Login failed';
                     errorDiv.style.display = 'block';
+                } else if (data.success) {
+                    window.location.href = data.redirect || '/dashboard';
                 }
             } catch (error) {
                 console.error('Login error:', error);

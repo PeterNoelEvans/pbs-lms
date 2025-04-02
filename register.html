@@ -102,67 +102,83 @@
             </div>
 
             <div>
+                <label for="email">Email Address:</label>
+                <input type="email" id="email" name="email" required>
+                <p class="note">
+                    This email will be used for account recovery and notifications
+                </p>
+            </div>
+
+            <div>
                 <label for="password">Password:</label>
                 <input type="password" id="password" name="password" required>
+                <p class="note">
+                    Password must be at least 8 characters long
+                </p>
+            </div>
+
+            <div>
+                <label for="confirmPassword">Confirm Password:</label>
+                <input type="password" id="confirmPassword" name="confirmPassword" required>
             </div>
 
             <div>
                 <label for="portfolioPath">Portfolio Path:</label>
-                <select id="portfolioPath" name="portfolio_path" required>
-                    <option value="">Select your portfolio</option>
-                    <optgroup label="Phumdham Primary - Grade 4/1">
-                        <option value="/portfolios/P4-1/Peter/Peter.html">Peter</option>
-                        <option value="/portfolios/P4-1/Peta/Peta.html">Peta</option>
-                        <option value="/portfolios/P4-1/Uda/Uda.html">Uda</option>
-                        <option value="/portfolios/P4-1/Tar/Tar.html">Tar</option>
-                        <option value="/portfolios/P4-1/Jaijai/Jaijai.html">Jaijai</option>
-                        <option value="/portfolios/P4-1/Nava/Nava.html">Nava</option>
-                        <option value="/portfolios/P4-1/Bonus/Bonus.html">Bonus</option>
-                        <option value="/portfolios/P4-1/Nicha/Nicha.html">Nicha</option>
-                        <option value="/portfolios/P4-1/Tigger/Tigger.html">Tigger</option>
-                        <option value="/portfolios/P4-1/Uno/Uno.html">Uno</option>
-                        <option value="/portfolios/P4-1/Namoun/Namoun.html">Namoun</option>
-                        <option value="/portfolios/P4-1/Copter/Copter.html">Copter</option>
-                        <option value="/portfolios/P4-1/Phupha/Phupha.html">Phupha</option>
-                        <option value="/portfolios/P4-1/Teen/Teen.html">Teen</option>
-                        <option value="/portfolios/P4-1/Kod/Kod.html">Kod</option>
-                        <option value="/portfolios/P4-1/Earth/Earth.html">Earth</option>
-                    </optgroup>
-                    <optgroup label="Phumdham Primary - Grade 4/2">
-                        <option value="/portfolios/P4-2/Peter/Peter.html">Peter</option>
-                        <option value="/portfolios/P4-2/Paul/Paul.html">Paul</option>
-                        <option value="/portfolios/P4-2/Peso/Peso.html">Peso</option>
-                        <option value="/portfolios/P4-2/Ounjai/Ounjai.html">Ounjai</option>
-                        <option value="/portfolios/P4-2/Darin/Darin.html">Darin</option>
-                        <option value="/portfolios/P4-2/Harber/Harber.html">Harber</option>
-                        <option value="/portfolios/P4-2/Pleng/Pleng.html">Pleng</option>
-                        <option value="/portfolios/P4-2/Tonmali/Tonmali.html">Tonmali</option>
-                        <option value="/portfolios/P4-2/Tin/Tin.html">Tin</option>
-                        <option value="/portfolios/P4-2/PoonPoon/PoonPoon.html">PoonPoon</option>
-                        <option value="/portfolios/P4-2/Sky/Sky.html">Sky</option>
-                    </optgroup>
-                    <optgroup label="Prabhassorn Vidhaya School">
-                        <option value="/portfolios/ClassM2-001/Peter/Peter.html">Peter (M2-001)</option>
-                    </optgroup>
-                </select>
+                <input type="text" id="portfolioPath" name="portfolioPath" required>
             </div>
 
+            <div id="errorMessage" style="color: red; margin: 10px 0; display: none;"></div>
+
             <button type="submit">Register</button>
-            <div id="errorMessage"></div>
         </form>
 
-        <button onclick="location.href='login.html'" style="margin-top: 20px;">Login Instead</button>
+        <div class="login-link">
+            Already have an account? <a href="login.html">Login here</a>
+        </div>
     </div>
 
     <script>
         document.getElementById('registerForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             
-            const username = document.getElementById('username').value;
+            const username = document.getElementById('username').value.trim();
+            const email = document.getElementById('email').value.trim();
             const password = document.getElementById('password').value;
-            const portfolioPath = document.getElementById('portfolioPath').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            const portfolioPath = document.getElementById('portfolioPath').value.trim();
             const errorDiv = document.getElementById('errorMessage');
+            
+            // Reset error message
             errorDiv.style.display = 'none';
+            errorDiv.textContent = '';
+            
+            // Validate input
+            if (!username || !email || !password || !confirmPassword || !portfolioPath) {
+                errorDiv.textContent = 'All fields are required';
+                errorDiv.style.display = 'block';
+                return;
+            }
+            
+            // Validate email format
+            if (!email.includes('@')) {
+                errorDiv.textContent = 'Please enter a valid email address';
+                errorDiv.style.display = 'block';
+                return;
+            }
+            
+            // Validate password length
+            if (password.length < 8) {
+                errorDiv.textContent = 'Password must be at least 8 characters long';
+                errorDiv.style.display = 'block';
+                return;
+            }
+            
+            // Check if passwords match
+            if (password !== confirmPassword) {
+                errorDiv.textContent = 'Passwords do not match';
+                errorDiv.style.display = 'block';
+                return;
+            }
             
             try {
                 const response = await fetch('/register', {
@@ -174,6 +190,7 @@
                     },
                     body: JSON.stringify({ 
                         username, 
+                        email,
                         password,
                         portfolio_path: portfolioPath
                     })
@@ -184,24 +201,18 @@
                     return;
                 }
                 
-                const contentType = response.headers.get('content-type');
-                if (contentType && contentType.includes('application/json')) {
-                    const data = await response.json();
-                    
-                    if (!response.ok) {
-                        errorDiv.textContent = data.error || 'Registration failed';
-                        errorDiv.style.display = 'block';
-                    } else if (data.success) {
-                        alert('Registration successful! Please log in.');
-                        window.location.href = '/login.html';
-                    }
-                } else {
-                    alert('Registration successful! Please log in.');
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    errorDiv.textContent = data.error || 'Registration failed';
+                    errorDiv.style.display = 'block';
+                } else if (data.success) {
+                    alert('Registration successful! Please log in with your new account.');
                     window.location.href = '/login.html';
                 }
             } catch (error) {
                 console.error('Registration error:', error);
-                errorDiv.textContent = 'An error occurred during registration';
+                errorDiv.textContent = 'An error occurred during registration. Please try again.';
                 errorDiv.style.display = 'block';
             }
         });

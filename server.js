@@ -191,41 +191,62 @@ async function initializeApp() {
 
         // Login route with rate limiting
         app.post('/login', loginLimiter, async (req, res) => {
-            const { username, password } = req.body;
+            const { username, password, remember } = req.body;
 
             try {
-                const student = await studentManager.verifyStudent(username, password);
+                const db = new sqlite3.Database(dbPath);
                 
-                if (!student) {
-                    return res.status(401).json({ error: 'Invalid credentials' });
-                }
-
-                // Set session data
-                req.session.user = {
-                    id: student.id,
-                    username: student.username,
-                    portfolio_path: student.portfolio_path
-                };
-
-                // Save session
-                await new Promise((resolve, reject) => {
-                    req.session.save((err) => {
+                // Get user
+                const user = await new Promise((resolve, reject) => {
+                    db.get('SELECT * FROM users WHERE username = ?', [username], (err, row) => {
                         if (err) reject(err);
-                        else resolve();
+                        else resolve(row);
                     });
                 });
 
-                res.json({
+                if (!user) {
+                    return res.status(401).json({ error: 'Invalid username or password' });
+                }
+
+                // Verify password
+                const isValid = await bcrypt.compare(password, user.password);
+                if (!isValid) {
+                    return res.status(401).json({ error: 'Invalid username or password' });
+                }
+
+                // Update last login time
+                await new Promise((resolve, reject) => {
+                    db.run(
+                        'UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?',
+                        [user.id],
+                        function(err) {
+                            if (err) reject(err);
+                            else resolve();
+                        }
+                    );
+                });
+
+                // Set up session
+                req.session.user = {
+                    id: user.id,
+                    username: user.username,
+                    portfolio_path: user.portfolio_path,
+                    email: user.email,
+                    is_super_user: user.is_super_user
+                };
+
+                // If remember me is checked, set a longer session expiry
+                if (remember) {
+                    req.session.cookie.maxAge = 30 * 24 * 60 * 60 * 1000; // 30 days
+                }
+
+                res.json({ 
                     success: true,
-                    redirect: '/dashboard',
-                    user: {
-                        username: student.username,
-                        portfolio_path: student.portfolio_path
-                    }
+                    redirect: '/dashboard'
                 });
             } catch (error) {
                 console.error('Login error:', error);
-                res.status(500).json({ error: 'Internal server error' });
+                res.status(500).json({ error: 'Server error' });
             }
         });
 
@@ -611,23 +632,60 @@ process.on('SIGTERM', () => {
 
 // Routes
 app.post('/register', async (req, res) => {
-    const { username, password, portfolio_path } = req.body;
+    const { username, password, portfolio_path, email } = req.body;
+
+    if (!username || !password || !portfolio_path) {
+        return res.status(400).json({ error: 'Missing required fields' });
+    }
 
     try {
-        const studentId = await studentManager.addStudent(username, password, portfolio_path);
+        // Hash the password
+        const hashedPassword = await bcrypt.hash(password, 10);
         
-        if (!studentId) {
-            return res.status(400).json({ error: 'Registration failed' });
-        }
+        // Insert the user with email
+        const db = new sqlite3.Database(dbPath);
+        
+        await new Promise((resolve, reject) => {
+            db.run(
+                'INSERT INTO users (username, email, password, portfolio_path, created_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)',
+                [username, email, hashedPassword, portfolio_path],
+                function(err) {
+                    if (err) {
+                        if (err.message.includes('UNIQUE constraint failed')) {
+                            if (err.message.includes('email')) {
+                                reject(new Error('Email already registered'));
+                            } else {
+                                reject(new Error('Username already taken'));
+                            }
+                        } else {
+                            reject(err);
+                        }
+                    } else {
+                        resolve(this.lastID);
+                    }
+                }
+            );
+        });
 
-        const student = await studentManager.getStudentById(studentId);
-
-        // Set session
+        // Set up session
         req.session.user = {
-            id: student.id,
-            username: student.username,
-            portfolio_path: student.portfolio_path
+            id: this.lastID,
+            username,
+            portfolio_path,
+            email
         };
+        
+        // Update last login time
+        await new Promise((resolve, reject) => {
+            db.run(
+                'UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?',
+                [this.lastID],
+                function(err) {
+                    if (err) reject(err);
+                    else resolve();
+                }
+            );
+        });
 
         res.json({ 
             success: true, 
@@ -636,7 +694,7 @@ app.post('/register', async (req, res) => {
         });
     } catch (error) {
         console.error('Registration error:', error);
-        res.status(500).json({ error: 'Error creating user' });
+        res.status(500).json({ error: error.message || 'Error creating user' });
     }
 });
 
@@ -934,6 +992,7 @@ const db = new sqlite3.Database(dbPath, (err) => {
         db.run(`CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE,
+            email TEXT UNIQUE,
             password TEXT,
             portfolio_path TEXT UNIQUE,
             avatar_path TEXT,
@@ -941,7 +1000,9 @@ const db = new sqlite3.Database(dbPath, (err) => {
             is_super_user BOOLEAN DEFAULT 0,
             first_name TEXT,
             last_name TEXT,
-            nickname TEXT
+            nickname TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            last_login TIMESTAMP
         )`, (err) => {
             if (err) {
                 console.error('Error creating users table:', err);
@@ -949,6 +1010,25 @@ const db = new sqlite3.Database(dbPath, (err) => {
             }
             console.log('Users table ready');
             
+            // Add email column if it doesn't exist (for backward compatibility)
+            db.run(`PRAGMA table_info(users)`, (err, rows) => {
+                if (err) {
+                    console.error('Error checking table info:', err);
+                    return;
+                }
+                
+                const hasEmail = rows.some(row => row.name === 'email');
+                if (!hasEmail) {
+                    db.run(`ALTER TABLE users ADD COLUMN email TEXT UNIQUE`, (err) => {
+                        if (err) {
+                            console.error('Error adding email column:', err);
+                        } else {
+                            console.log('Added email column to users table');
+                        }
+                    });
+                }
+            });
+
             // Add super_user column if it doesn't exist
             db.run(`ALTER TABLE users ADD COLUMN is_super_user BOOLEAN DEFAULT 0;`, (err) => {
                 if (err && !err.message.includes('duplicate column')) {
