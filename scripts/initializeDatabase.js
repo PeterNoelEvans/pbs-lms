@@ -41,6 +41,11 @@ const students42 = [
     { username: 'Tonmali', password: 'Tonmali2025N', portfolio_path: '/portfolios/P4-2/Tonmali/Tonmali.html' }
 ];
 
+// Student data for ClassM2-001
+const studentsM2 = [
+    { username: 'Peter', password: 'Peter2025CC', portfolio_path: '/portfolios/ClassM2-001/Peter/Peter.html' }
+];
+
 // Function to initialize the database
 async function initializeDatabase() {
     try {
@@ -77,6 +82,21 @@ async function initializeDatabase() {
         
         console.log('Registering Class 4/2 students...');
         for (const student of students42) {
+            try {
+                await studentManager.addStudent(student.username, student.password, student.portfolio_path);
+                console.log(`Registered: ${student.username}`);
+            } catch (error) {
+                // If the error is about duplicate username, it's ok - student already exists
+                if (error.message.includes('UNIQUE constraint failed')) {
+                    console.log(`Student ${student.username} already exists, skipping`);
+                } else {
+                    console.error(`Error registering ${student.username}:`, error.message);
+                }
+            }
+        }
+        
+        console.log('Registering Class M2-001 students...');
+        for (const student of studentsM2) {
             try {
                 await studentManager.addStudent(student.username, student.password, student.portfolio_path);
                 console.log(`Registered: ${student.username}`);

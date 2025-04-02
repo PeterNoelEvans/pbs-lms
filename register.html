@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .register-container {
+            background-color: #f5f5f5;
+            border-radius: 5px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"], input[type="password"], select {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 20px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        select {
+            height: 40px;
+        }
+        button {
+            width: 100%;
+            padding: 10px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .login-link {
+            display: block;
+            text-align: center;
+            margin-top: 20px;
+        }
+        /* Navigation styles */
+        .navigation {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+        .nav-button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            text-decoration: none;
+            border-radius: 4px;
+            transition: background-color 0.3s;
+        }
+        .nav-button:hover {
+            background-color: #45a049;
+        }
+        .note {
+            font-size: 14px;
+            color: #666;
+            margin: 5px 0 15px 0;
+        }
+        #errorMessage {
+            color: red;
+            margin-top: 10px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <!-- Removed navigation buttons -->
+
+    <div class="register-container">
+        <h1>Register</h1>
+        <form id="registerForm">
+            <div>
+                <label for="username">Username:</label>
+                <input type="text" id="username" name="username" required>
+                <p class="note">
+                    For students: Use your given username (e.g., Peter41)<br>
+                    For parents: Use format "parent-" + child's username (e.g., parent-peter41)
+                </p>
+            </div>
+
+            <div>
+                <label for="password">Password:</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+
+            <div>
+                <label for="portfolioPath">Portfolio Path:</label>
+                <select id="portfolioPath" name="portfolio_path" required>
+                    <option value="">Select your portfolio</option>
+                    <optgroup label="Phumdham Primary - Grade 4/1">
+                        <option value="/portfolios/P4-1/Peter/Peter.html">Peter</option>
+                        <option value="/portfolios/P4-1/Peta/Peta.html">Peta</option>
+                        <option value="/portfolios/P4-1/Uda/Uda.html">Uda</option>
+                        <option value="/portfolios/P4-1/Tar/Tar.html">Tar</option>
+                        <option value="/portfolios/P4-1/Jaijai/Jaijai.html">Jaijai</option>
+                        <option value="/portfolios/P4-1/Nava/Nava.html">Nava</option>
+                        <option value="/portfolios/P4-1/Bonus/Bonus.html">Bonus</option>
+                        <option value="/portfolios/P4-1/Nicha/Nicha.html">Nicha</option>
+                        <option value="/portfolios/P4-1/Tigger/Tigger.html">Tigger</option>
+                        <option value="/portfolios/P4-1/Uno/Uno.html">Uno</option>
+                        <option value="/portfolios/P4-1/Namoun/Namoun.html">Namoun</option>
+                        <option value="/portfolios/P4-1/Copter/Copter.html">Copter</option>
+                        <option value="/portfolios/P4-1/Phupha/Phupha.html">Phupha</option>
+                        <option value="/portfolios/P4-1/Teen/Teen.html">Teen</option>
+                        <option value="/portfolios/P4-1/Kod/Kod.html">Kod</option>
+                        <option value="/portfolios/P4-1/Earth/Earth.html">Earth</option>
+                    </optgroup>
+                    <optgroup label="Phumdham Primary - Grade 4/2">
+                        <option value="/portfolios/P4-2/Peter/Peter.html">Peter</option>
+                        <option value="/portfolios/P4-2/Paul/Paul.html">Paul</option>
+                        <option value="/portfolios/P4-2/Peso/Peso.html">Peso</option>
+                        <option value="/portfolios/P4-2/Ounjai/Ounjai.html">Ounjai</option>
+                        <option value="/portfolios/P4-2/Darin/Darin.html">Darin</option>
+                        <option value="/portfolios/P4-2/Harber/Harber.html">Harber</option>
+                        <option value="/portfolios/P4-2/Pleng/Pleng.html">Pleng</option>
+                        <option value="/portfolios/P4-2/Tonmali/Tonmali.html">Tonmali</option>
+                        <option value="/portfolios/P4-2/Tin/Tin.html">Tin</option>
+                        <option value="/portfolios/P4-2/PoonPoon/PoonPoon.html">PoonPoon</option>
+                        <option value="/portfolios/P4-2/Sky/Sky.html">Sky</option>
+                    </optgroup>
+                    <optgroup label="Prabhassorn Vidhaya School">
+                        <option value="/portfolios/ClassM2-001/Peter/Peter.html">Peter (M2-001)</option>
+                    </optgroup>
+                </select>
+            </div>
+
+            <button type="submit">Register</button>
+            <div id="errorMessage"></div>
+        </form>
+
+        <button onclick="location.href='login.html'" style="margin-top: 20px;">Login Instead</button>
+    </div>
+
+    <script>
+        document.getElementById('registerForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const portfolioPath = document.getElementById('portfolioPath').value;
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.style.display = 'none';
+            
+            try {
+                const response = await fetch('/register', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'Cache-Control': 'no-cache'
+                    },
+                    body: JSON.stringify({ 
+                        username, 
+                        password,
+                        portfolio_path: portfolioPath
+                    })
+                });
+                
+                if (response.redirected) {
+                    window.location.href = response.url;
+                    return;
+                }
+                
+                const contentType = response.headers.get('content-type');
+                if (contentType && contentType.includes('application/json')) {
+                    const data = await response.json();
+                    
+                    if (!response.ok) {
+                        errorDiv.textContent = data.error || 'Registration failed';
+                        errorDiv.style.display = 'block';
+                    } else if (data.success) {
+                        alert('Registration successful! Please log in.');
+                        window.location.href = '/login.html';
+                    }
+                } else {
+                    alert('Registration successful! Please log in.');
+                    window.location.href = '/login.html';
+                }
+            } catch (error) {
+                console.error('Registration error:', error);
+                errorDiv.textContent = 'An error occurred during registration';
+                errorDiv.style.display = 'block';
+            }
+        });
+    </script>
+</body>
+</html> 

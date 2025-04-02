@@ -8,7 +8,11 @@
     "register": "node register-students.js",
     "init-db": "node scripts/initializeDatabase.js",
     "dev": "nodemon server.js",
-    "postinstall": "echo 'Build completed. Run init-db script after deployment to initialize the database.'"
+    "postinstall": "echo 'Build completed. Run init-db script after deployment to initialize the database.'",
+    "setup-school": "node scripts/setup-new-school.js",
+    "setup-class": "node scripts/setupClassStudents.js",
+    "csv-to-json": "node scripts/csv-to-json.js",
+    "register-existing": "node scripts/register-existing-portfolios.js"
   },
   "engines": {
     "node": ">=16.0.0"

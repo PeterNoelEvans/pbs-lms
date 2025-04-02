@@ -61,6 +61,9 @@ const sessionConfig = {
     }
 };
 
+// Require the school configuration
+const schoolConfig = require('./config/schools');
+
 // Initialize application
 async function initializeApp() {
     console.log('Initializing application...');
@@ -233,59 +236,63 @@ async function initializeApp() {
             res.sendFile(path.join(__dirname, 'dashboard.html'));
         });
 
-        app.post('/toggle-privacy', requireAuth, (req, res) => {
-            console.log('Toggle privacy request received');
-            console.log('Session:', req.session);
-            
-            if (!req.session || !req.session.user || !req.session.user.id) {
-                console.log('Not authenticated:', req.session);
+        app.post('/toggle-privacy', requireAuth, async (req, res) => {
+            try {
+                const userId = req.session.user.id;
+                const username = req.session.user.username;
+                
+                if (!userId) {
                 return res.status(401).json({ error: 'Not authenticated' });
             }
 
-            console.log('Updating privacy for user:', req.session.user.username);
-            
-            const db = new sqlite3.Database(dbPath);
-            
-            // First, get the current state
-            db.get('SELECT is_public FROM users WHERE id = ?', [req.session.user.id], (err, currentState) => {
-                if (err) {
-                    console.error('Error getting current state:', err);
-                    return res.status(500).json({ error: 'Error getting current privacy state' });
-                }
+                console.log(`Toggling privacy for user: ${username} (ID: ${userId})`);
                 
-                if (!currentState) {
-                    console.log('User not found when getting current state');
-                    return res.status(404).json({ error: 'User not found' });
-                }
+                const db = new sqlite3.Database(dbPath);
+                
+                // First, get the current state
+                const currentState = await new Promise((resolve, reject) => {
+                    db.get('SELECT is_public FROM users WHERE id = ?', [userId], (err, result) => {
+                    if (err) {
+                            reject(err);
+                            return;
+                        }
+                        if (!result) {
+                            reject(new Error('User not found'));
+                            return;
+                        }
+                        resolve(result);
+                    });
+                });
                 
                 console.log('Current privacy state:', currentState.is_public);
                 
-                // Now toggle the state
-                db.run('UPDATE users SET is_public = ? WHERE id = ?',
-                    [currentState.is_public ? 0 : 1, req.session.user.id],
-                    function(err) {
+                // Calculate new state (toggle)
+                const newState = currentState.is_public ? 0 : 1;
+                
+                // Update the privacy setting
+                await new Promise((resolve, reject) => {
+                    db.run('UPDATE users SET is_public = ? WHERE id = ?', [newState, userId], function(err) {
                         if (err) {
-                            console.error('Error updating privacy:', err);
-                            return res.status(500).json({ error: 'Error updating privacy settings' });
+                            reject(err);
+                            return;
                         }
-
-                        console.log('Privacy updated, rows affected:', this.changes);
-
-                        // Get the new status after toggle
-                        db.get('SELECT is_public FROM users WHERE id = ?', [req.session.user.id], (err, result) => {
-                            if (err) {
-                                console.error('Error getting updated status:', err);
-                                return res.status(500).json({ error: 'Error getting updated status' });
-                            }
-                            if (!result) {
-                                console.log('User not found after update');
-                                return res.status(404).json({ error: 'User not found' });
-                            }
-                            console.log('New privacy status:', result.is_public);
-                            res.json({ success: true, is_public: result.is_public });
-                        });
+                        if (this.changes === 0) {
+                            reject(new Error('User not found during update'));
+                            return;
+                        }
+                        resolve();
                     });
-            });
+                });
+                
+                db.close();
+                
+                // Return the new state
+                res.json({ success: true, is_public: newState === 1 });
+                
+            } catch (error) {
+                console.error('Error toggling privacy:', error);
+                res.status(500).json({ error: 'Failed to update privacy setting' });
+            }
         });
 
         app.get('/get-privacy-status', requireAuth, (req, res) => {
@@ -307,40 +314,102 @@ async function initializeApp() {
         });
 
         app.get('/get-all-privacy-states', async (req, res) => {
-            console.log('\n=== Get All Privacy States ===');
             const db = new sqlite3.Database(dbPath);
-            db.all('SELECT id, username, portfolio_path, is_public FROM users', [], (err, rows) => {
-                if (err) {
-                    console.error('Error getting privacy states:', err);
-                    return res.status(500).json({ error: 'Error getting privacy states' });
-                }
+            
+            try {
+                console.log('\n=== Getting All Privacy States ===');
                 
-                console.log('Privacy states from database:');
-                rows.forEach(row => {
-                    console.log(`${row.id}: ${row.username} - ${row.portfolio_path}: ${row.is_public}`);
+                const privacyStates = await new Promise((resolve, reject) => {
+                    db.all('SELECT portfolio_path, is_public FROM users', [], (err, rows) => {
+                        if (err) {
+                            console.error('Database error:', err);
+                            reject(err);
+                        } else {
+                            const stateMap = {};
+                            
+                            // Group portfolios by class for better logging
+                            const p41Portfolios = [];
+                            const p42Portfolios = [];
+                            const otherPortfolios = [];
+                            
+                            rows.forEach(row => {
+                                // Ensure strict boolean values - only true if is_public is exactly 1
+                                stateMap[row.portfolio_path] = row.is_public === 1;
+                                
+                                // Categorize for logging
+                                const pathLower = row.portfolio_path.toLowerCase();
+                                if (pathLower.includes('p4-1')) {
+                                    p41Portfolios.push({
+                                        path: row.portfolio_path,
+                                        isPublic: row.is_public === 1
+                                    });
+                                } else if (pathLower.includes('p4-2')) {
+                                    p42Portfolios.push({
+                                        path: row.portfolio_path,
+                                        isPublic: row.is_public === 1
+                                    });
+                                } else {
+                                    otherPortfolios.push({
+                                        path: row.portfolio_path,
+                                        isPublic: row.is_public === 1
+                                    });
+                                }
+                            });
+                            
+                            console.log(`Found privacy states for ${Object.keys(stateMap).length} portfolios`);
+                            console.log(`Class 4/1: ${p41Portfolios.length} portfolios`);
+                            p41Portfolios.forEach(p => {
+                                console.log(`  - ${p.path}: ${p.isPublic ? 'Public' : 'Private'}`);
+                            });
+                            
+                            console.log(`Class 4/2: ${p42Portfolios.length} portfolios`);
+                            p42Portfolios.forEach(p => {
+                                console.log(`  - ${p.path}: ${p.isPublic ? 'Public' : 'Private'}`);
+                            });
+                            
+                            console.log(`Other classes: ${otherPortfolios.length} portfolios`);
+                            
+                            resolve(stateMap);
+                        }
+                    });
                 });
                 
-                // Convert array of rows to object with portfolio_path as key
-                const privacyStates = rows.reduce((acc, row) => {
-                    acc[row.portfolio_path] = row.is_public === 1;
-                    return acc;
-                }, {});
-                
-                console.log('Sending privacy states to client:', privacyStates);
                 res.json(privacyStates);
-            });
+            } catch (error) {
+                console.error('Error getting privacy states:', error);
+                res.status(500).json({ error: 'Error getting privacy states' });
+            } finally {
+                db.close();
+            }
         });
 
         // Additional routes
         app.get('/check-auth', (req, res) => {
             if (req.session.user) {
+                // Check if user is a super user
+                const db = new sqlite3.Database(dbPath);
+                db.get('SELECT is_super_user FROM users WHERE id = ?', [req.session.user.id], (err, result) => {
+                    db.close();
+                    
+                    if (err) {
+                        console.error('Error checking super user status:', err);
                 res.json({
                     authenticated: true,
                     username: req.session.user.username,
-                    portfolio_path: req.session.user.portfolio_path
+                            portfolio_path: req.session.user.portfolio_path,
+                            isSuperUser: false
                 });
             } else {
-                res.json({ authenticated: false });
+                        res.json({
+                            authenticated: true,
+                            username: req.session.user.username,
+                            portfolio_path: req.session.user.portfolio_path,
+                            isSuperUser: result && result.is_super_user === 1
+                        });
+                    }
+                });
+            } else {
+                res.json({ authenticated: false, isSuperUser: false });
             }
         });
 
@@ -617,12 +686,21 @@ app.get('/check-access/*', (req, res) => {
 });
 
 // Serve the main pages
-app.get(['/', '/index.html', '/login.html', '/register.html', '/dashboard.html', '/class1.html', '/class2.html'], (req, res) => {
-    // Redirect old class URLs to new class1.html
-    if (req.path === '/class-4-1.html' || req.path === '/class-4-2.html') {
-        return res.redirect('/class1.html');
-    }
+app.get(['/', '/index.html', '/login.html', '/register.html', '/dashboard.html'], (req, res) => {
     res.sendFile(path.join(__dirname, req.path === '/' ? 'index.html' : req.path));
+});
+
+// Redirect old class pages to new class viewer
+app.get(['/class1.html', '/class2.html'], (req, res) => {
+    // Redirect to the new class viewer page
+    return res.redirect('/classes');
+});
+
+// Dedicated class pages (do not redirect)
+app.get(['/class-4-1.html', '/class-4-2.html'], (req, res) => {
+    const filePath = path.join(__dirname, 'views', req.path);
+    console.log('Serving dedicated class page:', filePath);
+    res.sendFile(filePath);
 });
 
 // Protected portfolio access
@@ -779,24 +857,14 @@ const db = new sqlite3.Database(dbPath, (err) => {
         // Ensure data directory exists in production
         if (isProduction) {
             const fs = require('fs');
-            const dataDir = '/opt/render/project/src/data';
-            
-            try {
-                // Create data directory only
+            const dataDir = path.dirname(dbPath);
                 if (!fs.existsSync(dataDir)) {
-                    console.log('Creating data directory...');
-                    fs.mkdirSync(dataDir, { recursive: true, mode: 0o755 });
-                }
-
-                // Ensure we have write permissions for data directory
-                fs.accessSync(dataDir, fs.constants.W_OK);
-                console.log('Data directory is writable');
-            } catch (error) {
-                console.error('Error with directory setup:', error);
-                process.exit(1);
+                console.log(`Creating data directory: ${dataDir}`);
+                fs.mkdirSync(dataDir, { recursive: true });
             }
         }
-
+        
+        // Create users table if it doesn't exist
         db.run(`CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE,
@@ -804,8 +872,11 @@ const db = new sqlite3.Database(dbPath, (err) => {
             portfolio_path TEXT UNIQUE,
             avatar_path TEXT,
             is_public BOOLEAN DEFAULT 0,
-            is_super_user BOOLEAN DEFAULT 0
-        )`, async (err) => {
+            is_super_user BOOLEAN DEFAULT 0,
+            first_name TEXT,
+            last_name TEXT,
+            nickname TEXT
+        )`, (err) => {
             if (err) {
                 console.error('Error creating users table:', err);
                 return;
@@ -833,51 +904,77 @@ const db = new sqlite3.Database(dbPath, (err) => {
                 }
             });
             
-            try {
                 // Check if Peter42 exists
-                const row = await new Promise((resolve, reject) => {
-                    db.get('SELECT id, username FROM users WHERE username = ?', ['Peter42'], (err, row) => {
-                        if (err) reject(err);
-                        else resolve(row);
-                    });
-                });
-
-                if (row) {
-                    console.log('Peter42 exists with ID:', row.id);
-                    // Update Peter42's avatar path
-                    await new Promise((resolve, reject) => {
-                        db.run(
-                            'UPDATE users SET avatar_path = ?, portfolio_path = ? WHERE username = ?',
-                            ['/portfolios/P4-2/Peter/images/Peter42.jpg', '/portfolios/P4-2/Peter/Peter.html', 'Peter42'],
-                            function(err) {
-                                if (err) reject(err);
-                                else {
-                                    console.log('Updated Peter42 avatar path and portfolio path');
-                                    resolve();
-                                }
-                            }
-                        );
-                    });
-                } else {
+            db.get('SELECT id FROM users WHERE username = ?', ['Peter42'], (err, result) => {
+                if (err) {
+                    console.error('Error checking for Peter42:', err);
+                    return;
+                }
+                
+                if (!result) {
                     console.log('Peter42 not found, creating...');
                     // Create Peter42 with hashed password and avatar path
-                    const hashedPassword = await bcrypt.hash('Peter2025BB', 10);
-                    await new Promise((resolve, reject) => {
+                    bcrypt.hash('Peter2025BB', 10).then(hashedPassword => {
                         db.run(
                             'INSERT INTO users (username, password, portfolio_path, avatar_path, is_public) VALUES (?, ?, ?, ?, ?)',
                             ['Peter42', hashedPassword, '/portfolios/P4-2/Peter/Peter.html', '/portfolios/P4-2/Peter/images/Peter42.jpg', true],
                             function(err) {
-                                if (err) reject(err);
-                                else {
+                                if (err) {
+                                    console.error('Error creating Peter42:', err);
+                                } else {
                                     console.log('Peter42 created successfully with ID:', this.lastID);
-                                    resolve(this.lastID);
                                 }
                             }
                         );
+                    }).catch(err => {
+                        console.error('Error hashing password:', err);
                     });
                 }
-            } catch (error) {
-                console.error('Error handling Peter42 user:', error);
+            });
+        });
+        
+        // Create public_visitors table for visitor registration
+        db.run(`CREATE TABLE IF NOT EXISTS public_visitors (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            full_name TEXT NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL,
+            reason TEXT,
+            registration_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`, (err) => {
+            if (err) {
+                console.error('Error creating public_visitors table:', err);
+            } else {
+                console.log('Public visitors table ready');
+            }
+        });
+        
+        // Create visitor_logins table to track visitor activity
+        db.run(`CREATE TABLE IF NOT EXISTS visitor_logins (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            visitor_id INTEGER NOT NULL,
+            login_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (visitor_id) REFERENCES public_visitors(id)
+        )`, (err) => {
+            if (err) {
+                console.error('Error creating visitor_logins table:', err);
+            } else {
+                console.log('Visitor logins table ready');
+            }
+        });
+        
+        // Create visitor_views table to track portfolio viewing
+        db.run(`CREATE TABLE IF NOT EXISTS visitor_views (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            visitor_id INTEGER NOT NULL,
+            portfolio_path TEXT NOT NULL,
+            view_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (visitor_id) REFERENCES public_visitors(id)
+        )`, (err) => {
+            if (err) {
+                console.error('Error creating visitor_views table:', err);
+            } else {
+                console.log('Visitor views table ready');
             }
         });
     });
@@ -899,4 +996,861 @@ app.get('/debug-privacy/:username', (req, res) => {
         }
         res.json(result);
     });
+});
+
+// School and class API endpoints
+app.get('/api/schools', (req, res) => {
+    res.json(schoolConfig.getSchools());
+});
+
+app.get('/api/schools/:schoolId', (req, res) => {
+    const school = schoolConfig.getSchool(req.params.schoolId);
+    if (!school) {
+        return res.status(404).json({ error: 'School not found' });
+    }
+    res.json(school);
+});
+
+app.get('/api/schools/:schoolId/classes', (req, res) => {
+    const classes = schoolConfig.getClasses(req.params.schoolId);
+    res.json(classes);
+});
+
+app.get('/api/schools/:schoolId/classes/:classId', (req, res) => {
+    const cls = schoolConfig.getClass(req.params.schoolId, req.params.classId);
+    if (!cls) {
+        return res.status(404).json({ error: 'Class not found' });
+    }
+    res.json(cls);
+});
+
+app.get('/api/classes/:classId/students', async (req, res) => {
+    const classId = req.params.classId;
+    const portfolioPath = req.query.portfolioPath;
+    const db = new sqlite3.Database(dbPath);
+    
+    try {
+        // Log the request for debugging
+        console.log(`\n==== STUDENT FETCH DEBUG ====`);
+        console.log(`Class ID: ${classId}`);
+        console.log(`Portfolio Path: ${portfolioPath}`);
+        
+        if (!portfolioPath) {
+            return res.status(400).json({ error: 'portfolioPath parameter is required' });
+        }
+        
+        // Special handling for Phumdham classes
+        if (classId === 'Class4-1' || classId === 'Class4-2') {
+            const classNumber = classId === 'Class4-1' ? '1' : '2';
+            const searchPath = `P4-${classNumber}`;
+            
+            console.log(`Special handling for Phumdham class: ${classId}, searching for ${searchPath}`);
+            
+            // Direct query for P4-1 or P4-2 folders
+            const students = await new Promise((resolve, reject) => {
+                db.all('SELECT * FROM users WHERE portfolio_path LIKE ?', [`%${searchPath}%`], (err, rows) => {
+                    if (err) {
+                        console.error('Database error:', err);
+                        reject(err);
+                    }
+                    
+                    console.log(`Found ${rows.length} students for Phumdham ${classId}`);
+                    if (rows.length > 0) {
+                        console.log('Sample students:');
+                        for (let i = 0; i < Math.min(5, rows.length); i++) {
+                            console.log(` - ${rows[i].username}: ${rows[i].portfolio_path}`);
+                        }
+                    }
+                    
+                    resolve(rows || []);
+                });
+            });
+            
+            console.log(`==== END DEBUG ====\n`);
+            return res.json(students);
+        }
+        
+        // Special handling for M2 class
+        if (classId === 'ClassM2-001') {
+            console.log(`Special handling for PBSChonburi M2 class: ${classId}`);
+            
+            // Try all possible M2 paths
+            const possiblePaths = ['ClassM2-001', 'M2', 'M2-001'];
+            const likeQueries = possiblePaths.map(p => `portfolio_path LIKE '%${p}%'`).join(' OR ');
+            
+            // Direct query for M2 folders
+            const students = await new Promise((resolve, reject) => {
+                db.all(`SELECT * FROM users WHERE ${likeQueries}`, [], (err, rows) => {
+                    if (err) {
+                        console.error('Database error:', err);
+                        reject(err);
+                    }
+                    
+                    console.log(`Found ${rows.length} students for M2 class`);
+                    if (rows.length > 0) {
+                        console.log('Sample students:');
+                        for (let i = 0; i < Math.min(5, rows.length); i++) {
+                            console.log(` - ${rows[i].username}: ${rows[i].portfolio_path}`);
+                        }
+                    }
+                    
+                    resolve(rows || []);
+                });
+            });
+            
+            // If no students in database, check filesystem
+            if (!students.length) {
+                console.log('No M2 students found in database, checking filesystem');
+                
+                try {
+                    for (const folderName of possiblePaths) {
+                        const folderPath = path.join(__dirname, 'portfolios', folderName);
+                        if (fs.existsSync(folderPath)) {
+                            console.log(`Found M2 directory: ${folderPath}`);
+                            
+                            // Get files and directories
+                            const entries = fs.readdirSync(folderPath, { withFileTypes: true });
+                            const studentDirs = entries.filter(entry => entry.isDirectory());
+                            
+                            console.log(`Found ${studentDirs.length} student directories in ${folderPath}`);
+                            
+                            for (const dir of studentDirs) {
+                                const studentName = dir.name;
+                                const studentPath = path.join(folderPath, studentName);
+                                
+                                // Find HTML files
+                                const files = fs.readdirSync(studentPath);
+                                const htmlFiles = files.filter(file => file.toLowerCase().endsWith('.html'));
+                                
+                                if (htmlFiles.length) {
+                                    const htmlFile = htmlFiles[0];
+                                    students.push({
+                                        username: studentName,
+                                        portfolio_path: `/portfolios/${folderName}/${studentName}/${htmlFile}`,
+                                        avatar_path: `/portfolios/${folderName}/${studentName}/images/${studentName}.jpg`,
+                                        is_public: 1
+                                    });
+                                }
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error reading filesystem for M2:', error);
+                }
+            }
+            
+            console.log(`==== END DEBUG ====\n`);
+            return res.json(students);
+        }
+        
+        // Regular handling for other classes
+        const students = await new Promise((resolve, reject) => {
+            db.all('SELECT * FROM users', [], (err, rows) => {
+                if (err) {
+                    console.error('Database error:', err);
+                    reject(err);
+                }
+                console.log(`Total users in database: ${rows.length}`);
+                
+                // Print all portfolio paths for debugging
+                console.log("All portfolio paths in database:");
+                rows.forEach((user, i) => {
+                    if (user.portfolio_path) {
+                        console.log(`${i+1}. ${user.username}: ${user.portfolio_path}`);
+                    }
+                });
+                
+                // Extract the folder name from portfolioPath for more flexible matching
+                const pathParts = portfolioPath.split('/');
+                const folderName = pathParts[pathParts.length - 1];
+                
+                console.log(`Looking for portfolios with folder name: ${folderName}`);
+                
+                // Filter students based on the portfolio path (case-insensitive)
+                // Try multiple matching strategies
+                const filteredStudents = rows.filter(user => {
+                    // Make sure user has a portfolio path before checking
+                    if (!user.portfolio_path) return false;
+                    
+                    // Convert to lowercase for case-insensitive comparison
+                    const userPath = user.portfolio_path.toLowerCase();
+                    const searchPath = portfolioPath.toLowerCase();
+                    const searchFolder = folderName.toLowerCase();
+                    
+                    // Try different matching strategies
+                    return userPath.includes(searchPath) || 
+                           userPath.includes(searchFolder) || 
+                           userPath.includes(`portfolios/${searchFolder}`) ||
+                           userPath.includes(`/portfolios/${searchFolder}`);
+                });
+                
+                console.log(`Found ${filteredStudents.length} students for path: ${portfolioPath}`);
+                
+                if (filteredStudents.length > 0) {
+                    // Log first 5 students for debugging
+                    console.log('Sample students:');
+                    for (let i = 0; i < Math.min(5, filteredStudents.length); i++) {
+                        const s = filteredStudents[i];
+                        console.log(` - ${s.username}: ${s.portfolio_path}`);
+                    }
+                } else {
+                    console.log('No students found! Check database entries and portfolio paths.');
+                }
+                
+                resolve(filteredStudents || []);
+            });
+        });
+        
+        console.log(`==== END DEBUG ====\n`);
+        res.json(students);
+    } catch (error) {
+        console.error('Error getting students:', error);
+        res.status(500).json({ error: 'Error getting students' });
+    } finally {
+        db.close();
+    }
+});
+
+// Class viewer route
+app.get('/classes', (req, res) => {
+    // Get query parameters
+    const schoolId = req.query.school;
+    const classId = req.query.class;
+    
+    console.log(`\n==== CLASS VIEWER REQUEST ====`);
+    console.log(`URL: ${req.url}`);
+    console.log(`Query parameters: school=${schoolId}, class=${classId}`);
+    
+    // Log if this is a direct access or a redirect
+    console.log(`Referrer: ${req.headers.referer || 'Direct Access'}`);
+    
+    // Validate the parameters if provided
+    if (schoolId && classId) {
+        console.log(`Validating parameters: school=${schoolId}, class=${classId}`);
+        
+        // Check if the school exists
+        const school = schoolConfig.getSchool(schoolId);
+        if (!school) {
+            console.log(`School not found: ${schoolId}`);
+        } else {
+            console.log(`School found: ${school.name}`);
+            
+            // Check if the class exists in the school
+            const cls = schoolConfig.getClass(schoolId, classId);
+            if (!cls) {
+                console.log(`Class not found: ${classId} in school ${schoolId}`);
+            } else {
+                console.log(`Class found: ${cls.displayName} (${cls.id})`);
+            }
+        }
+    }
+    
+    // Send the HTML file
+    res.sendFile(path.join(__dirname, 'views/class-viewer.html'));
+    console.log(`==== END CLASS VIEWER REQUEST ====\n`);
+});
+
+// Public visitor registration
+app.post('/public-register', async (req, res) => {
+    const { fullName, email, password, reason } = req.body;
+    
+    if (!fullName || !email || !password) {
+        return res.status(400).json({ error: 'All fields are required' });
+    }
+    
+    // Validate email format
+    if (!email.includes('@')) {
+        return res.status(400).json({ error: 'Invalid email format' });
+    }
+    
+    const db = new sqlite3.Database(dbPath);
+    
+    try {
+        // Check if email already exists
+        const emailExists = await new Promise((resolve, reject) => {
+            db.get('SELECT id FROM public_visitors WHERE email = ?', [email], (err, row) => {
+                        if (err) reject(err);
+                        else resolve(row);
+                    });
+                });
+
+        if (emailExists) {
+            return res.status(400).json({ error: 'Email already registered' });
+        }
+        
+        // Hash the password
+        const hashedPassword = await bcrypt.hash(password, 10);
+        
+        // Insert the visitor
+                    await new Promise((resolve, reject) => {
+                        db.run(
+                'INSERT INTO public_visitors (full_name, email, password, reason, registration_date) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)',
+                [fullName, email, hashedPassword, reason || ''],
+                            function(err) {
+                                if (err) reject(err);
+                    else resolve(this.lastID);
+                }
+            );
+        });
+        
+        // Success
+        res.status(201).json({ success: true, message: 'Registration successful' });
+    } catch (error) {
+        console.error('Error registering public visitor:', error);
+        res.status(500).json({ error: 'Server error' });
+    } finally {
+        db.close();
+    }
+});
+
+// Public visitor login
+app.post('/public-login', async (req, res) => {
+    const { email, password } = req.body;
+    
+    if (!email || !password) {
+        return res.status(400).json({ error: 'Email and password are required' });
+    }
+    
+    const db = new sqlite3.Database(dbPath);
+    
+    try {
+        // Get visitor by email
+        const visitor = await new Promise((resolve, reject) => {
+            db.get('SELECT id, full_name, email, password FROM public_visitors WHERE email = ?', [email], (err, row) => {
+                if (err) reject(err);
+                else resolve(row);
+            });
+        });
+        
+        if (!visitor) {
+            return res.status(401).json({ error: 'Invalid email or password' });
+        }
+        
+        // Check password
+        const passwordMatch = await bcrypt.compare(password, visitor.password);
+        
+        if (!passwordMatch) {
+            return res.status(401).json({ error: 'Invalid email or password' });
+        }
+        
+        // Log activity
+        db.run(
+            'INSERT INTO visitor_logins (visitor_id, login_date) VALUES (?, CURRENT_TIMESTAMP)',
+            [visitor.id]
+        );
+        
+        // Set session
+        req.session.authenticated = true;
+        req.session.userType = 'visitor';
+        req.session.visitorId = visitor.id;
+        req.session.fullName = visitor.full_name;
+        req.session.email = visitor.email;
+        
+        // Success
+        res.json({ 
+            success: true, 
+            user: { 
+                id: visitor.id, 
+                fullName: visitor.full_name, 
+                email: visitor.email 
+            }
+        });
+    } catch (error) {
+        console.error('Error logging in public visitor:', error);
+        res.status(500).json({ error: 'Server error' });
+    } finally {
+        db.close();
+    }
+});
+
+// Special endpoint for Phumdham students
+app.get('/api/phumdham-students/:classId', async (req, res) => {
+    const classId = req.params.classId;
+    const db = new sqlite3.Database(dbPath);
+    
+    try {
+        console.log(`\n==== PHUMDHAM STUDENTS DIRECT QUERY DEBUG ====`);
+        console.log(`Class ID: ${classId}`);
+        console.log(`User authenticated: ${req.session?.user ? 'Yes' : 'No'}`);
+        console.log(`Username: ${req.session?.user?.username || 'Not logged in'}`);
+        
+        // Check if the database file exists
+        if (!fs.existsSync(dbPath)) {
+            console.error(`Database file not found at: ${dbPath}`);
+            return res.status(500).json({ error: 'Database file not found' });
+        }
+        
+        // Determine the path pattern based on the class ID
+        const pathPattern = classId === 'Class4-1' ? '%P4-1%' : '%P4-2%';
+        console.log(`Using path pattern: ${pathPattern}`);
+        
+        // Log all users first
+        const allUsers = await new Promise((resolve, reject) => {
+            db.all('SELECT * FROM users', [], (err, rows) => {
+                if (err) {
+                    console.error('Database error when querying all users:', err);
+                    reject(err);
+                } else {
+                    console.log(`Total users in database: ${rows.length}`);
+                    if (rows.length > 0) {
+                        console.log('Sample users:');
+                        for (let i = 0; i < Math.min(5, rows.length); i++) {
+                            console.log(` - ${rows[i].username}: ${rows[i].portfolio_path}`);
+                        }
+                    }
+                    resolve(rows);
+                }
+            });
+        });
+        
+        // Try direct query first
+        try {
+            const query = 'SELECT * FROM users WHERE portfolio_path LIKE ?';
+            console.log(`Executing query: ${query} with pattern: ${pathPattern}`);
+            
+            const students = await new Promise((resolve, reject) => {
+                db.all(query, [pathPattern], (err, rows) => {
+                    if (err) {
+                        console.error('Database error:', err);
+                        reject(err);
+                        return;
+                    }
+                    
+                    console.log(`Found ${rows.length} students for path pattern: ${pathPattern}`);
+                    
+                    if (rows.length > 0) {
+                        console.log('Sample students from query:');
+                        for (let i = 0; i < Math.min(5, rows.length); i++) {
+                            console.log(` - ${rows[i].username}: ${rows[i].portfolio_path}`);
+                        }
+                    } else {
+                        console.log('No students found through SQL query. Checking P4-1 pattern explicitly:');
+                        const matchingUsers = allUsers.filter(user => {
+                            if (user.portfolio_path && 
+                                typeof user.portfolio_path === 'string' && 
+                                user.portfolio_path.includes(pathPattern.replace(/%/g, ''))) {
+                                console.log(` - Found match: ${user.username}: ${user.portfolio_path}`);
+                                return true;
+                            }
+                            return false;
+                        });
+                        console.log(`Manual filtering found ${matchingUsers.length} matching users`);
+                        
+                        if (matchingUsers.length > 0) {
+                            // Return the manually filtered users if SQL query failed
+                            resolve(matchingUsers);
+                            return;
+                        }
+                    }
+                    
+                    resolve(rows || []);
+                });
+            });
+            
+            console.log(`==== END PHUMDHAM DEBUG ====\n`);
+            res.json(students);
+            
+        } catch (sqlError) {
+            console.error('SQL Error, falling back to manual filtering:', sqlError);
+            
+            // Fallback to manual filtering if SQL query fails
+            const manualFiltered = allUsers.filter(user => 
+                user.portfolio_path && 
+                typeof user.portfolio_path === 'string' && 
+                user.portfolio_path.includes(pathPattern.replace(/%/g, '')));
+            
+            console.log(`Manual filtering found ${manualFiltered.length} students`);
+            console.log(`==== END PHUMDHAM DEBUG (FALLBACK) ====\n`);
+            
+            res.json(manualFiltered);
+        }
+        
+    } catch (error) {
+        console.error('Error getting Phumdham students:', error);
+        res.status(500).json({ error: 'Error getting students' });
+    } finally {
+        db.close();
+    }
+});
+
+// Direct filesystem-based endpoint for Phumdham portfolios
+app.get('/api/filesystem-portfolios/:classId', (req, res) => {
+    const classId = req.params.classId;
+    console.log(`\n==== DIRECT FILESYSTEM PORTFOLIO CHECK ====`);
+    console.log(`Checking portfolios for class: ${classId}`);
+    
+    // Map class ID to folder name (case-sensitive)
+    const folderMap = {
+        'Class4-1': 'P4-1',
+        'Class4-2': 'P4-2',
+        'ClassM2-001': 'ClassM2-001'
+    };
+    
+    // List of alternative folders to check for each class
+    const altFolders = {
+        'ClassM2-001': ['ClassM2-001', 'M2', 'M2-001', 'M2-2025'],
+        'Class4-1': ['P4-1', 'Class4-1', '4-1'],
+        'Class4-2': ['P4-2', 'Class4-2', '4-2']
+    };
+    
+    // Set initial folder name from map or use class ID as fallback
+    const folderName = folderMap[classId] || classId;
+    let resolvedFolderPath = path.join(__dirname, 'portfolios', folderName);
+    
+    console.log(`Looking for portfolios in: ${resolvedFolderPath}`);
+    
+    try {
+        // Check if the directory exists
+        if (!fs.existsSync(resolvedFolderPath)) {
+            console.log(`Portfolio directory not found: ${resolvedFolderPath}`);
+            
+            // Try alternative folder names
+            let foundAlternative = false;
+            
+            if (altFolders[classId]) {
+                for (const altName of altFolders[classId]) {
+                    if (altName === folderName) continue; // Skip the one we already tried
+                    
+                    const altPath = path.join(__dirname, 'portfolios', altName);
+                    console.log(`Trying alternative path: ${altPath}`);
+                    
+                    if (fs.existsSync(altPath)) {
+                        console.log(`Found alternative directory: ${altPath}`);
+                        resolvedFolderPath = altPath;
+                        foundAlternative = true;
+                        break;
+                    }
+                }
+            }
+            
+            // If we still haven't found a valid folder, return empty list
+            if (!foundAlternative) {
+                console.log(`No portfolio directories found for ${classId}`);
+                return res.json([]);
+            }
+        }
+        
+        // Read directory with EXACT case from filesystem
+        const files = fs.readdirSync(resolvedFolderPath, { withFileTypes: true });
+        console.log(`Found ${files.length} items in ${resolvedFolderPath}`);
+        
+        // Process all files and directories as they exist in the filesystem (preserving case)
+        const students = [];
+        
+        // Get base folder name for paths (e.g., 'P4-2' from full path)
+        const baseFolderName = path.basename(resolvedFolderPath);
+
+        files.forEach(entry => {
+            console.log(` - Found: ${entry.name} (${entry.isDirectory() ? 'Directory' : 'File'})`);
+            
+            if (entry.isDirectory()) {
+                // Use exact name from filesystem
+                const studentName = entry.name;
+                const studentPath = path.join(resolvedFolderPath, studentName);
+                
+                // Find HTML files in the directory
+                try {
+                    const studentFiles = fs.readdirSync(studentPath);
+                    const htmlFiles = studentFiles.filter(file => file.toLowerCase().endsWith('.html') || file.toLowerCase() === 'index.html');
+                    
+                    // If found HTML files, add to students array
+                    if (htmlFiles.length > 0) {
+                        let htmlFile = htmlFiles[0]; // Default to first HTML file
+                        
+                        // Prefer index.html if available
+                        const indexHtml = htmlFiles.find(file => file.toLowerCase() === 'index.html');
+                        if (indexHtml) {
+                            htmlFile = indexHtml;
+                        }
+                        
+                        console.log(`   Found HTML file: ${htmlFile}`);
+                        
+                        // Look for an avatar image
+                        let avatarPath = null;
+                        try {
+                            const imagesPath = path.join(studentPath, 'images');
+                            if (fs.existsSync(imagesPath)) {
+                                const imageFiles = fs.readdirSync(imagesPath).filter(file => 
+                                    file.toLowerCase().endsWith('.jpg') || 
+                                    file.toLowerCase().endsWith('.png') || 
+                                    file.toLowerCase().endsWith('.jpeg')
+                                );
+                                
+                                if (imageFiles.length > 0) {
+                                    // Use exact filename from filesystem
+                                    avatarPath = `/portfolios/${baseFolderName}/${studentName}/images/${imageFiles[0]}`;
+                                    console.log(`   Found avatar: ${imageFiles[0]}`);
+                                }
+                            }
+                        } catch (err) {
+                            console.log(`   Error finding avatar for ${studentName}: ${err.message}`);
+                        }
+                        
+                        students.push({
+                            username: studentName,
+                            portfolio_path: `/portfolios/${baseFolderName}/${studentName}/${htmlFile}`,
+                            avatar_path: avatarPath || '/images/default-avatar.png',
+                            is_public: false,  // Set all to PRIVATE by default
+                            first_name: studentName,
+                            last_name: '',
+                            nickname: studentName
+                        });
+                    }
+                } catch (err) {
+                    console.log(`   Error processing directory ${studentName}: ${err.message}`);
+                }
+            } else if (entry.name.toLowerCase().endsWith('.html')) {
+                // Handle HTML files at root level
+                const studentName = entry.name.replace('.html', '');
+                
+                console.log(`   Adding HTML file: ${entry.name}`);
+                
+                students.push({
+                    username: studentName,
+                    portfolio_path: `/portfolios/${baseFolderName}/${entry.name}`,
+                    avatar_path: '/images/default-avatar.png',
+                    is_public: false,
+                    first_name: studentName,
+                    last_name: '',
+                    nickname: studentName
+                });
+            }
+        });
+        
+        console.log(`\nReturning ${students.length} portfolios from filesystem`);
+        if (students.length > 0) {
+            for (let i = 0; i < Math.min(5, students.length); i++) {
+                console.log(` - ${students[i].username}: ${students[i].portfolio_path}`);
+            }
+        }
+        
+        // Also check the database for any relevant entries
+        const db = new sqlite3.Database(dbPath);
+        db.all('SELECT * FROM users WHERE portfolio_path LIKE ?', [`%${baseFolderName}%`], (err, dbRows) => {
+            db.close();
+            
+            if (err) {
+                console.log(`Error checking database: ${err.message}`);
+                console.log(`==== END FILESYSTEM CHECK ====\n`);
+                return res.json(students);
+            }
+            
+            const portfolioPathMap = {};
+            students.forEach(s => {
+                portfolioPathMap[s.portfolio_path.toLowerCase()] = true;
+            });
+            
+            // Add any additional students from database
+            console.log(`Found ${dbRows.length} students in database`);
+            let dbAdded = 0;
+            
+            dbRows.forEach(row => {
+                // Check if we already have this path in our results
+                if (!portfolioPathMap[row.portfolio_path.toLowerCase()]) {
+                    students.push({
+                        username: row.username,
+                        portfolio_path: row.portfolio_path,
+                        avatar_path: row.avatar_path || '/images/default-avatar.png',
+                        is_public: row.is_public === 1,
+                        first_name: row.first_name || row.username,
+                        last_name: row.last_name || '',
+                        nickname: row.nickname || row.username
+                    });
+                    dbAdded++;
+                }
+            });
+            
+            console.log(`Added ${dbAdded} additional students from database`);
+            console.log(`==== END FILESYSTEM CHECK ====\n`);
+            res.json(students);
+        });
+            } catch (error) {
+        console.error('Error reading portfolios from filesystem:', error);
+        console.log(`==== END FILESYSTEM CHECK (ERROR) ====\n`);
+        res.status(500).json({ error: 'Failed to read portfolios from filesystem' });
+    }
+});
+
+// Direct folder list API for debugging
+app.get('/api/folder-list/:folderName', (req, res) => {
+    const folderName = req.params.folderName;
+    const folderPath = path.join(__dirname, 'portfolios', folderName);
+    
+    console.log(`\n=== Direct Folder List: ${folderName} ===`);
+    console.log(`Looking in: ${folderPath}`);
+    
+    try {
+        // Check if the directory exists
+        if (!fs.existsSync(folderPath)) {
+            console.log(`Directory not found: ${folderPath}`);
+            return res.json({ error: 'Directory not found', folders: [] });
+        }
+        
+        // Read directory with EXACT case from filesystem
+        const items = fs.readdirSync(folderPath, { withFileTypes: true });
+        console.log(`Found ${items.length} items in ${folderPath}`);
+        
+        const folders = items
+            .filter(item => item.isDirectory())
+            .map(dir => dir.name);
+            
+        const files = items
+            .filter(item => !item.isDirectory())
+            .map(file => file.name);
+        
+        console.log(`Folders: ${folders.join(', ')}`);
+        console.log(`Files: ${files.join(', ')}`);
+        
+        res.json({
+            path: folderPath,
+            totalItems: items.length,
+            folders: folders,
+            files: files
+        });
+    } catch (error) {
+        console.error('Error reading directory:', error);
+        res.status(500).json({ error: 'Error reading directory' });
+    }
+});
+
+// Special endpoint to fetch M2 student portfolios
+app.get('/api/m2-students', (req, res) => {
+    console.log(`\n==== FETCHING M2 STUDENTS ====`);
+    
+    // Look in all possible M2 folders
+    const possibleFolders = ['ClassM2-001', 'M2', 'M2-001'];
+    const students = [];
+    
+    try {
+        // Try each possible folder path
+        for (const folderName of possibleFolders) {
+            const folderPath = path.join(__dirname, 'portfolios', folderName);
+            console.log(`Checking folder: ${folderPath}`);
+            
+            if (fs.existsSync(folderPath)) {
+                console.log(`Found directory: ${folderPath}`);
+                
+                // Read directory
+                const files = fs.readdirSync(folderPath, { withFileTypes: true });
+                console.log(`Found ${files.length} items in ${folderPath}`);
+                
+                // Process directories as student portfolios
+                for (const entry of files) {
+                    if (entry.isDirectory()) {
+                        const studentName = entry.name;
+                        const studentPath = path.join(folderPath, studentName);
+                        
+                        console.log(`Found student folder: ${studentName}`);
+                        
+                        // Find HTML files
+                        try {
+                            const studentFiles = fs.readdirSync(studentPath);
+                            const htmlFiles = studentFiles.filter(file => 
+                                file.toLowerCase().endsWith('.html') || 
+                                file.toLowerCase() === 'index.html'
+                            );
+                            
+                            if (htmlFiles.length > 0) {
+                                // Prefer index.html if available
+                                let htmlFile = htmlFiles[0];
+                                const indexHtml = htmlFiles.find(file => file.toLowerCase() === 'index.html');
+                                if (indexHtml) {
+                                    htmlFile = indexHtml;
+                                }
+                                
+                                // Look for avatar
+                                let avatarPath = null;
+                                const imagesPath = path.join(studentPath, 'images');
+                                if (fs.existsSync(imagesPath)) {
+                                    const imageFiles = fs.readdirSync(imagesPath).filter(file => 
+                                        file.toLowerCase().endsWith('.jpg') || 
+                                        file.toLowerCase().endsWith('.png') || 
+                                        file.toLowerCase().endsWith('.jpeg')
+                                    );
+                                    
+                                    if (imageFiles.length > 0) {
+                                        avatarPath = `/portfolios/${folderName}/${studentName}/images/${imageFiles[0]}`;
+                                    }
+                                }
+                                
+                                // Add student to list
+                                students.push({
+                                    username: studentName,
+                                    portfolio_path: `/portfolios/${folderName}/${studentName}/${htmlFile}`,
+                                    avatar_path: avatarPath || '/images/default-avatar.png',
+                                    is_public: true, // Set all M2 students to public by default
+                                    first_name: studentName,
+                                    last_name: '',
+                                    nickname: studentName
+                                });
+                            }
+                        } catch (err) {
+                            console.log(`Error processing student ${studentName}: ${err.message}`);
+                        }
+                    } else if (entry.name.toLowerCase().endsWith('.html')) {
+                        // Handle HTML files at root level
+                        const studentName = entry.name.replace('.html', '');
+                        
+                        students.push({
+                            username: studentName,
+                            portfolio_path: `/portfolios/${folderName}/${entry.name}`,
+                            avatar_path: '/images/default-avatar.png',
+                            is_public: true, // Set all to public for M2
+                            first_name: studentName,
+                            last_name: '',
+                            nickname: studentName
+                        });
+                    }
+                }
+            } else {
+                console.log(`Directory not found: ${folderPath}`);
+            }
+        }
+        
+        // Also check the database for M2 students
+        const db = new sqlite3.Database(dbPath);
+        db.all('SELECT * FROM users WHERE portfolio_path LIKE ? OR portfolio_path LIKE ? OR portfolio_path LIKE ?', 
+            ['%ClassM2-001%', '%M2%', '%M2-001%'], 
+            (err, dbRows) => {
+                db.close();
+                
+                if (err) {
+                    console.log(`Error checking database: ${err.message}`);
+                } else {
+                    console.log(`Found ${dbRows.length} M2 students in database`);
+                    
+                    // Create a map of existing portfolio paths (lowercase for case-insensitive comparison)
+                    const existingPaths = {};
+                    students.forEach(student => {
+                        existingPaths[student.portfolio_path.toLowerCase()] = true;
+                    });
+                    
+                    // Add any students from database that aren't already in our list
+                    let dbAdded = 0;
+                    dbRows.forEach(row => {
+                        if (!existingPaths[row.portfolio_path.toLowerCase()]) {
+                            students.push({
+                                username: row.username,
+                                portfolio_path: row.portfolio_path,
+                                avatar_path: row.avatar_path || '/images/default-avatar.png',
+                                is_public: row.is_public === 1,
+                                first_name: row.first_name || row.username,
+                                last_name: row.last_name || '',
+                                nickname: row.nickname || row.username
+                            });
+                            dbAdded++;
+                        }
+                    });
+                    
+                    console.log(`Added ${dbAdded} additional M2 students from database`);
+                }
+                
+                console.log(`Total M2 students found: ${students.length}`);
+                console.log(`==== END M2 STUDENTS FETCH ====\n`);
+                res.json(students);
+            });
+    } catch (error) {
+        console.error('Error fetching M2 students:', error);
+        res.status(500).json({ error: 'Error fetching M2 students' });
+    }
 });

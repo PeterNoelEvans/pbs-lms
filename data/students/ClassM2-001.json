@@ -1,0 +1,370 @@
+{
+  "class": {
+    "id": "ClassM2-001",
+    "name": "M2 001",
+    "displayName": "M2 001",
+    "school": "PBSChonburi"
+  },
+  "students": [
+    {
+      "username": "wanchana_srisura_16191",
+      "password": "Wanchana2025SR",
+      "firstName": "Wanchana",
+      "lastName": "Srisura",
+      "title": "Master",
+      "studentNumber": "16191",
+      "nickname": "Wan",
+      "avatarFileName": "wanchana_srisura_16191.jpg"
+    },
+    {
+      "username": "khunanon_rungsawang_16365",
+      "password": "Khunanon2025RU",
+      "firstName": "Khunanon",
+      "lastName": "Rungsawang",
+      "title": "Master",
+      "studentNumber": "16365",
+      "nickname": "Khu",
+      "avatarFileName": "khunanon_rungsawang_16365.jpg"
+    },
+    {
+      "username": "maythisa_bunpanya_16563",
+      "password": "Maythisa2025BU",
+      "firstName": "Maythisa",
+      "lastName": "Bunpanya",
+      "title": "Miss",
+      "studentNumber": "16563",
+      "nickname": "May",
+      "avatarFileName": "maythisa_bunpanya_16563.jpg"
+    },
+    {
+      "username": "sasinadda_yindee_17657",
+      "password": "Sasinadda2025YI",
+      "firstName": "Sasinadda",
+      "lastName": "Yindee",
+      "title": "Miss",
+      "studentNumber": "17657",
+      "nickname": "Sas",
+      "avatarFileName": "sasinadda_yindee_17657.jpg"
+    },
+    {
+      "username": "kanya_yindee_17658",
+      "password": "Kanya2025YI",
+      "firstName": "Kanya",
+      "lastName": "Yindee",
+      "title": "Miss",
+      "studentNumber": "17658",
+      "nickname": "Kan",
+      "avatarFileName": "kanya_yindee_17658.jpg"
+    },
+    {
+      "username": "pitchayathida_thapthong_17661",
+      "password": "Pitchayathida2025TH",
+      "firstName": "Pitchayathida",
+      "lastName": "Thapthong",
+      "title": "Miss",
+      "studentNumber": "17661",
+      "nickname": "Pit",
+      "avatarFileName": "pitchayathida_thapthong_17661.jpg"
+    },
+    {
+      "username": "panadol_rangsikunkawin_17664",
+      "password": "Panadol2025RA",
+      "firstName": "Panadol",
+      "lastName": "Rangsikunkawin",
+      "title": "Master",
+      "studentNumber": "17664",
+      "nickname": "Pan",
+      "avatarFileName": "panadol_rangsikunkawin_17664.jpg"
+    },
+    {
+      "username": "thoranapoom_nuonplot_17667",
+      "password": "Thoranapoom2025NU",
+      "firstName": "Thoranapoom",
+      "lastName": "Nuonplot",
+      "title": "Master",
+      "studentNumber": "17667",
+      "nickname": "Tho",
+      "avatarFileName": "thoranapoom_nuonplot_17667.jpg"
+    },
+    {
+      "username": "kunpriyaphat_phinpet_17678",
+      "password": "Kunpriyaphat2025PH",
+      "firstName": "Kunpriyaphat",
+      "lastName": "Phinpet",
+      "title": "Miss",
+      "studentNumber": "17678",
+      "nickname": "Kun",
+      "avatarFileName": "kunpriyaphat_phinpet_17678.jpg"
+    },
+    {
+      "username": "chaowapat_phetkoet_17679",
+      "password": "Chaowapat2025PH",
+      "firstName": "Chaowapat",
+      "lastName": "Phetkoet",
+      "title": "Master",
+      "studentNumber": "17679",
+      "nickname": "Cha",
+      "avatarFileName": "chaowapat_phetkoet_17679.jpg"
+    },
+    {
+      "username": "saran_tujaroen_17681",
+      "password": "Saran2025TU",
+      "firstName": "Saran",
+      "lastName": "Tujaroen",
+      "title": "Master",
+      "studentNumber": "17681",
+      "nickname": "Sar",
+      "avatarFileName": "saran_tujaroen_17681.jpg"
+    },
+    {
+      "username": "wijitra_champachat_17682",
+      "password": "Wijitra2025CH",
+      "firstName": "Wijitra",
+      "lastName": "Champachat",
+      "title": "Miss",
+      "studentNumber": "17682",
+      "nickname": "Wij",
+      "avatarFileName": "wijitra_champachat_17682.jpg"
+    },
+    {
+      "username": "nantaporn_thammaniam_17683",
+      "password": "Nantaporn2025TH",
+      "firstName": "Nantaporn",
+      "lastName": "Thammaniam",
+      "title": "Miss",
+      "studentNumber": "17683",
+      "nickname": "Nan",
+      "avatarFileName": "nantaporn_thammaniam_17683.jpg"
+    },
+    {
+      "username": "nichaporn_boonsong_17684",
+      "password": "Nichaporn2025BO",
+      "firstName": "Nichaporn",
+      "lastName": "Boonsong",
+      "title": "Miss",
+      "studentNumber": "17684",
+      "nickname": "Nic",
+      "avatarFileName": "nichaporn_boonsong_17684.jpg"
+    },
+    {
+      "username": "donthorn_sritamma_17688",
+      "password": "Donthorn2025SR",
+      "firstName": "Donthorn",
+      "lastName": "Sritamma",
+      "title": "Miss",
+      "studentNumber": "17688",
+      "nickname": "Don",
+      "avatarFileName": "donthorn_sritamma_17688.jpg"
+    },
+    {
+      "username": "punyaphat_chaisuwan_17697",
+      "password": "Punyaphat2025CH",
+      "firstName": "Punyaphat",
+      "lastName": "Chaisuwan",
+      "title": "Master",
+      "studentNumber": "17697",
+      "nickname": "Pun",
+      "avatarFileName": "punyaphat_chaisuwan_17697.jpg"
+    },
+    {
+      "username": "natthapoom_wongthong_17698",
+      "password": "Natthapoom2025WO",
+      "firstName": "Natthapoom",
+      "lastName": "Wongthong",
+      "title": "Master",
+      "studentNumber": "17698",
+      "nickname": "Nat",
+      "avatarFileName": "natthapoom_wongthong_17698.jpg"
+    },
+    {
+      "username": "patcha_jarungchatchawan_17699",
+      "password": "Patcha2025JA",
+      "firstName": "Patcha",
+      "lastName": "Jarungchatchawan",
+      "title": "Miss",
+      "studentNumber": "17699",
+      "nickname": "Pat",
+      "avatarFileName": "patcha_jarungchatchawan_17699.jpg"
+    },
+    {
+      "username": "metha_sroikiri_17702",
+      "password": "Metha2025SR",
+      "firstName": "Metha",
+      "lastName": "Sroikiri",
+      "title": "Master",
+      "studentNumber": "17702",
+      "nickname": "Met",
+      "avatarFileName": "metha_sroikiri_17702.jpg"
+    },
+    {
+      "username": "narongsak_witthayaocha_17703",
+      "password": "Narongsak2025WI",
+      "firstName": "Narongsak",
+      "lastName": "Witthayaocha",
+      "title": "Master",
+      "studentNumber": "17703",
+      "nickname": "Nar",
+      "avatarFileName": "narongsak_witthayaocha_17703.jpg"
+    },
+    {
+      "username": "atchariya_phrinyapoolsuk_17705",
+      "password": "Atchariya2025PH",
+      "firstName": "Atchariya",
+      "lastName": "Phrinyapoolsuk",
+      "title": "Master",
+      "studentNumber": "17705",
+      "nickname": "Atc",
+      "avatarFileName": "atchariya_phrinyapoolsuk_17705.jpg"
+    },
+    {
+      "username": "thikhamphon_rueangket_17711",
+      "password": "Thikhamphon2025RU",
+      "firstName": "Thikhamphon",
+      "lastName": "Rueangket",
+      "title": "Miss",
+      "studentNumber": "17711",
+      "nickname": "Thi",
+      "avatarFileName": "thikhamphon_rueangket_17711.jpg"
+    },
+    {
+      "username": "kasidis_thiamthong_17712",
+      "password": "Kasidis2025TH",
+      "firstName": "Kasidis",
+      "lastName": "Thiamthong",
+      "title": "Master",
+      "studentNumber": "17712",
+      "nickname": "Kas",
+      "avatarFileName": "kasidis_thiamthong_17712.jpg"
+    },
+    {
+      "username": "praphatpluem_chuen-arom_17719",
+      "password": "Praphatpluem2025CH",
+      "firstName": "Praphatpluem",
+      "lastName": "Chuen-arom",
+      "title": "Master",
+      "studentNumber": "17719",
+      "nickname": "Pra",
+      "avatarFileName": "praphatpluem_chuen-arom_17719.jpg"
+    },
+    {
+      "username": "natthaphon_buathong_17722",
+      "password": "Natthaphon2025BU",
+      "firstName": "Natthaphon",
+      "lastName": "Buathong",
+      "title": "Master",
+      "studentNumber": "17722",
+      "nickname": "Nat",
+      "avatarFileName": "natthaphon_buathong_17722.jpg"
+    },
+    {
+      "username": "kawin_sriburapha_17734",
+      "password": "Kawin2025SR",
+      "firstName": "Kawin",
+      "lastName": "Sriburapha",
+      "title": "Master",
+      "studentNumber": "17734",
+      "nickname": "Kaw",
+      "avatarFileName": "kawin_sriburapha_17734.jpg"
+    },
+    {
+      "username": "thanphat_sihabuttho_17739",
+      "password": "Thanphat2025SI",
+      "firstName": "Thanphat",
+      "lastName": "Sihabuttho",
+      "title": "Miss",
+      "studentNumber": "17739",
+      "nickname": "Tha",
+      "avatarFileName": "thanphat_sihabuttho_17739.jpg"
+    },
+    {
+      "username": "chutima_chaisit_17755",
+      "password": "Chutima2025CH",
+      "firstName": "Chutima",
+      "lastName": "Chaisit",
+      "title": "Miss",
+      "studentNumber": "17755",
+      "nickname": "Chu",
+      "avatarFileName": "chutima_chaisit_17755.jpg"
+    },
+    {
+      "username": "jakkarit_sodsai_17763",
+      "password": "Jakkarit2025SO",
+      "firstName": "Jakkarit",
+      "lastName": "Sodsai",
+      "title": "Master",
+      "studentNumber": "17763",
+      "nickname": "Jak",
+      "avatarFileName": "jakkarit_sodsai_17763.jpg"
+    },
+    {
+      "username": "somchai_jaidee_10001",
+      "password": "Somchai2025JA",
+      "firstName": "Somchai",
+      "lastName": "Jaidee",
+      "title": "Mr.",
+      "studentNumber": "10001",
+      "nickname": "Som",
+      "avatarFileName": "somchai_jaidee_10001.jpg"
+    },
+    {
+      "username": "somsri_rakdee_10002",
+      "password": "Somsri2025RA",
+      "firstName": "Somsri",
+      "lastName": "Rakdee",
+      "title": "Ms.",
+      "studentNumber": "10002",
+      "nickname": "Som",
+      "avatarFileName": "somsri_rakdee_10002.jpg"
+    },
+    {
+      "username": "somying_jitdee_10003",
+      "password": "Somying2025JI",
+      "firstName": "Somying",
+      "lastName": "Jitdee",
+      "title": "Ms.",
+      "studentNumber": "10003",
+      "nickname": "Som",
+      "avatarFileName": "somying_jitdee_10003.jpg"
+    },
+    {
+      "username": "tanawat_supasin_10004",
+      "password": "Tanawat2025SU",
+      "firstName": "Tanawat",
+      "lastName": "Supasin",
+      "title": "Mr.",
+      "studentNumber": "10004",
+      "nickname": "Tan",
+      "avatarFileName": "tanawat_supasin_10004.jpg"
+    },
+    {
+      "username": "pranee_wongtip_10005",
+      "password": "Pranee2025WO",
+      "firstName": "Pranee",
+      "lastName": "Wongtip",
+      "title": "Ms.",
+      "studentNumber": "10005",
+      "nickname": "Pra",
+      "avatarFileName": "pranee_wongtip_10005.jpg"
+    },
+    {
+      "username": "new_student_12345",
+      "password": "NewStudent2025",
+      "firstName": "New",
+      "lastName": "Student",
+      "title": "Miss",
+      "studentNumber": "12345",
+      "nickname": "Newbie",
+      "avatarFileName": "new_student_12345.jpg"
+    },
+    {
+      "username": "Peter",
+      "password": "2025",
+      "firstName": "Peter",
+      "lastName": "Evans",
+      "title": "Mr",
+      "studentNumber": "12345",
+      "nickname": "PE",
+      "avatarFileName": "Peter.jpg"
+    }
+  ]
+}

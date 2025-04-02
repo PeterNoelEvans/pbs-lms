@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Browse Schools</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1 {
+            text-align: center;
+            color: #444;
+            margin-bottom: 20px;
+        }
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 40px;
+        }
+        .nav-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+        .back-button {
+            background-color: #2196F3;
+            color: white;
+            padding: 8px 15px;
+            text-decoration: none;
+            border-radius: 4px;
+        }
+        .user-info {
+            padding: 8px 15px;
+            background-color: #f0f0f0;
+            border-radius: 4px;
+        }
+        .logout-button {
+            margin-left: 10px;
+            padding: 3px 8px;
+            background-color: #f44336;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .login-button {
+            background-color: #2196F3;
+            color: white;
+            padding: 8px 15px;
+            text-decoration: none;
+            border-radius: 4px;
+        }
+        .schools-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 30px;
+        }
+        .school-card {
+            background-color: #f8f8f8;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            transition: transform 0.3s;
+        }
+        .school-card:hover {
+            transform: translateY(-5px);
+        }
+        .school-name {
+            font-size: 20px;
+            font-weight: bold;
+            color: #2196F3;
+            margin-bottom: 10px;
+        }
+        .class-list {
+            margin-top: 15px;
+        }
+        .class-item {
+            display: block;
+            padding: 10px;
+            margin-bottom: 8px;
+            background-color: #e9e9e9;
+            border-radius: 4px;
+            text-decoration: none;
+            color: #333;
+            transition: background-color 0.3s;
+        }
+        .class-item:hover {
+            background-color: #d9d9d9;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            background-color: #f8f8f8;
+            border-radius: 8px;
+            margin-top: 30px;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+        }
+    </style>
+</head>
+<body>
+    <div class="nav-container">
+        <a href="/index.html" class="back-button">Back to Home</a>
+        
+        <!-- User info (shown when logged in) -->
+        <div id="userInfo" class="user-info" style="display: none;">
+            Logged in as <span id="username"></span>
+            <button id="logoutButton" class="logout-button">Logout</button>
+        </div>
+        
+        <!-- Login button (shown when not logged in) -->
+        <a id="loginButton" href="/login.html" class="login-button">Login</a>
+    </div>
+
+    <h1>Browse Schools</h1>
+    <p class="subtitle">Select a school to explore portfolios</p>
+
+    <div id="loading" class="loading">
+        Loading schools...
+    </div>
+
+    <div id="schoolsContainer" class="schools-grid" style="display: none;">
+        <!-- Schools will be loaded here dynamically -->
+    </div>
+
+    <div id="emptyState" class="empty-state" style="display: none;">
+        <h3>No schools found</h3>
+        <p>There are currently no schools available to browse.</p>
+    </div>
+
+    <script>
+        // Check authentication status
+        async function checkAuth() {
+            try {
+                const response = await fetch('/check-auth', {
+                    cache: 'no-store',
+                    headers: {
+                        'Cache-Control': 'no-cache',
+                        'Pragma': 'no-cache'
+                    }
+                });
+                const data = await response.json();
+                
+                if (data.authenticated) {
+                    // User is logged in
+                    document.getElementById('userInfo').style.display = 'block';
+                    document.getElementById('username').textContent = data.username || 'User';
+                    document.getElementById('loginButton').style.display = 'none';
+                } else {
+                    // User is not logged in
+                    document.getElementById('userInfo').style.display = 'none';
+                    document.getElementById('loginButton').style.display = 'block';
+                }
+                
+                return data.authenticated;
+            } catch (error) {
+                console.error('Error checking authentication:', error);
+                return false;
+            }
+        }
+
+        // Load all schools
+        async function loadSchools() {
+            try {
+                document.getElementById('loading').style.display = 'block';
+                document.getElementById('schoolsContainer').style.display = 'none';
+                document.getElementById('emptyState').style.display = 'none';
+                
+                const response = await fetch('/api/schools');
+                const schools = await response.json();
+                
+                const container = document.getElementById('schoolsContainer');
+                container.innerHTML = '';
+                
+                if (schools.length === 0) {
+                    document.getElementById('emptyState').style.display = 'block';
+                    return;
+                }
+                
+                // Create school cards
+                schools.forEach(school => {
+                    const schoolCard = document.createElement('div');
+                    schoolCard.className = 'school-card';
+                    
+                    const schoolName = document.createElement('div');
+                    schoolName.className = 'school-name';
+                    schoolName.textContent = school.name;
+                    
+                    const classList = document.createElement('div');
+                    classList.className = 'class-list';
+                    
+                    if (school.classes && school.classes.length > 0) {
+                        school.classes.forEach(cls => {
+                            const classItem = document.createElement('a');
+                            classItem.className = 'class-item';
+                            classItem.href = `/class-viewer.html?school=${school.id}&class=${cls.id}`;
+                            classItem.textContent = cls.displayName;
+                            classList.appendChild(classItem);
+                        });
+                    } else {
+                        const noClasses = document.createElement('p');
+                        noClasses.textContent = 'No classes available';
+                        classList.appendChild(noClasses);
+                    }
+                    
+                    schoolCard.appendChild(schoolName);
+                    schoolCard.appendChild(classList);
+                    container.appendChild(schoolCard);
+                });
+                
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('schoolsContainer').style.display = 'grid';
+            } catch (error) {
+                console.error('Error loading schools:', error);
+                document.getElementById('loading').style.display = 'none';
+                
+                const emptyState = document.getElementById('emptyState');
+                emptyState.style.display = 'block';
+                emptyState.innerHTML = `
+                    <h3>Error loading schools</h3>
+                    <p>An error occurred while loading schools. Please try again later.</p>
+                `;
+            }
+        }
+
+        // Handle logout
+        document.getElementById('logoutButton').addEventListener('click', async () => {
+            try {
+                const response = await fetch('/logout', {
+                    method: 'POST'
+                });
+                
+                if (response.ok) {
+                    // Refresh the page after logout
+                    window.location.reload();
+                } else {
+                    console.error('Logout failed');
+                }
+            } catch (error) {
+                console.error('Error during logout:', error);
+            }
+        });
+
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', async () => {
+            await checkAuth();
+            await loadSchools();
+        });
+    </script>
+</body>
+</html> 

@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Class Portfolios</title>
+    <link rel="stylesheet" href="/class-styles.css">
+    <style>
+        .school-selector {
+            margin: 20px auto;
+            text-align: center;
+        }
+        .school-selector select {
+            padding: 8px;
+            font-size: 16px;
+            border-radius: 4px;
+            margin-right: 10px;
+        }
+        .class-buttons {
+            margin: 20px auto;
+            text-align: center;
+        }
+        .class-btn {
+            display: inline-block;
+            padding: 10px 20px;
+            margin: 5px;
+            background-color: #4CAF50;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            transition: background-color 0.3s;
+        }
+        .class-btn:hover {
+            background-color: #45a049;
+        }
+        .class-btn.active {
+            background-color: #2196F3;
+            font-weight: bold;
+        }
+        /* Login Modal Styles */
+        .login-button {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            padding: 8px 15px;
+            background-color: #2196F3;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .login-modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+        .login-modal-content {
+            background-color: white;
+            margin: 15% auto;
+            padding: 20px;
+            border-radius: 8px;
+            width: 300px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .login-form {
+            display: flex;
+            flex-direction: column;
+        }
+        .login-form input {
+            margin-bottom: 15px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .login-form button {
+            padding: 10px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .login-form button:hover {
+            background-color: #45a049;
+        }
+        .close-button {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .close-button:hover {
+            color: black;
+        }
+        .user-info {
+            display: none;
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            padding: 8px 15px;
+            background-color: #f0f0f0;
+            border-radius: 4px;
+        }
+        .logout-button {
+            margin-left: 10px;
+            padding: 3px 8px;
+            background-color: #f44336;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .privacy-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 12px;
+            font-weight: bold;
+            color: white;
+            z-index: 10;
+        }
+        .privacy-badge.public {
+            background-color: #4CAF50;
+        }
+        .privacy-badge.private {
+            background-color: #f44336;
+        }
+        
+        /* Portfolio card styles */
+        .portfolio-card {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+    </style>
+</head>
+<body>
+    <h1 id="classTitle">Class Portfolios</h1>
+    
+    <div class="navigation-links" style="text-align: center; margin-bottom: 20px;">
+        <a href="/dashboard.html" class="button" style="background-color: #2196F3; color: white;">Back to Dashboard</a>
+    </div>
+
+    <!-- Login Button - Show when not logged in -->
+    <button id="loginButton" class="login-button">Login</button>
+    
+    <!-- User Info - Show when logged in -->
+    <div id="userInfo" class="user-info">
+        Logged in as <span id="username"></span>
+        <button id="logoutButton" class="logout-button">Logout</button>
+    </div>
+
+    <!-- Login Modal -->
+    <div id="loginModal" class="login-modal">
+        <div class="login-modal-content">
+            <span class="close-button" id="closeLoginModal">&times;</span>
+            <h2>Login</h2>
+            <form id="loginForm" class="login-form">
+                <input type="text" id="usernameInput" placeholder="Username" required>
+                <input type="password" id="passwordInput" placeholder="Password" required>
+                <button type="submit">Login</button>
+            </form>
+            <div id="loginError" style="color: red; margin-top: 10px; display: none;"></div>
+        </div>
+    </div>
+
+    <div class="school-selector">
+        <label for="schoolSelect">Select School:</label>
+        <select id="schoolSelect">
+            <!-- Schools will be loaded dynamically -->
+        </select>
+    </div>
+
+    <div class="class-buttons" id="classButtons">
+        <!-- Class buttons will be loaded dynamically -->
+    </div>
+    
+    <div class="login-container" id="loginPrompt" style="display: none;">
+        <p>Please <a href="/login.html">login</a> to view private portfolios</p>
+    </div>
+
+    <div id="portfoliosContainer" class="portfolios-grid">
+        <!-- Portfolios will be loaded here dynamically -->
+    </div>
+
+    <script>
+        // Global variables
+        let currentSchoolId = localStorage.getItem('selectedSchoolId') || 'PBSChonburi';
+        let currentClassId = localStorage.getItem('selectedClassId') || 'ClassM2-001';
+        let isAuthenticated = false;
+        let isSuperUser = false;
+        let currentUsername = '';
+        
+        // Function to validate stored school and class
+        async function validateStoredSelections() {
+            try {
+                // Check if the stored school exists
+                const schoolResponse = await fetch(`/api/schools/${currentSchoolId}`);
+                if (!schoolResponse.ok) {
+                    console.log('Stored school not found, resetting to default');
+                    currentSchoolId = 'PBSChonburi';
+                    localStorage.setItem('selectedSchoolId', currentSchoolId);
+                }
+                
+                // Check if the stored class exists in the selected school
+                const classResponse = await fetch(`/api/schools/${currentSchoolId}/classes/${currentClassId}`);
+                if (!classResponse.ok) {
+                    console.log('Stored class not found in selected school, resetting to first available class');
+                    // Get available classes for the school
+                    const classesResponse = await fetch(`/api/schools/${currentSchoolId}/classes`);
+                    const classes = await classesResponse.json();
+                    if (classes && classes.length > 0) {
+                        currentClassId = classes[0].id;
+                    } else {
+                        currentClassId = ''; // No classes available
+                    }
+                    localStorage.setItem('selectedClassId', currentClassId);
+                }
+            } catch (error) {
+                console.error('Error validating stored selections:', error);
+                // Reset to safe defaults
+                currentSchoolId = 'PBSChonburi';
+                currentClassId = 'ClassM2-001';
+                localStorage.setItem('selectedSchoolId', currentSchoolId);
+                localStorage.setItem('selectedClassId', currentClassId);
+            }
+        }
+
+        // Function to create a portfolio card
+        function createPortfolioCard(username, imagePath, isPublic, portfolioPath, firstName, lastName, nickname) {
+            // Strict boolean conversion - only true if explicitly true
+            isPublic = isPublic === true;
+            
+            const card = document.createElement('div');
+            card.className = 'portfolio-card';
+            
+            const privacyBadge = document.createElement('span');
+            privacyBadge.className = `privacy-badge ${isPublic ? 'public' : 'private'}`;
+            privacyBadge.textContent = isPublic ? 'Public' : 'Private';
+            
+            const img = document.createElement('img');
+            img.src = imagePath || '/images/default-avatar.png';
+            img.alt = `${username}'s avatar`;
+            img.className = 'avatar';
+            img.onerror = function() {
+                this.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIwIiBoZWlnaHQ9IjEyMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTIwIiBoZWlnaHQ9IjEyMCIgZmlsbD0iI2YwZjBmMCIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTYiIGZpbGw9IiM2NjY2NjYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5ObyBJbWFnZTwvdGV4dD48L3N2Zz4=';
+            };
+            
+            const name = document.createElement('h3');
+            // Use nickname or full name instead of username
+            if (nickname) {
+                name.textContent = nickname;
+            } else if (firstName && lastName) {
+                name.textContent = `${firstName} ${lastName}`;
+            } else {
+                // Remove student ID if present (assumes format like name_name_12345)
+                const nameParts = username.split('_');
+                // If the last part is numeric, remove it
+                if (nameParts.length > 2 && /^\d+$/.test(nameParts[nameParts.length-1])) {
+                    nameParts.pop();
+                }
+                const displayName = nameParts.map(part => 
+                    part.charAt(0).toUpperCase() + part.slice(1)
+                ).join(' ');
+                name.textContent = displayName;
+            }
+
+            const classIndicator = document.createElement('div');
+            classIndicator.style.marginTop = '5px';
+            classIndicator.style.color = '#666';
+            classIndicator.style.fontSize = '0.9em';
+            classIndicator.textContent = portfolioPath.split('/')[2] || 'Unknown Class';
+            
+            const viewBtn = document.createElement('a');
+            viewBtn.className = 'view-portfolio';
+            viewBtn.textContent = 'View Portfolio';
+            viewBtn.href = portfolioPath;
+            
+            // Visually indicate private portfolios
+            if (!isPublic) {
+                // Make the button visually indicate this is a private portfolio
+                if (!isAuthenticated) {
+                    // If not logged in, restrict access
+                    viewBtn.style.opacity = '0.7';
+                    viewBtn.style.backgroundColor = '#999';
+                    viewBtn.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        const loginPrompt = document.getElementById('loginPrompt');
+                        loginPrompt.style.display = 'block';
+                        setTimeout(() => {
+                            loginPrompt.style.display = 'none';
+                        }, 3000);
+                    });
+                } else {
+                    // If logged in, show it's private but allow access
+                    viewBtn.style.backgroundColor = '#ff9800';
+                    viewBtn.textContent = 'View Private Portfolio';
+                }
+            }
+            
+            card.appendChild(privacyBadge);
+            card.appendChild(img);
+            card.appendChild(name);
+            card.appendChild(classIndicator);
+            card.appendChild(viewBtn);
+            
+            return card;
+        }
+
+        // Function to load schools
+        async function loadSchools() {
+            try {
+                // Validate stored selections before loading anything
+                await validateStoredSelections();
+                
+                const response = await fetch('/api/schools');
+                const schools = await response.json();
+                
+                const schoolSelect = document.getElementById('schoolSelect');
+                schoolSelect.innerHTML = '';
+                
+                schools.forEach(school => {
+                    const option = document.createElement('option');
+                    option.value = school.id;
+                    option.textContent = school.name;
+                    if (school.id === currentSchoolId) {
+                        option.selected = true;
+                    }
+                    schoolSelect.appendChild(option);
+                });
+                
+                // Add event listener
+                schoolSelect.addEventListener('change', function() {
+                    currentSchoolId = this.value;
+                    localStorage.setItem('selectedSchoolId', currentSchoolId);
+                    loadClasses(currentSchoolId);
+                });
+                
+                // Load classes for the current school
+                await loadClasses(currentSchoolId);
+            } catch (error) {
+                console.error('Error loading schools:', error);
+            }
+        }
+        
+        // Function to load classes for a school
+        async function loadClasses(schoolId) {
+            try {
+                const response = await fetch(`/api/schools/${schoolId}/classes`);
+                const classes = await response.json();
+                
+                const classButtonsContainer = document.getElementById('classButtons');
+                classButtonsContainer.innerHTML = '';
+                
+                classes.forEach(cls => {
+                    const button = document.createElement('a');
+                    button.href = '#';
+                    button.className = `class-btn ${cls.id === currentClassId ? 'active' : ''}`;
+                    button.dataset.classId = cls.id;
+                    button.textContent = cls.displayName;
+                    button.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        document.querySelectorAll('.class-btn').forEach(btn => btn.classList.remove('active'));
+                        this.classList.add('active');
+                        currentClassId = this.dataset.classId;
+                        localStorage.setItem('selectedClassId', currentClassId);
+                        loadPortfolios(currentSchoolId, currentClassId);
+                    });
+                    classButtonsContainer.appendChild(button);
+                });
+                
+                // Load portfolios for the current class
+                await loadPortfolios(schoolId, currentClassId);
+            } catch (error) {
+                console.error('Error loading classes:', error);
+            }
+        }
+
+        // Function to check authentication status
+        async function checkAuthStatus() {
+            try {
+                const authResponse = await fetch('/check-auth', {
+                    cache: 'no-store',
+                    headers: {
+                        'Cache-Control': 'no-cache',
+                        'Pragma': 'no-cache'
+                    }
+                });
+                const authData = await authResponse.json();
+                
+                isAuthenticated = authData.authenticated;
+                isSuperUser = authData.isSuperUser || false;
+                
+                if (isAuthenticated) {
+                    // Update UI for authenticated user
+                    document.getElementById('loginButton').style.display = 'none';
+                    document.getElementById('userInfo').style.display = 'block';
+                    document.getElementById('username').textContent = authData.username || 'User';
+                    currentUsername = authData.username;
+                } else {
+                    // Update UI for unauthenticated user
+                    document.getElementById('loginButton').style.display = 'block';
+                    document.getElementById('userInfo').style.display = 'none';
+                }
+                
+                return authData;
+            } catch (error) {
+                console.error('Error checking authentication:', error);
+                return { authenticated: false, isSuperUser: false };
+            }
+        }
+
+        // Function to load portfolios for a class
+        async function loadPortfolios(schoolId, classId) {
+            try {
+                console.log(`\n======= LOADING PORTFOLIOS =======`);
+                console.log(`School: ${schoolId}, Class: ${classId}`);
+                
+                // Check authentication status
+                const authData = await checkAuthStatus();
+                
+                // Show login prompt if not authenticated
+                const loginPrompt = document.getElementById('loginPrompt');
+                if (!authData.authenticated) {
+                    loginPrompt.style.display = 'block';
+                } else {
+                    loginPrompt.style.display = 'none';
+                }
+
+                // Update class title
+                const classResponse = await fetch(`/api/schools/${schoolId}/classes/${classId}`);
+                if (!classResponse.ok) {
+                    throw new Error(`Failed to fetch class data: ${classResponse.status}`);
+                }
+                
+                const classData = await classResponse.json();
+                document.getElementById('classTitle').textContent = `${classData.displayName} Portfolios`;
+                document.title = `${classData.displayName} Portfolios`;
+                
+                console.log(`Loading portfolios for school:${schoolId}, class:${classId}, path:${classData.portfolioPath}`);
+
+                // Initialize our students array
+                let studentsArray = [];
+                
+                // Customize the approach based on specific class ID patterns
+                console.log(`Selecting approach for class ID: ${classId}`);
+
+                // SPECIAL HANDLING FOR DIFFERENT CLASS TYPES
+                if (classId === 'ClassM2-001') {
+                    console.log('Special handling for M2 students');
+                    
+                    // Try database query with multiple patterns
+                    const m2Response = await fetch(`/api/classes/${classId}/students?portfolioPath=${encodeURIComponent(classData.portfolioPath)}`);
+                    
+                    if (m2Response.ok) {
+                        const m2Data = await m2Response.json();
+                        console.log(`Found ${m2Data.length} M2 students via API endpoint`);
+                        
+                        if (m2Data.length > 0) {
+                            studentsArray = m2Data;
+                        } else {
+                            // Fallback - check database directly with SQL LIKE pattern for ClassM2-001
+                            console.log('No students from API, trying direct database query');
+                            
+                            // Try filesystem approach for M2
+                            const filesystemResponse = await fetch(`/api/filesystem-portfolios/${classId}`);
+                            if (filesystemResponse.ok) {
+                                const filesystemStudents = await filesystemResponse.json();
+                                console.log(`Found ${filesystemStudents.length} M2 students from filesystem`);
+                                
+                                if (filesystemStudents.length > 0) {
+                                    studentsArray = filesystemStudents;
+                                }
+                            }
+                        }
+                    }
+                } else if (classId.startsWith('Class4-')) {
+                    console.log(`Special handling for Phumdham class: ${classId}`);
+                    
+                    // Use the standard API with the class-specific path
+                    const studentsResponse = await fetch(`/api/classes/${classId}/students?portfolioPath=${encodeURIComponent(classData.portfolioPath)}`);
+                    if (studentsResponse.ok) {
+                        const phumdhamStudents = await studentsResponse.json();
+                        console.log(`Found ${phumdhamStudents.length} Phumdham students via API`);
+                        
+                        if (phumdhamStudents.length > 0) {
+                            studentsArray = phumdhamStudents;
+                        } else {
+                            // Fallback - try filesystem approach for Phumdham
+                            console.log('No students from API, trying filesystem');
+                            const folderName = classId === 'Class4-1' ? 'P4-1' : 'P4-2';
+                            const filesystemResponse = await fetch(`/api/filesystem-portfolios/${classId}`);
+                            
+                            if (filesystemResponse.ok) {
+                                const filesystemStudents = await filesystemResponse.json();
+                                console.log(`Found ${filesystemStudents.length} students from filesystem ${folderName}`);
+                                
+                                if (filesystemStudents.length > 0) {
+                                    studentsArray = filesystemStudents;
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // Default approach for other classes
+                    console.log('Using standard approach for class');
+                    const studentsResponse = await fetch(`/api/classes/${classId}/students?portfolioPath=${encodeURIComponent(classData.portfolioPath)}`);
+                    if (studentsResponse.ok) {
+                        studentsArray = await studentsResponse.json();
+                        console.log(`Found ${studentsArray.length} students via standard API`);
+                    }
+                }
+
+                // Fetch privacy states from server with no caching
+                const privacyResponse = await fetch('/get-all-privacy-states', {
+                    cache: 'no-store',
+                    headers: {
+                        'Cache-Control': 'no-cache',
+                        'Pragma': 'no-cache'
+                    }
+                });
+                const privacyStates = await privacyResponse.json();
+                
+                console.log('Privacy states received. Total:', Object.keys(privacyStates).length);
+                
+                // Update privacy states from server data
+                const studentsWithPrivacy = studentsArray.map(student => {
+                    // Always default to private (false) unless explicitly set to public
+                    let isPublic = false;
+                    
+                    // Check if there's a privacy state for this portfolio path
+                    if (student.portfolio_path && typeof privacyStates[student.portfolio_path] !== 'undefined') {
+                        // Use stored privacy state, convert to boolean
+                        isPublic = privacyStates[student.portfolio_path] === true;
+                    } else if (student.hasOwnProperty('is_public')) {
+                        // If student already has is_public, make sure it's a boolean (true only if explicitly true)
+                        isPublic = student.is_public === true || student.is_public === 1;
+                    }
+                    
+                    return {
+                        ...student,
+                        is_public: isPublic
+                    };
+                });
+                
+                console.log(`Final student count with privacy states: ${studentsWithPrivacy.length}`);
+                
+                // Determine which portfolios to show based on authentication
+                // Always show ALL portfolios in the listing, regardless of privacy status
+                // The access restriction only applies when trying to view a portfolio
+                const portfoliosToShow = studentsWithPrivacy;
+                
+                // Sort portfolios
+                const sortedPortfolios = portfoliosToShow.sort((a, b) => a.username.localeCompare(b.username));
+                
+                const container = document.getElementById('portfoliosContainer');
+                container.innerHTML = ''; // Clear existing content
+                
+                // Create portfolio cards
+                for (const user of sortedPortfolios) {
+                    const card = createPortfolioCard(
+                        user.username,
+                        user.avatar_path || null,
+                        user.is_public,
+                        user.portfolio_path,
+                        user.first_name,
+                        user.last_name,
+                        user.nickname
+                    );
+                    container.appendChild(card);
+                }
+
+                // If no portfolios found, show message
+                if (container.children.length === 0) {
+                    const message = document.createElement('p');
+                    message.style.textAlign = 'center';
+                    message.style.gridColumn = '1 / -1';
+                    message.style.padding = '20px';
+                    message.textContent = `No portfolios found for ${classData.displayName}`;
+                    container.appendChild(message);
+                }
+                
+                console.log(`Portfolio cards created: ${container.children.length}`);
+                console.log(`======= PORTFOLIOS LOADED =======\n`);
+            } catch (error) {
+                console.error('Error loading portfolios:', error);
+                const container = document.getElementById('portfoliosContainer');
+                container.innerHTML = '<p style="text-align: center; grid-column: 1 / -1; padding: 20px; color: #721c24;">Error loading portfolios. Please try again later.</p>';
+            }
+        }
+
+        // Handle login form submission
+        document.getElementById('loginForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const username = document.getElementById('usernameInput').value;
+            const password = document.getElementById('passwordInput').value;
+            const errorElement = document.getElementById('loginError');
+            
+            try {
+                const response = await fetch('/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                if (response.ok) {
+                    // Close the modal
+                    document.getElementById('loginModal').style.display = 'none';
+                    // Clear form
+                    document.getElementById('loginForm').reset();
+                    // Hide error
+                    errorElement.style.display = 'none';
+                    // Reload portfolios
+                    await loadPortfolios(currentSchoolId, currentClassId);
+                } else {
+                    const error = await response.json();
+                    errorElement.textContent = error.error || 'Login failed';
+                    errorElement.style.display = 'block';
+                }
+            } catch (error) {
+                console.error('Login error:', error);
+                errorElement.textContent = 'An error occurred. Please try again.';
+                errorElement.style.display = 'block';
+            }
+        });
+
+        // Handle logout button
+        document.getElementById('logoutButton').addEventListener('click', async function() {
+            try {
+                // Use window.location.href to navigate to the logout endpoint
+                window.location.href = '/logout';
+            } catch (error) {
+                console.error('Logout error:', error);
+            }
+        });
+
+        // Show login modal
+        document.getElementById('loginButton').addEventListener('click', function() {
+            document.getElementById('loginModal').style.display = 'block';
+        });
+
+        // Close login modal
+        document.getElementById('closeLoginModal').addEventListener('click', function() {
+            document.getElementById('loginModal').style.display = 'none';
+        });
+
+        // Close modal when clicking outside
+        window.addEventListener('click', function(event) {
+            const modal = document.getElementById('loginModal');
+            if (event.target === modal) {
+                modal.style.display = 'none';
+            }
+        });
+
+        // Load schools when the page loads
+        document.addEventListener('DOMContentLoaded', async () => {
+            document.title = 'Loading Class Portfolios...';
+            
+            // Check for URL parameters first
+            const urlParams = new URLSearchParams(window.location.search);
+            const schoolParam = urlParams.get('school');
+            const classParam = urlParams.get('class');
+            
+            console.log('URL parameters:', { school: schoolParam, class: classParam });
+            
+            if (schoolParam) {
+                currentSchoolId = schoolParam;
+                localStorage.setItem('selectedSchoolId', currentSchoolId);
+            }
+            
+            if (classParam) {
+                currentClassId = classParam;
+                localStorage.setItem('selectedClassId', currentClassId);
+                console.log(`Setting class ID from URL: ${currentClassId}`);
+            }
+            
+            // Always load schools and select the correct ones in UI
+            await loadSchools();
+            
+            // Set UI to reflect URL parameters
+            if (schoolParam) {
+                document.getElementById('schoolSelect').value = schoolParam;
+            }
+            
+            // Check authentication status
+            await checkAuthStatus();
+            
+            // Update document title with the actual class name
+            try {
+                const response = await fetch(`/api/schools/${currentSchoolId}/classes/${currentClassId}`);
+                if (response.ok) {
+                    const classData = await response.json();
+                    document.title = `${classData.displayName} Portfolios`;
+                }
+            } catch (error) {
+                console.error('Error updating page title:', error);
+            }
+        });
+        
+        // Refresh portfolios every 5 seconds to keep privacy states up to date
+        setInterval(() => loadPortfolios(currentSchoolId, currentClassId), 5000);
+        
+        // Listen for privacy updates from the dashboard
+        window.addEventListener('storage', (event) => {
+            if (event.key === 'privacy_updated') {
+                console.log('Privacy change detected, refreshing portfolios');
+                loadPortfolios(currentSchoolId, currentClassId);
+            }
+        });
+    </script>
+</body>
+</html> 

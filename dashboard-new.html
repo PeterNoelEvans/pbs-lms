@@ -104,16 +104,12 @@
             margin-bottom: 20px;
         }
         .class-links {
-            margin-top: 15px;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
+            margin-top: 20px;
         }
         .class-btn {
-            background-color: #2196F3;
+            background-color: #4CAF50;
             color: white;
-            min-width: 100px;
-            text-align: center;
+            margin-right: 10px;
         }
         .info-text {
             margin-top: 15px;
@@ -155,17 +151,12 @@
 
     <div class="class-links-card">
         <h2>Class Portfolios</h2>
-        
-        <div class="school-selector" style="margin-bottom: 20px;">
-            <label for="schoolSelect">Select School:</label>
-            <select id="schoolSelect" style="padding: 8px; font-size: 16px; border-radius: 4px; margin-left: 10px;">
-                <option value="">Select a school...</option>
-                <!-- Schools will be loaded dynamically -->
-            </select>
+        <p>View portfolios by class:</p>
+        <div class="class-links">
+            <a href="/classes" class="button class-btn">View All Classes</a>
         </div>
-        
-        <div id="classButtonsContainer" class="class-links" style="display: none;">
-            <!-- Class buttons will be loaded dynamically based on selected school -->
+        <div class="info-text" style="margin-top: 15px; color: #666;">
+            <p>Select a school and class to view student portfolios</p>
         </div>
     </div>
 
@@ -184,81 +175,12 @@
                     const privacyResponse = await fetch('/get-privacy-status');
                     const privacyData = await privacyResponse.json();
                     document.getElementById('privacyToggle').checked = privacyData.is_public;
-                    
-                    // Load schools
-                    loadSchools();
                 } else {
                     window.location.href = '/login.html';
                 }
             } catch (error) {
                 console.error('Error:', error);
                 showStatus('Error loading dashboard data', false);
-            }
-        }
-        
-        // Load schools from the API
-        async function loadSchools() {
-            try {
-                const response = await fetch('/api/schools');
-                const schools = await response.json();
-                
-                const schoolSelect = document.getElementById('schoolSelect');
-                schoolSelect.innerHTML = '<option value="">Select a school...</option>';
-                
-                schools.forEach(school => {
-                    const option = document.createElement('option');
-                    option.value = school.id;
-                    option.textContent = school.name;
-                    schoolSelect.appendChild(option);
-                });
-                
-                // Add event listener for school selection
-                schoolSelect.addEventListener('change', function() {
-                    if (this.value) {
-                        loadClasses(this.value);
-                    } else {
-                        // Hide class buttons if no school selected
-                        document.getElementById('classButtonsContainer').style.display = 'none';
-                    }
-                });
-            } catch (error) {
-                console.error('Error loading schools:', error);
-                showStatus('Error loading schools', false);
-            }
-        }
-        
-        // Load classes for the selected school
-        async function loadClasses(schoolId) {
-            try {
-                const response = await fetch(`/api/schools/${schoolId}/classes`);
-                const classes = await response.json();
-                
-                const classContainer = document.getElementById('classButtonsContainer');
-                classContainer.innerHTML = '';
-                
-                if (classes && classes.length > 0) {
-                    classes.forEach(cls => {
-                        // Create button for each class
-                        const classBtn = document.createElement('a');
-                        classBtn.href = cls.id.includes('Class4-') ? 
-                            `/class-${cls.id.replace('Class', '').toLowerCase()}.html` : 
-                            `/classes?school=${schoolId}&class=${cls.id}`;
-                        classBtn.className = 'button class-btn';
-                        classBtn.textContent = cls.displayName;
-                        classContainer.appendChild(classBtn);
-                    });
-                    
-                    // Show the class buttons
-                    classContainer.style.display = 'flex';
-                } else {
-                    classContainer.innerHTML = '<p>No classes found for this school</p>';
-                    classContainer.style.display = 'block';
-                }
-            } catch (error) {
-                console.error('Error loading classes:', error);
-                const classContainer = document.getElementById('classButtonsContainer');
-                classContainer.innerHTML = '<p>Error loading classes. Please try again.</p>';
-                classContainer.style.display = 'block';
             }
         }
 
