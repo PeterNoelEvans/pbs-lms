@@ -1609,7 +1609,7 @@ app.get('/api/filesystem-portfolios/:classId', (req, res) => {
                     username: studentName,
                     portfolio_path: `/portfolios/${baseFolderName}/${entry.name}`,
                     avatar_path: '/images/default-avatar.png',
-                    is_public: false,
+                    is_public: false, // Default to private like other classes
                     first_name: studentName,
                     last_name: '',
                     nickname: studentName
@@ -1778,7 +1778,7 @@ app.get('/api/m2-students', (req, res) => {
                                     username: studentName,
                                     portfolio_path: `/portfolios/${folderName}/${studentName}/${htmlFile}`,
                                     avatar_path: avatarPath || '/images/default-avatar.png',
-                                    is_public: true, // Set all M2 students to public by default
+                                    is_public: false, // Default to private like other classes
                                     first_name: studentName,
                                     last_name: '',
                                     nickname: studentName
@@ -1795,7 +1795,7 @@ app.get('/api/m2-students', (req, res) => {
                             username: studentName,
                             portfolio_path: `/portfolios/${folderName}/${entry.name}`,
                             avatar_path: '/images/default-avatar.png',
-                            is_public: true, // Set all to public for M2
+                            is_public: false, // Default to private like other classes
                             first_name: studentName,
                             last_name: '',
                             nickname: studentName

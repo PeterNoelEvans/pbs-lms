@@ -155,17 +155,22 @@
 
     <div class="class-links-card">
         <h2>Class Portfolios</h2>
+        <p>Select a school to view portfolios:</p>
         
-        <div class="school-selector" style="margin-bottom: 20px;">
-            <label for="schoolSelect">Select School:</label>
-            <select id="schoolSelect" style="padding: 8px; font-size: 16px; border-radius: 4px; margin-left: 10px;">
-                <option value="">Select a school...</option>
-                <!-- Schools will be loaded dynamically -->
+        <div class="school-selection">
+            <select id="schoolSelect" class="school-dropdown">
+                <option value="">Choose a school...</option>
+                <option value="phumdham">Phumdham Primary School</option>
+                <option value="pbschonburi">PBS Chonburi</option>
             </select>
+            
+            <div id="classOptions" class="class-options" style="display: none; margin-top: 15px;">
+                <!-- Class options will be populated dynamically -->
+            </div>
         </div>
-        
-        <div id="classButtonsContainer" class="class-links" style="display: none;">
-            <!-- Class buttons will be loaded dynamically based on selected school -->
+
+        <div class="info-text" style="margin-top: 15px; color: #666;">
+            <p>Select a school to view available classes</p>
         </div>
     </div>
 
@@ -218,7 +223,7 @@
                         loadClasses(this.value);
                     } else {
                         // Hide class buttons if no school selected
-                        document.getElementById('classButtonsContainer').style.display = 'none';
+                        document.getElementById('classOptions').style.display = 'none';
                     }
                 });
             } catch (error) {
@@ -233,7 +238,7 @@
                 const response = await fetch(`/api/schools/${schoolId}/classes`);
                 const classes = await response.json();
                 
-                const classContainer = document.getElementById('classButtonsContainer');
+                const classContainer = document.getElementById('classOptions');
                 classContainer.innerHTML = '';
                 
                 if (classes && classes.length > 0) {
@@ -256,7 +261,7 @@
                 }
             } catch (error) {
                 console.error('Error loading classes:', error);
-                const classContainer = document.getElementById('classButtonsContainer');
+                const classContainer = document.getElementById('classOptions');
                 classContainer.innerHTML = '<p>Error loading classes. Please try again.</p>';
                 classContainer.style.display = 'block';
             }
@@ -343,6 +348,30 @@
 
         // Initialize the dashboard when the page loads
         initializeDashboard();
+
+        // Add this to your existing JavaScript
+        document.getElementById('schoolSelect').addEventListener('change', function() {
+            const classOptions = document.getElementById('classOptions');
+            const school = this.value;
+            
+            if (school) {
+                classOptions.style.display = 'block';
+                classOptions.innerHTML = '';
+                
+                if (school === 'phumdham') {
+                    classOptions.innerHTML = `
+                        <a href="/class-4-1.html" class="button class-btn">Class 4/1</a>
+                        <a href="/class-4-2.html" class="button class-btn">Class 4/2</a>
+                    `;
+                } else if (school === 'pbschonburi') {
+                    classOptions.innerHTML = `
+                        <a href="/classes?school=pbschonburi&class=m2" class="button class-btn">Class M2</a>
+                    `;
+                }
+            } else {
+                classOptions.style.display = 'none';
+            }
+        });
     </script>
 </body>
 </html> 
