@@ -290,21 +290,22 @@
             };
             
             const name = document.createElement('h3');
-            // Use nickname or full name instead of username
+            // Format the name more elegantly
             if (nickname) {
                 name.textContent = nickname;
             } else if (firstName && lastName) {
                 name.textContent = `${firstName} ${lastName}`;
             } else {
-                // Remove student ID if present (assumes format like name_name_12345)
+                // Format username more elegantly
                 const nameParts = username.split('_');
-                // If the last part is numeric, remove it
-                if (nameParts.length > 2 && /^\d+$/.test(nameParts[nameParts.length-1])) {
+                // Remove the ID number if it exists (last part if numeric)
+                if (nameParts.length > 0 && /^\d+$/.test(nameParts[nameParts.length - 1])) {
                     nameParts.pop();
                 }
-                const displayName = nameParts.map(part => 
-                    part.charAt(0).toUpperCase() + part.slice(1)
-                ).join(' ');
+                // Capitalize each part and join with spaces
+                const displayName = nameParts
+                    .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+                    .join(' ');
                 name.textContent = displayName;
             }
 
@@ -312,20 +313,28 @@
             classIndicator.style.marginTop = '5px';
             classIndicator.style.color = '#666';
             classIndicator.style.fontSize = '0.9em';
-            classIndicator.textContent = portfolioPath.split('/')[2] || 'Unknown Class';
+            // Format class name more elegantly
+            const className = portfolioPath.split('/')[2] || 'Unknown Class';
+            classIndicator.textContent = className.replace(/([A-Z])/g, ' $1').trim(); // Add spaces before capitals
             
             const viewBtn = document.createElement('a');
             viewBtn.className = 'view-portfolio';
             viewBtn.textContent = 'View Portfolio';
             viewBtn.href = portfolioPath;
+            viewBtn.style.marginTop = '10px';
+            viewBtn.style.padding = '8px 16px';
+            viewBtn.style.backgroundColor = isPublic ? '#4CAF50' : '#ff9800';
+            viewBtn.style.color = 'white';
+            viewBtn.style.textDecoration = 'none';
+            viewBtn.style.borderRadius = '4px';
+            viewBtn.style.transition = 'background-color 0.3s';
             
             // Visually indicate private portfolios
             if (!isPublic) {
-                // Make the button visually indicate this is a private portfolio
+                viewBtn.textContent = 'Private Portfolio';
                 if (!isAuthenticated) {
-                    // If not logged in, restrict access
-                    viewBtn.style.opacity = '0.7';
                     viewBtn.style.backgroundColor = '#999';
+                    viewBtn.style.opacity = '0.7';
                     viewBtn.addEventListener('click', (e) => {
                         e.preventDefault();
                         const loginPrompt = document.getElementById('loginPrompt');
@@ -334,10 +343,6 @@
                             loginPrompt.style.display = 'none';
                         }, 3000);
                     });
-                } else {
-                    // If logged in, show it's private but allow access
-                    viewBtn.style.backgroundColor = '#ff9800';
-                    viewBtn.textContent = 'View Private Portfolio';
                 }
             }
             
@@ -393,6 +398,13 @@
                 const classButtonsContainer = document.getElementById('classButtons');
                 classButtonsContainer.innerHTML = '';
                 
+                // Update the page title with the current class name
+                const currentClass = classes.find(cls => cls.id === currentClassId);
+                if (currentClass) {
+                    document.getElementById('classTitle').textContent = `${currentClass.displayName} Portfolios`;
+                    document.title = `${currentClass.displayName} Portfolios`;
+                }
+                
                 classes.forEach(cls => {
                     const button = document.createElement('a');
                     button.href = '#';
@@ -413,6 +425,10 @@
                         this.classList.add('active');
                         currentClassId = cls.id;
                         localStorage.setItem('selectedClassId', currentClassId);
+                        
+                        // Update page title
+                        document.getElementById('classTitle').textContent = `${cls.displayName} Portfolios`;
+                        document.title = `${cls.displayName} Portfolios`;
                         
                         // Special handling for Class 4/1 and 4/2
                         if (cls.id === 'Class4-1') {
@@ -691,14 +707,57 @@
             }
         });
         
-        // Refresh portfolios every 5 seconds to keep privacy states up to date
-        setInterval(() => loadPortfolios(currentSchoolId, currentClassId), 5000);
+        // Function to update privacy states without rebuilding cards
+        async function updatePrivacyStates() {
+            try {
+                const authResponse = await fetch('/check-session');
+                const authData = await authResponse.json();
+                const isVisitor = authData.user?.userType === 'visitor' || authData.userType === 'visitor';
+                
+                // Get current portfolios
+                const apiUrl = currentClassId === 'ClassM2-001' ? 
+                    '/api/m2-students' : 
+                    `/api/classes/${currentClassId}/students?portfolioPath=/portfolios/${currentClassId}`;
+                
+                const response = await fetch(apiUrl);
+                if (!response.ok) return;
+                
+                const students = await response.json();
+                const container = document.getElementById('portfoliosContainer');
+                
+                // Update existing cards
+                Array.from(container.children).forEach(card => {
+                    const portfolioPath = card.querySelector('.view-portfolio').href;
+                    const student = students.find(s => s.portfolio_path === portfolioPath);
+                    
+                    if (student) {
+                        const privacyBadge = card.querySelector('.privacy-badge');
+                        const viewBtn = card.querySelector('.view-portfolio');
+                        
+                        if (student.is_public !== (privacyBadge.textContent === 'Public')) {
+                            // Update badge
+                            privacyBadge.className = `privacy-badge ${student.is_public ? 'public' : 'private'}`;
+                            privacyBadge.textContent = student.is_public ? 'Public' : 'Private';
+                            
+                            // Update button
+                            viewBtn.style.backgroundColor = student.is_public ? '#4CAF50' : '#ff9800';
+                            viewBtn.textContent = student.is_public ? 'View Portfolio' : 'Private Portfolio';
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error('Error updating privacy states:', error);
+            }
+        }
+        
+        // Check privacy states every 30 seconds instead of full refresh
+        setInterval(updatePrivacyStates, 30000);
         
         // Listen for privacy updates from the dashboard
         window.addEventListener('storage', (event) => {
             if (event.key === 'privacy_updated') {
-                console.log('Privacy change detected, refreshing portfolios');
-                loadPortfolios(currentSchoolId, currentClassId);
+                console.log('Privacy change detected, updating states');
+                updatePrivacyStates();
             }
         });
     </script>

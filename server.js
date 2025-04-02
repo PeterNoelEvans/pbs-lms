@@ -53,13 +53,14 @@ const sessionConfig = {
         concurrentDB: true // Enable concurrent access
     }),
     secret: process.env.SESSION_SECRET || 'your-secret-key-here',
-    resave: true, // Changed to true to ensure session is saved
-    saveUninitialized: true, // Changed to true to create session for all visitors
+    resave: true,
+    saveUninitialized: true,
     rolling: true, // Reset expiration with each request
     cookie: {
         secure: process.env.NODE_ENV === 'production',
         httpOnly: true,
-        maxAge: 7 * 24 * 60 * 60 * 1000 // Extended to 7 days
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+        sameSite: 'lax'
     }
 };
 
@@ -387,31 +388,35 @@ async function initializeApp() {
 
         // Additional routes
         app.get('/check-auth', (req, res) => {
-            if (req.session.user) {
-                // Check if user is a super user
-                const db = new sqlite3.Database(dbPath);
-                db.get('SELECT is_super_user FROM users WHERE id = ?', [req.session.user.id], (err, result) => {
-                    db.close();
-                    
-                    if (err) {
-                        console.error('Error checking super user status:', err);
+            console.log('\n=== Auth Check ===');
+            console.log('Session:', req.session);
+            console.log('User:', req.session?.user);
+            console.log('Visitor:', req.session?.visitorId);
+            
+            // Set no-cache headers
+            res.set({
+                'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0'
+            });
+            
+            if (req.session?.user) {
+                // Regular user
                 res.json({
                     authenticated: true,
                     username: req.session.user.username,
-                            portfolio_path: req.session.user.portfolio_path,
-                            isSuperUser: false
+                    portfolio_path: req.session.user.portfolio_path,
+                    userType: 'user'
+                });
+            } else if (req.session?.authenticated && req.session?.visitorId) {
+                // Visitor
+                res.json({
+                    authenticated: true,
+                    username: req.session.fullName,
+                    userType: 'visitor'
                 });
             } else {
-                        res.json({
-                            authenticated: true,
-                            username: req.session.user.username,
-                            portfolio_path: req.session.user.portfolio_path,
-                            isSuperUser: result && result.is_super_user === 1
-                        });
-                    }
-                });
-            } else {
-                res.json({ authenticated: false, isSuperUser: false });
+                res.json({ authenticated: false });
             }
         });
 
@@ -688,7 +693,7 @@ app.get('/check-access/*', (req, res) => {
 });
 
 // Serve the main pages
-app.get(['/', '/index.html', '/login.html', '/register.html', '/dashboard.html'], (req, res) => {
+app.get(['/', '/index.html', '/login.html', '/register.html', '/dashboard.html', '/schools.html'], (req, res) => {
     res.sendFile(path.join(__dirname, req.path === '/' ? 'index.html' : req.path));
 });
 
@@ -1404,57 +1409,79 @@ app.get('/api/phumdham-students/:classId', async (req, res) => {
         console.log(`Class ID: ${classId}`);
         console.log(`Session:`, req.session);
         
-        // Determine the path pattern based on the class ID
-        let pathPatterns = [];
-        if (classId === 'Class4-1') {
-            pathPatterns = ['%P4-1%', '%4-1%', '%Class4-1%'];
-        } else if (classId === 'Class4-2') {
-            pathPatterns = ['%P4-2%', '%4-2%', '%Class4-2%'];
-        }
+        // Check authentication
+        const isAuthenticated = req.session?.authenticated || !!req.session?.user;
+        const isVisitor = req.session?.userType === 'visitor' || req.session?.user?.userType === 'visitor';
+        console.log('Auth status:', { isAuthenticated, isVisitor });
         
-        console.log('Using path patterns:', pathPatterns);
-        
-        // Build the query to match any of the patterns
-        const placeholders = pathPatterns.map(() => 'portfolio_path LIKE ?').join(' OR ');
-        const query = `SELECT * FROM users WHERE ${placeholders}`;
-        
-        console.log('Executing query:', query);
-        console.log('With patterns:', pathPatterns);
-        
-        const students = await new Promise((resolve, reject) => {
-            db.all(query, pathPatterns, (err, rows) => {
+        // Get all students from the database first
+        const dbStudents = await new Promise((resolve, reject) => {
+            const query = `
+                SELECT username, portfolio_path, avatar_path, is_public, first_name, last_name, nickname 
+                FROM users 
+                WHERE portfolio_path LIKE ? OR portfolio_path LIKE ? OR portfolio_path LIKE ?
+            `;
+            const patterns = [`%/P4-1/%`, `%/4-1/%`, `%/Class4-1/%`];
+            
+            db.all(query, patterns, (err, rows) => {
                 if (err) {
                     console.error('Database error:', err);
                     reject(err);
                     return;
                 }
-                
-                console.log(`Found ${rows?.length || 0} students`);
-                if (rows?.length > 0) {
-                    console.log('Sample students:');
-                    rows.slice(0, 5).forEach(student => {
-                        console.log(` - ${student.username}: ${student.portfolio_path}`);
-                    });
-                }
-                
                 resolve(rows || []);
             });
         });
         
-        // Add is_public field if not present
-        const studentsWithPrivacy = students.map(student => ({
+        // Then check the filesystem
+        const folderPath = path.join(__dirname, 'portfolios', 'P4-1');
+        let filesystemStudents = [];
+        
+        if (fs.existsSync(folderPath)) {
+            const files = fs.readdirSync(folderPath, { withFileTypes: true });
+            filesystemStudents = files
+                .filter(file => file.isDirectory())
+                .map(dir => {
+                    const nameParts = dir.name.split(/[_-]/);
+                    const formattedName = nameParts
+                        .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+                        .join(' ');
+                    
+                    return {
+                        username: dir.name,
+                        portfolio_path: `/portfolios/P4-1/${dir.name}/index.html`,
+                        avatar_path: `/portfolios/P4-1/${dir.name}/images/${dir.name}.png`,
+                        is_public: true, // Filesystem portfolios are public by default
+                        first_name: formattedName,
+                        last_name: '',
+                        nickname: ''
+                    };
+                });
+        }
+        
+        // Merge database and filesystem results, preferring database entries
+        const dbUsernames = new Set(dbStudents.map(s => s.username));
+        const allStudents = [
+            ...dbStudents,
+            ...filesystemStudents.filter(s => !dbUsernames.has(s.username))
+        ];
+        
+        // Process each student
+        const processedStudents = allStudents.map(student => ({
             ...student,
-            is_public: student.is_public === 1 || student.is_public === true
+            is_public: student.is_public === 1 || student.is_public === true,
+            first_name: student.first_name || student.username,
+            nickname: student.nickname || student.first_name || student.username
         }));
         
-        console.log(`Returning ${studentsWithPrivacy.length} students`);
-        console.log(`==== END PHUMDHAM QUERY ====\n`);
+        console.log(`Found ${processedStudents.length} total students`);
+        console.log('Sample students:', processedStudents.slice(0, 3));
         
-        res.json(studentsWithPrivacy);
+        res.json(processedStudents);
         
     } catch (error) {
-        console.error('Error getting Phumdham students:', error);
-        res.status(500).json({ error: 'Error getting students' });
+        console.error('Error in Phumdham students API:', error);
+        res.status(500).json({ error: 'Internal server error' });
     } finally {
         db.close();
     }
