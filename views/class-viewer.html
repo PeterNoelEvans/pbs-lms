@@ -34,8 +34,20 @@
             background-color: #45a049;
         }
         .class-btn.active {
-            background-color: #2196F3;
+            background-color: #357a38; /* Darker shade of green */
             font-weight: bold;
+        }
+        .nav-button {
+            display: inline-block;
+            padding: 10px 20px;
+            background-color: #2196F3;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            transition: background-color 0.3s;
+        }
+        .nav-button:hover {
+            background-color: #1976D2;
         }
         /* Login Modal Styles */
         .login-button {
@@ -152,7 +164,7 @@
     <h1 id="classTitle">Class Portfolios</h1>
     
     <div class="navigation-links" style="text-align: center; margin-bottom: 20px;">
-        <a href="/dashboard.html" class="button" style="background-color: #2196F3; color: white;">Back to Dashboard</a>
+        <a href="/dashboard.html" class="nav-button">Back to Dashboard</a>
     </div>
 
     <!-- Login Button - Show when not logged in -->
@@ -362,9 +374,7 @@
                 
                 // Add event listener
                 schoolSelect.addEventListener('change', function() {
-                    currentSchoolId = this.value;
-                    localStorage.setItem('selectedSchoolId', currentSchoolId);
-                    loadClasses(currentSchoolId);
+                    handleSchoolChange(this.value);
                 });
                 
                 // Load classes for the current school
@@ -391,11 +401,31 @@
                     button.textContent = cls.displayName;
                     button.addEventListener('click', function(e) {
                         e.preventDefault();
+                        
+                        // Update URL with correct school and class
+                        const url = new URL(window.location.href);
+                        url.searchParams.set('school', schoolId);
+                        url.searchParams.set('class', cls.id);
+                        window.history.pushState({}, '', url.toString());
+                        
+                        // Update UI
                         document.querySelectorAll('.class-btn').forEach(btn => btn.classList.remove('active'));
                         this.classList.add('active');
-                        currentClassId = this.dataset.classId;
+                        currentClassId = cls.id;
                         localStorage.setItem('selectedClassId', currentClassId);
-                        loadPortfolios(currentSchoolId, currentClassId);
+                        
+                        // Special handling for Class 4/1 and 4/2
+                        if (cls.id === 'Class4-1') {
+                            window.location.href = '/class-4-1.html';
+                            return;
+                        }
+                        if (cls.id === 'Class4-2') {
+                            window.location.href = '/class-4-2.html';
+                            return;
+                        }
+                        
+                        // Load portfolios for other classes
+                        loadPortfolios(schoolId, currentClassId);
                     });
                     classButtonsContainer.appendChild(button);
                 });
@@ -405,6 +435,41 @@
             } catch (error) {
                 console.error('Error loading classes:', error);
             }
+        }
+
+        // Function to handle school selection
+        async function handleSchoolChange(schoolId) {
+            currentSchoolId = schoolId;
+            localStorage.setItem('selectedSchoolId', currentSchoolId);
+            
+            // Get the first class for this school
+            const response = await fetch(`/api/schools/${schoolId}/classes`);
+            const classes = await response.json();
+            
+            if (classes && classes.length > 0) {
+                const firstClass = classes[0];
+                currentClassId = firstClass.id;
+                localStorage.setItem('selectedClassId', currentClassId);
+                
+                // Update URL
+                const url = new URL(window.location.href);
+                url.searchParams.set('school', schoolId);
+                url.searchParams.set('class', currentClassId);
+                window.history.pushState({}, '', url.toString());
+                
+                // Special handling for Class 4/1 and 4/2
+                if (currentClassId === 'Class4-1') {
+                    window.location.href = '/class-4-1.html';
+                    return;
+                }
+                if (currentClassId === 'Class4-2') {
+                    window.location.href = '/class-4-2.html';
+                    return;
+                }
+            }
+            
+            // Load classes for the selected school
+            await loadClasses(schoolId);
         }
 
         // Function to check authentication status

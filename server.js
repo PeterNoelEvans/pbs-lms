@@ -49,15 +49,17 @@ if (!fs.existsSync(sessionDir)) {
 const sessionConfig = {
     store: new SQLiteStore({
         db: 'sessions.db',
-        dir: sessionDir
+        dir: sessionDir,
+        concurrentDB: true // Enable concurrent access
     }),
-    secret: process.env.SESSION_SECRET,
-    resave: false,
-    saveUninitialized: false,
+    secret: process.env.SESSION_SECRET || 'your-secret-key-here',
+    resave: true, // Changed to true to ensure session is saved
+    saveUninitialized: true, // Changed to true to create session for all visitors
+    rolling: true, // Reset expiration with each request
     cookie: {
         secure: process.env.NODE_ENV === 'production',
         httpOnly: true,
-        maxAge: 24 * 60 * 60 * 1000 // 24 hours
+        maxAge: 7 * 24 * 60 * 60 * 1000 // Extended to 7 days
     }
 };
 
@@ -1398,101 +1400,57 @@ app.get('/api/phumdham-students/:classId', async (req, res) => {
     const db = new sqlite3.Database(dbPath);
     
     try {
-        console.log(`\n==== PHUMDHAM STUDENTS DIRECT QUERY DEBUG ====`);
+        console.log(`\n==== PHUMDHAM STUDENTS QUERY ====`);
         console.log(`Class ID: ${classId}`);
-        console.log(`User authenticated: ${req.session?.user ? 'Yes' : 'No'}`);
-        console.log(`Username: ${req.session?.user?.username || 'Not logged in'}`);
-        
-        // Check if the database file exists
-        if (!fs.existsSync(dbPath)) {
-            console.error(`Database file not found at: ${dbPath}`);
-            return res.status(500).json({ error: 'Database file not found' });
-        }
+        console.log(`Session:`, req.session);
         
         // Determine the path pattern based on the class ID
-        const pathPattern = classId === 'Class4-1' ? '%P4-1%' : '%P4-2%';
-        console.log(`Using path pattern: ${pathPattern}`);
+        let pathPatterns = [];
+        if (classId === 'Class4-1') {
+            pathPatterns = ['%P4-1%', '%4-1%', '%Class4-1%'];
+        } else if (classId === 'Class4-2') {
+            pathPatterns = ['%P4-2%', '%4-2%', '%Class4-2%'];
+        }
         
-        // Log all users first
-        const allUsers = await new Promise((resolve, reject) => {
-            db.all('SELECT * FROM users', [], (err, rows) => {
+        console.log('Using path patterns:', pathPatterns);
+        
+        // Build the query to match any of the patterns
+        const placeholders = pathPatterns.map(() => 'portfolio_path LIKE ?').join(' OR ');
+        const query = `SELECT * FROM users WHERE ${placeholders}`;
+        
+        console.log('Executing query:', query);
+        console.log('With patterns:', pathPatterns);
+        
+        const students = await new Promise((resolve, reject) => {
+            db.all(query, pathPatterns, (err, rows) => {
                 if (err) {
-                    console.error('Database error when querying all users:', err);
+                    console.error('Database error:', err);
                     reject(err);
-                } else {
-                    console.log(`Total users in database: ${rows.length}`);
-                    if (rows.length > 0) {
-                        console.log('Sample users:');
-                        for (let i = 0; i < Math.min(5, rows.length); i++) {
-                            console.log(` - ${rows[i].username}: ${rows[i].portfolio_path}`);
-                        }
-                    }
-                    resolve(rows);
+                    return;
                 }
+                
+                console.log(`Found ${rows?.length || 0} students`);
+                if (rows?.length > 0) {
+                    console.log('Sample students:');
+                    rows.slice(0, 5).forEach(student => {
+                        console.log(` - ${student.username}: ${student.portfolio_path}`);
+                    });
+                }
+                
+                resolve(rows || []);
             });
         });
         
-        // Try direct query first
-        try {
-            const query = 'SELECT * FROM users WHERE portfolio_path LIKE ?';
-            console.log(`Executing query: ${query} with pattern: ${pathPattern}`);
-            
-            const students = await new Promise((resolve, reject) => {
-                db.all(query, [pathPattern], (err, rows) => {
-                    if (err) {
-                        console.error('Database error:', err);
-                        reject(err);
-                        return;
-                    }
-                    
-                    console.log(`Found ${rows.length} students for path pattern: ${pathPattern}`);
-                    
-                    if (rows.length > 0) {
-                        console.log('Sample students from query:');
-                        for (let i = 0; i < Math.min(5, rows.length); i++) {
-                            console.log(` - ${rows[i].username}: ${rows[i].portfolio_path}`);
-                        }
-                    } else {
-                        console.log('No students found through SQL query. Checking P4-1 pattern explicitly:');
-                        const matchingUsers = allUsers.filter(user => {
-                            if (user.portfolio_path && 
-                                typeof user.portfolio_path === 'string' && 
-                                user.portfolio_path.includes(pathPattern.replace(/%/g, ''))) {
-                                console.log(` - Found match: ${user.username}: ${user.portfolio_path}`);
-                                return true;
-                            }
-                            return false;
-                        });
-                        console.log(`Manual filtering found ${matchingUsers.length} matching users`);
-                        
-                        if (matchingUsers.length > 0) {
-                            // Return the manually filtered users if SQL query failed
-                            resolve(matchingUsers);
-                            return;
-                        }
-                    }
-                    
-                    resolve(rows || []);
-                });
-            });
-            
-            console.log(`==== END PHUMDHAM DEBUG ====\n`);
-            res.json(students);
-            
-        } catch (sqlError) {
-            console.error('SQL Error, falling back to manual filtering:', sqlError);
-            
-            // Fallback to manual filtering if SQL query fails
-            const manualFiltered = allUsers.filter(user => 
-                user.portfolio_path && 
-                typeof user.portfolio_path === 'string' && 
-                user.portfolio_path.includes(pathPattern.replace(/%/g, '')));
-            
-            console.log(`Manual filtering found ${manualFiltered.length} students`);
-            console.log(`==== END PHUMDHAM DEBUG (FALLBACK) ====\n`);
-            
-            res.json(manualFiltered);
-        }
+        // Add is_public field if not present
+        const studentsWithPrivacy = students.map(student => ({
+            ...student,
+            is_public: student.is_public === 1 || student.is_public === true
+        }));
+        
+        console.log(`Returning ${studentsWithPrivacy.length} students`);
+        console.log(`==== END PHUMDHAM QUERY ====\n`);
+        
+        res.json(studentsWithPrivacy);
         
     } catch (error) {
         console.error('Error getting Phumdham students:', error);
