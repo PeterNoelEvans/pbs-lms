@@ -1024,7 +1024,8 @@ const db = new sqlite3.Database(dbPath, (err) => {
             { name: 'is_super_user', type: 'INTEGER DEFAULT 0' },
             { name: 'first_name', type: 'TEXT' },
             { name: 'last_name', type: 'TEXT' },
-            { name: 'nickname', type: 'TEXT' }
+            { name: 'nickname', type: 'TEXT' },
+            { name: 'last_login', type: 'TIMESTAMP' }
         ];
 
         for (const column of columnsToAdd) {
