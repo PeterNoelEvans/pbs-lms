@@ -703,6 +703,50 @@ app.get(['/class-4-1.html', '/class-4-2.html'], (req, res) => {
     res.sendFile(filePath);
 });
 
+// Class viewer route - only for non-dedicated pages
+app.get('/classes', (req, res) => {
+    // Get query parameters
+    const schoolId = req.query.school;
+    const classId = req.query.class;
+    
+    console.log(`\n==== CLASS VIEWER REQUEST ====`);
+    console.log(`URL: ${req.url}`);
+    console.log(`Query parameters: school=${schoolId}, class=${classId}`);
+    
+    // Check if this is a dedicated class page request
+    if (classId === 'Class4-1') {
+        return res.redirect('/class-4-1.html');
+    }
+    if (classId === 'Class4-2') {
+        return res.redirect('/class-4-2.html');
+    }
+    
+    // Validate the parameters if provided
+    if (schoolId && classId) {
+        console.log(`Validating parameters: school=${schoolId}, class=${classId}`);
+        
+        // Check if the school exists
+        const school = schoolConfig.getSchool(schoolId);
+        if (!school) {
+            console.log(`School not found: ${schoolId}`);
+        } else {
+            console.log(`School found: ${school.name}`);
+            
+            // Check if the class exists in the school
+            const cls = schoolConfig.getClass(schoolId, classId);
+            if (!cls) {
+                console.log(`Class not found: ${classId} in school ${schoolId}`);
+            } else {
+                console.log(`Class found: ${cls.displayName} (${cls.id})`);
+            }
+        }
+    }
+    
+    // Send the HTML file
+    res.sendFile(path.join(__dirname, 'views/class-viewer.html'));
+    console.log(`==== END CLASS VIEWER REQUEST ====\n`);
+});
+
 // Protected portfolio access
 app.get('/portfolios/*', async (req, res, next) => {
     const portfolioPath = req.path;
@@ -1209,45 +1253,6 @@ app.get('/api/classes/:classId/students', async (req, res) => {
     } finally {
         db.close();
     }
-});
-
-// Class viewer route
-app.get('/classes', (req, res) => {
-    // Get query parameters
-    const schoolId = req.query.school;
-    const classId = req.query.class;
-    
-    console.log(`\n==== CLASS VIEWER REQUEST ====`);
-    console.log(`URL: ${req.url}`);
-    console.log(`Query parameters: school=${schoolId}, class=${classId}`);
-    
-    // Log if this is a direct access or a redirect
-    console.log(`Referrer: ${req.headers.referer || 'Direct Access'}`);
-    
-    // Validate the parameters if provided
-    if (schoolId && classId) {
-        console.log(`Validating parameters: school=${schoolId}, class=${classId}`);
-        
-        // Check if the school exists
-        const school = schoolConfig.getSchool(schoolId);
-        if (!school) {
-            console.log(`School not found: ${schoolId}`);
-        } else {
-            console.log(`School found: ${school.name}`);
-            
-            // Check if the class exists in the school
-            const cls = schoolConfig.getClass(schoolId, classId);
-            if (!cls) {
-                console.log(`Class not found: ${classId} in school ${schoolId}`);
-            } else {
-                console.log(`Class found: ${cls.displayName} (${cls.id})`);
-            }
-        }
-    }
-    
-    // Send the HTML file
-    res.sendFile(path.join(__dirname, 'views/class-viewer.html'));
-    console.log(`==== END CLASS VIEWER REQUEST ====\n`);
 });
 
 // Public visitor registration

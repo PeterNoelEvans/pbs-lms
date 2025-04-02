@@ -1,0 +1,11 @@
+                    classes.forEach(cls => {
+                        // Create button for each class
+                        const classBtn = document.createElement('a');
+                        // Special handling for Class 4/1 and 4/2
+                        classBtn.href = cls.id === 'Class4-1' ? '/class-4-1.html' :
+                                      cls.id === 'Class4-2' ? '/class-4-2.html' :
+                                      `/classes?school=${schoolId}&class=${cls.id}`;
+                        classBtn.className = 'button class-btn';
+                        classBtn.textContent = cls.displayName;
+                        classContainer.appendChild(classBtn);
+                    }); 
