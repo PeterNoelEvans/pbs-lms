@@ -142,6 +142,9 @@
                         'Pragma': 'no-cache'
                     }
                 });
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
                 const data = await response.json();
                 console.log('Auth check result:', data);
                 return {
@@ -156,8 +159,13 @@
         
         // Function to create a portfolio card
         function createPortfolioCard(student) {
+            if (!student) {
+                console.error('Invalid student data provided to createPortfolioCard');
+                return document.createElement('div');
+            }
+
             try {
-                console.log(`Creating card for student:`, student);
+                console.log('Creating card for student:', student);
                 const card = document.createElement('div');
                 card.className = 'portfolio-card';
                 
@@ -169,24 +177,21 @@
                 img.src = student.avatar_path || '/images/default-avatar.png';
                 img.alt = `${student.username}'s avatar`;
                 img.className = 'avatar';
-                img.onerror = function() {
-                    console.log(`Failed to load image for ${student.username}, using fallback`);
-                    this.src = '/images/default-avatar.png';
+                img.onerror = () => {
+                    img.src = '/images/default-avatar.png';
+                    console.log(`Using default avatar for ${student.username}`);
                 };
                 
                 const name = document.createElement('h3');
-                // Use nickname if available, otherwise use first name + last name, fallback to username
-                let displayedName = student.nickname || 
-                    (student.first_name && student.last_name ? 
-                        `${student.first_name} ${student.last_name}` : 
-                        student.username);
-                
-                // Clean up the username if we have to use it
-                if (displayedName === student.username) {
-                    displayedName = student.username.split('_')[0]; // Take first part before underscore
+                let displayedName = student.nickname;
+                if (!displayedName && student.first_name && student.last_name) {
+                    displayedName = `${student.first_name} ${student.last_name}`;
+                }
+                if (!displayedName && student.username) {
+                    displayedName = student.username.split('_')[0];
                     displayedName = displayedName.charAt(0).toUpperCase() + displayedName.slice(1);
                 }
-                name.textContent = displayedName;
+                name.textContent = displayedName || 'Unknown Student';
                 
                 const classTag = document.createElement('div');
                 classTag.textContent = 'P4-2';
@@ -195,7 +200,7 @@
                 const viewBtn = document.createElement('a');
                 viewBtn.className = 'view-portfolio';
                 viewBtn.textContent = student.is_public ? 'View Portfolio' : 'View Private Portfolio';
-                viewBtn.href = student.portfolio_path;
+                viewBtn.href = student.portfolio_path || '#';
                 
                 if (!student.is_public) {
                     viewBtn.style.backgroundColor = '#ff9800';
@@ -207,11 +212,10 @@
                 card.appendChild(classTag);
                 card.appendChild(viewBtn);
                 
-                console.log(`Card created for ${student.username}`);
                 return card;
             } catch (error) {
-                console.error(`Error creating card for ${student.username}:`, error);
-                return document.createElement('div'); // Return empty div on error
+                console.error('Error creating portfolio card:', error);
+                return document.createElement('div');
             }
         }
 
@@ -220,16 +224,20 @@
             const container = document.getElementById('portfoliosContainer');
             const loadingMessage = document.getElementById('loadingMessage');
             
+            if (!container) {
+                console.error('Portfolio container not found');
+                return;
+            }
+            
             try {
-                // Check authentication first
                 const auth = await checkAuth();
                 console.log('Authentication status:', auth);
                 
-                // Show/hide login prompt based on auth status
-                document.getElementById('loginPrompt').style.display = 
-                    auth.isAuthenticated ? 'none' : 'block';
+                const loginPrompt = document.getElementById('loginPrompt');
+                if (loginPrompt) {
+                    loginPrompt.style.display = auth.isAuthenticated ? 'none' : 'block';
+                }
                 
-                // Fetch student data from API
                 const response = await fetch('/api/phumdham-students/Class4-2', {
                     credentials: 'include',
                     headers: {
@@ -245,14 +253,12 @@
                 const students = await response.json();
                 console.log(`Fetched ${students.length} students`);
                 
-                // Clear loading message
                 if (loadingMessage) {
                     loadingMessage.remove();
                 }
                 
-                // Filter portfolios based on authentication
                 const visiblePortfolios = students.filter(student => 
-                    student.is_public || auth.isAuthenticated
+                    student && (student.is_public || auth.isAuthenticated)
                 );
                 
                 if (visiblePortfolios.length === 0) {
@@ -260,7 +266,6 @@
                     return;
                 }
                 
-                // Clear container and add portfolio cards
                 container.innerHTML = '';
                 visiblePortfolios.forEach(student => {
                     const card = createPortfolioCard(student);
@@ -269,15 +274,15 @@
                 
             } catch (error) {
                 console.error('Error loading portfolios:', error);
-                container.innerHTML = '<p style="text-align: center; width: 100%;">Error loading portfolios. Please try again later.</p>';
+                container.innerHTML = `<p style="text-align: center; width: 100%;">Error loading portfolios: ${error.message}</p>`;
             }
         }
 
-        // Load portfolios immediately
-        loadPortfolios();
+        // Initial load
+        document.addEventListener('DOMContentLoaded', loadPortfolios);
         
-        // Refresh portfolios periodically
-        setInterval(loadPortfolios, 30000); // Refresh every 30 seconds
+        // Refresh every 30 seconds
+        setInterval(loadPortfolios, 30000);
     </script>
 </body>
 </html> 
