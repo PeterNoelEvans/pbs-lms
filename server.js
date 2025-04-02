@@ -976,175 +976,134 @@ const db = new sqlite3.Database(dbPath, (err) => {
     }
     console.log('Successfully connected to database');
     
-    // Create tables and initial user
-    db.serialize(() => {
-        // Ensure data directory exists in production
-        if (isProduction) {
-            const fs = require('fs');
-            const dataDir = path.dirname(dbPath);
-            if (!fs.existsSync(dataDir)) {
-                console.log(`Creating data directory: ${dataDir}`);
-                fs.mkdirSync(dataDir, { recursive: true });
-            }
-        }
-        
-        // Create users table if it doesn't exist
-        db.run(`CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE,
-            email TEXT,
-            password TEXT,
-            portfolio_path TEXT UNIQUE,
-            avatar_path TEXT,
-            is_public INTEGER DEFAULT 0,
-            is_super_user INTEGER DEFAULT 0,
-            first_name TEXT,
-            last_name TEXT,
-            nickname TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            last_login TIMESTAMP
-        )`, (err) => {
-            if (err) {
-                console.error('Error creating users table:', err);
-                return;
-            }
-            console.log('Users table ready');
-            
-            // Check for missing columns
+    // Create users table if it doesn't exist
+    db.serialize(async () => {
+        // Create users table first
+        await new Promise((resolve, reject) => {
+            db.run(`CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE,
+                password TEXT,
+                portfolio_path TEXT UNIQUE,
+                avatar_path TEXT,
+                is_public INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_login TIMESTAMP
+            )`, (err) => {
+                if (err) {
+                    console.error('Error creating users table:', err);
+                    reject(err);
+                } else {
+                    console.log('Users table ready');
+                    resolve();
+                }
+            });
+        });
+
+        // Check existing columns
+        const columns = await new Promise((resolve, reject) => {
             db.all("PRAGMA table_info(users)", [], (err, rows) => {
                 if (err) {
                     console.error('Error checking table schema:', err);
-                    return;
+                    reject(err);
+                } else {
+                    resolve(rows.map(row => row.name));
                 }
-                
-                const columns = rows.map(row => row.name);
-                console.log('Checking for missing columns in users table...');
-                
-                // Add email column if it doesn't exist
-                if (!columns.includes('email')) {
-                    console.log('Adding email column...');
-                    db.run('ALTER TABLE users ADD COLUMN email TEXT', (err) => {
-                        if (err) {
-                            console.error('Error adding email column:', err);
-                        } else {
-                            // After adding the column, make it unique if it doesn't have data
-                            db.run('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email) WHERE email IS NOT NULL');
-                        }
-                    });
-                }
-                
-                // Add is_super_user column if it doesn't exist
-                if (!columns.includes('is_super_user')) {
-                    console.log('Adding is_super_user column...');
-                    db.run('ALTER TABLE users ADD COLUMN is_super_user INTEGER DEFAULT 0', (err) => {
-                        if (err) {
-                            console.error('Error adding is_super_user column:', err);
-                        }
-                    });
-                }
-                
-                // Add other columns if they don't exist
-                ['first_name', 'last_name', 'nickname'].forEach(col => {
-                    if (!columns.includes(col)) {
-                        console.log(`Adding ${col} column...`);
-                        db.run(`ALTER TABLE users ADD COLUMN ${col} TEXT`);
-                    }
-                });
-                
-                // Check if Peter42 exists and create if not
-                db.get('SELECT * FROM users WHERE username = ?', ['Peter42'], (err, row) => {
-                    if (err) {
-                        console.error('Error checking for Peter42:', err);
-                        return;
-                    }
-                    
-                    if (!row) {
-                        console.log('Peter42 not found, creating...');
-                        const hashedPassword = bcrypt.hashSync('Peter2025BB', 10);
-                        db.run(
-                            `INSERT INTO users (
-                                username, password, portfolio_path, avatar_path, 
-                                is_public, is_super_user, email
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-                            [
-                                'Peter42',
-                                hashedPassword,
-                                '/portfolios/P4-2/Peter/Peter.html',
-                                '/portfolios/P4-2/Peter/images/Peter42.jpg',
-                                1,
-                                1,
-                                'peter42@example.com'
-                            ],
-                            function(err) {
-                                if (err) {
-                                    console.error('Error creating Peter42:', err);
-                                } else {
-                                    console.log('Peter42 created successfully');
-                                }
-                            }
-                        );
-                    } else {
-                        // Update Peter42 to be a super user if they exist
-                        db.run(
-                            'UPDATE users SET is_super_user = 1 WHERE username = ?',
-                            ['Peter42'],
-                            (err) => {
-                                if (err) {
-                                    console.error('Error setting Peter42 as super user:', err);
-                                } else {
-                                    console.log('Peter42 updated to super user');
-                                }
-                            }
-                        );
-                    }
-                });
             });
         });
-        
-        // Create public_visitors table for visitor registration
-        db.run(`CREATE TABLE IF NOT EXISTS public_visitors (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            full_name TEXT NOT NULL,
-            email TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL,
-            reason TEXT,
-            registration_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )`, (err) => {
-            if (err) {
-                console.error('Error creating public_visitors table:', err);
-            } else {
-                console.log('Public visitors table ready');
+
+        // Add columns one by one in sequence
+        const columnsToAdd = [
+            {
+                name: 'email',
+                type: 'TEXT',
+                afterAdd: () => {
+                    db.run('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email) WHERE email IS NOT NULL');
+                }
+            },
+            { name: 'is_super_user', type: 'INTEGER DEFAULT 0' },
+            { name: 'first_name', type: 'TEXT' },
+            { name: 'last_name', type: 'TEXT' },
+            { name: 'nickname', type: 'TEXT' }
+        ];
+
+        for (const column of columnsToAdd) {
+            if (!columns.includes(column.name)) {
+                await new Promise((resolve, reject) => {
+                    console.log(`Adding ${column.name} column...`);
+                    db.run(`ALTER TABLE users ADD COLUMN ${column.name} ${column.type}`, async (err) => {
+                        if (err) {
+                            console.error(`Error adding ${column.name} column:`, err);
+                        } else {
+                            console.log(`Added ${column.name} column successfully`);
+                            if (column.afterAdd) {
+                                await column.afterAdd();
+                            }
+                        }
+                        resolve(); // Continue even if there's an error
+                    });
+                });
             }
+        }
+
+        // Now check for Peter42 and create/update if needed
+        const peter42 = await new Promise((resolve, reject) => {
+            db.get('SELECT * FROM users WHERE username = ?', ['Peter42'], (err, row) => {
+                if (err) {
+                    console.error('Error checking for Peter42:', err);
+                    reject(err);
+                } else {
+                    resolve(row);
+                }
+            });
         });
-        
-        // Create visitor_logins table to track visitor activity
-        db.run(`CREATE TABLE IF NOT EXISTS visitor_logins (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            visitor_id INTEGER NOT NULL,
-            login_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (visitor_id) REFERENCES public_visitors(id)
-        )`, (err) => {
-            if (err) {
-                console.error('Error creating visitor_logins table:', err);
-            } else {
-                console.log('Visitor logins table ready');
-            }
-        });
-        
-        // Create visitor_views table to track portfolio viewing
-        db.run(`CREATE TABLE IF NOT EXISTS visitor_views (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            visitor_id INTEGER NOT NULL,
-            portfolio_path TEXT NOT NULL,
-            view_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (visitor_id) REFERENCES public_visitors(id)
-        )`, (err) => {
-            if (err) {
-                console.error('Error creating visitor_views table:', err);
-            } else {
-                console.log('Visitor views table ready');
-            }
-        });
+
+        if (!peter42) {
+            console.log('Peter42 not found, creating...');
+            const hashedPassword = await bcrypt.hash('Peter2025BB', 10);
+            await new Promise((resolve, reject) => {
+                db.run(
+                    `INSERT INTO users (
+                        username, password, portfolio_path, avatar_path, 
+                        is_public, is_super_user, email
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                    [
+                        'Peter42',
+                        hashedPassword,
+                        '/portfolios/P4-2/Peter/Peter.html',
+                        '/portfolios/P4-2/Peter/images/Peter42.jpg',
+                        1,
+                        1,
+                        'peter42@example.com'
+                    ],
+                    function(err) {
+                        if (err) {
+                            console.error('Error creating Peter42:', err);
+                            reject(err);
+                        } else {
+                            console.log('Peter42 created successfully');
+                            resolve();
+                        }
+                    }
+                );
+            });
+        } else {
+            // Update Peter42's super user status
+            await new Promise((resolve, reject) => {
+                db.run(
+                    'UPDATE users SET is_super_user = 1 WHERE username = ?',
+                    ['Peter42'],
+                    (err) => {
+                        if (err) {
+                            console.error('Error updating Peter42 super user status:', err);
+                        } else {
+                            console.log('Peter42 updated to super user');
+                        }
+                        resolve();
+                    }
+                );
+            });
+        }
     });
 });
 
