@@ -1202,16 +1202,13 @@ app.get('/api/classes/:classId/students', async (req, res) => {
         if (classId === 'ClassM2-001') {
             console.log(`Special handling for PBSChonburi M2 class: ${classId}`);
             
-            // Try all possible M2 paths
-            const possiblePaths = ['ClassM2-001', 'M2', 'M2-001'];
-            const likeQueries = possiblePaths.map(p => `portfolio_path LIKE '%${p}%'`).join(' OR ');
-            
             // Direct query for M2 folders
             const students = await new Promise((resolve, reject) => {
-                db.all(`SELECT * FROM users WHERE ${likeQueries}`, [], (err, rows) => {
+                db.all('SELECT * FROM users WHERE portfolio_path LIKE ?', [`%ClassM2-001%`], (err, rows) => {
                     if (err) {
                         console.error('Database error:', err);
                         reject(err);
+                        return;
                     }
                     
                     console.log(`Found ${rows.length} students for M2 class`);
@@ -1231,34 +1228,32 @@ app.get('/api/classes/:classId/students', async (req, res) => {
                 console.log('No M2 students found in database, checking filesystem');
                 
                 try {
-                    for (const folderName of possiblePaths) {
-                        const folderPath = path.join(__dirname, 'portfolios', folderName);
-                        if (fs.existsSync(folderPath)) {
-                            console.log(`Found M2 directory: ${folderPath}`);
+                    const folderPath = path.join(__dirname, 'portfolios', 'ClassM2-001');
+                    if (fs.existsSync(folderPath)) {
+                        console.log(`Found M2 directory: ${folderPath}`);
+                        
+                        // Get files and directories
+                        const entries = fs.readdirSync(folderPath, { withFileTypes: true });
+                        const studentDirs = entries.filter(entry => entry.isDirectory());
+                        
+                        console.log(`Found ${studentDirs.length} student directories in ${folderPath}`);
+                        
+                        for (const dir of studentDirs) {
+                            const studentName = dir.name;
+                            const studentPath = path.join(folderPath, studentName);
                             
-                            // Get files and directories
-                            const entries = fs.readdirSync(folderPath, { withFileTypes: true });
-                            const studentDirs = entries.filter(entry => entry.isDirectory());
+                            // Find HTML files
+                            const files = fs.readdirSync(studentPath);
+                            const htmlFiles = files.filter(file => file.toLowerCase().endsWith('.html'));
                             
-                            console.log(`Found ${studentDirs.length} student directories in ${folderPath}`);
-                            
-                            for (const dir of studentDirs) {
-                                const studentName = dir.name;
-                                const studentPath = path.join(folderPath, studentName);
-                                
-                                // Find HTML files
-                                const files = fs.readdirSync(studentPath);
-                                const htmlFiles = files.filter(file => file.toLowerCase().endsWith('.html'));
-                                
-                                if (htmlFiles.length) {
-                                    const htmlFile = htmlFiles[0];
-                                    students.push({
-                                        username: studentName,
-                                        portfolio_path: `/portfolios/${folderName}/${studentName}/${htmlFile}`,
-                                        avatar_path: `/portfolios/${folderName}/${studentName}/images/${studentName}.jpg`,
-                                        is_public: 1
-                                    });
-                                }
+                            if (htmlFiles.length) {
+                                const htmlFile = htmlFiles[0];
+                                students.push({
+                                    username: studentName,
+                                    portfolio_path: `/portfolios/ClassM2-001/${studentName}/${htmlFile}`,
+                                    avatar_path: `/portfolios/ClassM2-001/${studentName}/images/${studentName}.jpg`,
+                                    is_public: 1
+                                });
                             }
                         }
                     }
@@ -1776,5 +1771,103 @@ app.get('/api/filesystem-portfolios/:classId', (req, res) => {
     } catch (error) {
         console.error('Error in filesystem-based endpoint:', error);
         res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Special endpoint for M2 students
+app.get('/api/m2-students', async (req, res) => {
+    const db = new sqlite3.Database(dbPath);
+    
+    try {
+        console.log(`\n==== M2 STUDENTS QUERY ====`);
+        
+        // Check authentication
+        const isAuthenticated = req.session?.authenticated || !!req.session?.user;
+        const isVisitor = req.session?.userType === 'visitor' || req.session?.user?.userType === 'visitor';
+        console.log('Auth status:', { isAuthenticated, isVisitor });
+        
+        // Use correct path for M2
+        const m2Path = 'ClassM2-001';
+        
+        // Get students from database
+        const dbStudents = await new Promise((resolve, reject) => {
+            const query = `
+                SELECT username, portfolio_path, avatar_path, is_public, first_name, last_name, nickname 
+                FROM users 
+                WHERE portfolio_path LIKE ?
+            `;
+            
+            console.log('Executing query:', query);
+            
+            db.all(query, [`%${m2Path}%`], (err, rows) => {
+                if (err) {
+                    console.error('Database error:', err);
+                    reject(err);
+                    return;
+                }
+                
+                console.log(`Found ${rows?.length || 0} students in database`);
+                resolve(rows || []);
+            });
+        });
+        
+        // Check filesystem for additional students
+        let filesystemStudents = [];
+        const folderPath = path.join(__dirname, 'portfolios', m2Path);
+        
+        if (fs.existsSync(folderPath)) {
+            console.log(`Checking filesystem path: ${folderPath}`);
+            const files = fs.readdirSync(folderPath, { withFileTypes: true });
+            const studentDirs = files.filter(file => file.isDirectory());
+            
+            studentDirs.forEach(dir => {
+                const studentName = dir.name;
+                const studentPath = path.join(folderPath, studentName);
+                
+                try {
+                    const studentFiles = fs.readdirSync(studentPath);
+                    const htmlFiles = studentFiles.filter(file => 
+                        file.toLowerCase().endsWith('.html') || 
+                        file.toLowerCase() === 'index.html'
+                    );
+                    
+                    if (htmlFiles.length > 0) {
+                        // Prefer index.html if available
+                        const htmlFile = htmlFiles.find(f => f.toLowerCase() === 'index.html') || htmlFiles[0];
+                        
+                        filesystemStudents.push({
+                            username: studentName,
+                            portfolio_path: `/portfolios/${m2Path}/${studentName}/${htmlFile}`,
+                            avatar_path: `/portfolios/${m2Path}/${studentName}/images/${studentName}.jpg`,
+                            is_public: true,
+                            first_name: studentName,
+                            last_name: '',
+                            nickname: studentName
+                        });
+                    }
+                } catch (error) {
+                    console.error(`Error processing student directory ${studentName}:`, error);
+                }
+            });
+        }
+        
+        // Merge database and filesystem results, preferring database entries
+        const dbUsernames = new Set(dbStudents.map(s => s.username));
+        const allStudents = [
+            ...dbStudents,
+            ...filesystemStudents.filter(s => !dbUsernames.has(s.username))
+        ];
+        
+        // Sort students by username
+        allStudents.sort((a, b) => a.username.localeCompare(b.username));
+        
+        console.log(`Returning ${allStudents.length} total students`);
+        res.json(allStudents);
+        
+    } catch (error) {
+        console.error('Error in M2 students API:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    } finally {
+        db.close();
     }
 });
