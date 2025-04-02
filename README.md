@@ -41,9 +41,11 @@ Tips for using the Turtle Editor:
 
 ### Portfolio Structure
 When you register, the system automatically creates:
-1. Your portfolio directory at `/portfolios/P4-1/` or `/portfolios/P4-2/` (based on your class)
+1. Your portfolio directory in the correct class folder
 2. An `images` folder for your media
 3. Your initial portfolio HTML file
+
+Note: For technical details about portfolio paths and directory structure, please refer to `CODEBASE_GUIDE.md`.
 
 #### Adding Your Avatar Image
 1. Your avatar should be placed in your `images` folder
@@ -177,4 +179,44 @@ portfolios/
 
 <!-- Code image example -->
 <img src="code-images/my-code.png" alt="My Project Code">
-``` 
+```
+
+## Class Paths and Portfolio Structure
+
+### Important: Class Directory Names
+The system uses specific directory names for each class. These names are fixed and must be used exactly as shown:
+
+| Class Display Name | Directory Name | Example Path |
+|-------------------|----------------|--------------|
+| M2 2025 | ClassM2-001 | /portfolios/ClassM2-001/StudentName/StudentName.html |
+| Class 4/1 | P4-1 | /portfolios/P4-1/StudentName/StudentName.html |
+| Class 4/2 | P4-2 | /portfolios/P4-2/StudentName/StudentName.html |
+
+⚠️ IMPORTANT NOTES:
+1. Directory names are case-sensitive
+2. Do NOT use alternative names (e.g., do not use 'M2' or 'M2-2025' instead of 'ClassM2-001')
+3. Always use the exact directory names as specified above
+4. The system will look for portfolios only in these exact paths
+
+### Portfolio Structure Example for M2 2025
+```
+portfolios/
+  ClassM2-001/           # Exact directory name for M2 2025
+    StudentName/
+      StudentName.html   # Main portfolio file
+      images/
+        StudentName.jpg  # Avatar image
+      videos/
+        project1.mp4
+```
+
+### Common Issues and Solutions
+1. If portfolios are not appearing:
+   - Check that you're using the exact directory name (e.g., 'ClassM2-001' not 'M2')
+   - Verify the case sensitivity of all folder names
+   - Ensure the portfolio path in the database matches the filesystem path
+
+2. For new class setups:
+   - Always use the standardized directory names as shown in the table above
+   - Update both the database entries and filesystem paths to match
+   - Test the paths before deploying 

@@ -1781,13 +1781,16 @@ app.get('/api/m2-students', async (req, res) => {
     try {
         console.log(`\n==== M2 STUDENTS QUERY ====`);
         
-        // Check authentication
-        const isAuthenticated = req.session?.authenticated || !!req.session?.user;
-        const isVisitor = req.session?.userType === 'visitor' || req.session?.user?.userType === 'visitor';
-        console.log('Auth status:', { isAuthenticated, isVisitor });
+        // Get class configuration
+        const m2Class = schoolConfig.getClass('PBSChonburi', 'ClassM2-001');
+        if (!m2Class) {
+            console.error('M2 class configuration not found');
+            return res.status(404).json({ error: 'Class not found' });
+        }
         
-        // Use correct path for M2
-        const m2Path = 'ClassM2-001';
+        // Use the configured portfolio path
+        const portfolioPath = m2Class.portfolioPath;
+        console.log('Using portfolio path:', portfolioPath);
         
         // Get students from database
         const dbStudents = await new Promise((resolve, reject) => {
@@ -1798,8 +1801,7 @@ app.get('/api/m2-students', async (req, res) => {
             `;
             
             console.log('Executing query:', query);
-            
-            db.all(query, [`%${m2Path}%`], (err, rows) => {
+            db.all(query, [`${portfolioPath}%`], (err, rows) => {
                 if (err) {
                     console.error('Database error:', err);
                     reject(err);
@@ -1807,13 +1809,20 @@ app.get('/api/m2-students', async (req, res) => {
                 }
                 
                 console.log(`Found ${rows?.length || 0} students in database`);
+                if (rows?.length > 0) {
+                    console.log('Sample students:');
+                    rows.slice(0, 3).forEach(student => {
+                        console.log(` - ${student.username}: ${student.portfolio_path}`);
+                    });
+                }
+                
                 resolve(rows || []);
             });
         });
         
         // Check filesystem for additional students
         let filesystemStudents = [];
-        const folderPath = path.join(__dirname, 'portfolios', m2Path);
+        const folderPath = path.join(__dirname, 'portfolios', 'ClassM2-001');
         
         if (fs.existsSync(folderPath)) {
             console.log(`Checking filesystem path: ${folderPath}`);
@@ -1837,8 +1846,8 @@ app.get('/api/m2-students', async (req, res) => {
                         
                         filesystemStudents.push({
                             username: studentName,
-                            portfolio_path: `/portfolios/${m2Path}/${studentName}/${htmlFile}`,
-                            avatar_path: `/portfolios/${m2Path}/${studentName}/images/${studentName}.jpg`,
+                            portfolio_path: `${portfolioPath}/${studentName}/${htmlFile}`,
+                            avatar_path: `${portfolioPath}/${studentName}/images/${studentName}.jpg`,
                             is_public: true,
                             first_name: studentName,
                             last_name: '',

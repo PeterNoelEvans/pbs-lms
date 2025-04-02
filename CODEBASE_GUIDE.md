@@ -1,13 +1,18 @@
 # Portfolio System Codebase Guide
 
-## 1. File Structure
+## 1. File Structure and Directory Names
+
+### Directory Structure
 ```
 /
 ├── views/                    # Frontend HTML views
 │   ├── class-4-1.html       # Class 4/1 portfolio view
 │   ├── class-4-2.html       # Class 4/2 portfolio view
+│   ├── class-m2.html        # M2 2025 portfolio view
 │   └── class-styles.css     # Shared styles
 ├── portfolios/              # Student portfolios
+│   ├── ClassM2-001/        # M2 2025 portfolios
+│   │   └── [student]/      # Individual student folders
 │   ├── P4-1/               # Class 4/1 portfolios
 │   │   └── [student]/      # Individual student folders
 │   └── P4-2/               # Class 4/2 portfolios
@@ -15,6 +20,36 @@
 └── scripts/                # Backend scripts
     └── initializeDatabase.js
 ```
+
+### Critical: Class Directory Names
+The system uses specific directory names that MUST be used exactly as shown:
+
+| Class Display Name | Directory Name | Example Path |
+|-------------------|----------------|--------------|
+| M2 2025 | ClassM2-001 | /portfolios/ClassM2-001/StudentName/StudentName.html |
+| Class 4/1 | P4-1 | /portfolios/P4-1/StudentName/StudentName.html |
+| Class 4/2 | P4-2 | /portfolios/P4-2/StudentName/StudentName.html |
+
+⚠️ CRITICAL IMPLEMENTATION NOTES:
+1. Directory names are case-sensitive
+2. Do NOT use alternative names (e.g., do not use 'M2' or 'M2-2025' instead of 'ClassM2-001')
+3. The system will ONLY look for portfolios in these exact paths
+4. Both database entries and filesystem paths MUST match these exact names
+
+### Common Directory Issues and Solutions
+1. **404 Errors in Portfolio Loading**
+   - Cause: Mismatched directory names (e.g., using 'M2' instead of 'ClassM2-001')
+   - Solution: Always use exact directory names as specified above
+
+2. **Missing Portfolios**
+   - Cause: Case sensitivity issues or incorrect path structure
+   - Solution: Verify both database paths and filesystem structure match exactly
+
+3. **New Class Setup**
+   - Always use standardized directory names
+   - Update both database entries and filesystem paths
+   - Test paths before deploying
+   - Verify API endpoints use correct paths
 
 ## 2. Student Data Structure
 ```javascript
