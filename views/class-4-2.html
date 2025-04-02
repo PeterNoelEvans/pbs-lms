@@ -145,7 +145,7 @@
         }
         
         // Function to create a portfolio card
-        function createPortfolioCard(username, imagePath, isPublic, portfolioPath, displayName) {
+        function createPortfolioCard(username, imagePath, isPublic, portfolioPath, displayName, firstName, lastName, nickname) {
             try {
                 console.log(`createPortfolioCard for ${username} at ${portfolioPath}`);
                 const card = document.createElement('div');
@@ -165,7 +165,15 @@
                 };
                 
                 const name = document.createElement('h3');
-                name.textContent = displayName || username;
+                // Use nickname if available, otherwise use first name + last name, fallback to username
+                let displayedName = nickname || (firstName && lastName ? `${firstName} ${lastName}` : username);
+                // Clean up the username if we have to use it (remove underscores and numbers)
+                if (displayedName === username) {
+                    displayedName = username.split('_')[0]; // Take first part before underscore
+                    // Capitalize first letter
+                    displayedName = displayedName.charAt(0).toUpperCase() + displayedName.slice(1);
+                }
+                name.textContent = displayedName;
                 
                 const classTag = document.createElement('div');
                 classTag.textContent = 'P4-2';
@@ -234,7 +242,10 @@
                         student.avatar_url,
                         student.is_public,
                         student.portfolio_path,
-                        student.display_name
+                        student.display_name,
+                        student.first_name,
+                        student.last_name,
+                        student.nickname
                     );
                     container.appendChild(card);
                 });
