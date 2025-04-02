@@ -1416,12 +1416,25 @@ app.get('/api/phumdham-students/:classId', async (req, res) => {
         
         // Get all students from the database first
         const dbStudents = await new Promise((resolve, reject) => {
+            // Use multiple patterns to match both with and without leading slash
+            const patterns = [
+                'P4-1%',           // No slash
+                '/P4-1%',          // With slash
+                '%/P4-1/%',        // Full path with slashes
+                'portfolios/P4-1%', // Standard format
+                '/portfolios/P4-1%' // Standard format with leading slash
+            ];
+            
+            // Build query to match any pattern
+            const placeholders = patterns.map(() => 'portfolio_path LIKE ?').join(' OR ');
             const query = `
                 SELECT username, portfolio_path, avatar_path, is_public, first_name, last_name, nickname 
                 FROM users 
-                WHERE portfolio_path LIKE ? OR portfolio_path LIKE ? OR portfolio_path LIKE ?
+                WHERE ${placeholders}
             `;
-            const patterns = [`%/P4-1/%`, `%/4-1/%`, `%/Class4-1/%`];
+            
+            console.log('Executing query:', query);
+            console.log('With patterns:', patterns);
             
             db.all(query, patterns, (err, rows) => {
                 if (err) {
@@ -1429,6 +1442,17 @@ app.get('/api/phumdham-students/:classId', async (req, res) => {
                     reject(err);
                     return;
                 }
+                
+                if (rows?.length > 0) {
+                    console.log(`Found ${rows.length} students in database`);
+                    console.log('Sample students:');
+                    rows.slice(0, 3).forEach(student => {
+                        console.log(` - ${student.username}: ${student.portfolio_path} (${student.is_public ? 'Public' : 'Private'})`);
+                    });
+                } else {
+                    console.log('No students found in database');
+                }
+                
                 resolve(rows || []);
             });
         });
@@ -1438,6 +1462,7 @@ app.get('/api/phumdham-students/:classId', async (req, res) => {
         let filesystemStudents = [];
         
         if (fs.existsSync(folderPath)) {
+            console.log(`Checking filesystem path: ${folderPath}`);
             const files = fs.readdirSync(folderPath, { withFileTypes: true });
             filesystemStudents = files
                 .filter(file => file.isDirectory())
@@ -1447,9 +1472,12 @@ app.get('/api/phumdham-students/:classId', async (req, res) => {
                         .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
                         .join(' ');
                     
+                    const portfolioPath = `/portfolios/P4-1/${dir.name}/index.html`;
+                    console.log(`Found student directory: ${dir.name} -> ${portfolioPath}`);
+                    
                     return {
                         username: dir.name,
-                        portfolio_path: `/portfolios/P4-1/${dir.name}/index.html`,
+                        portfolio_path: portfolioPath,
                         avatar_path: `/portfolios/P4-1/${dir.name}/images/${dir.name}.png`,
                         is_public: true, // Filesystem portfolios are public by default
                         first_name: formattedName,
@@ -1457,6 +1485,10 @@ app.get('/api/phumdham-students/:classId', async (req, res) => {
                         nickname: ''
                     };
                 });
+            
+            console.log(`Found ${filesystemStudents.length} students in filesystem`);
+        } else {
+            console.log(`Filesystem path not found: ${folderPath}`);
         }
         
         // Merge database and filesystem results, preferring database entries
@@ -1475,7 +1507,12 @@ app.get('/api/phumdham-students/:classId', async (req, res) => {
         }));
         
         console.log(`Found ${processedStudents.length} total students`);
-        console.log('Sample students:', processedStudents.slice(0, 3));
+        if (processedStudents.length > 0) {
+            console.log('First 3 students in response:');
+            processedStudents.slice(0, 3).forEach(student => {
+                console.log(` - ${student.username}: ${student.portfolio_path} (${student.is_public ? 'Public' : 'Private'})`);
+            });
+        }
         
         res.json(processedStudents);
         

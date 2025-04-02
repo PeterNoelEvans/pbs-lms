@@ -114,6 +114,7 @@
     <div class="nav-buttons">
         <a href="/class-4-1.html" class="nav-btn">Class 4/1</a>
         <a href="/class-4-2.html" class="nav-btn active">Class 4/2</a>
+        <a href="/schools.html" class="nav-btn">Back to Schools</a>
         <a href="/logout" class="nav-btn" style="background-color: #f44336;">Logout</a>
     </div>
     
@@ -127,6 +128,21 @@
 
     <script>
         console.log('Script loaded in class-4-2.html at', new Date().toISOString());
+        
+        // Function to check authentication status
+        async function checkAuth() {
+            try {
+                const response = await fetch('/check-session');
+                const data = await response.json();
+                return {
+                    isAuthenticated: data.authenticated,
+                    userType: data.userType
+                };
+            } catch (error) {
+                console.error('Error checking auth:', error);
+                return { isAuthenticated: false, userType: null };
+            }
+        }
         
         // Function to create a portfolio card
         function createPortfolioCard(username, imagePath, isPublic, portfolioPath, displayName) {
@@ -160,23 +176,8 @@
                 viewBtn.textContent = isPublic ? 'View Portfolio' : 'View Private Portfolio';
                 viewBtn.href = portfolioPath;
                 
-                // Visually indicate private portfolios if not logged in
                 if (!isPublic) {
-                    const isLoggedIn = localStorage.getItem('isAuthenticated') === 'true';
-                    if (!isLoggedIn) {
-                        viewBtn.style.opacity = '0.7';
-                        viewBtn.style.backgroundColor = '#999';
-                        viewBtn.addEventListener('click', function(e) {
-                            e.preventDefault();
-                            const loginPrompt = document.getElementById('loginPrompt');
-                            loginPrompt.style.display = 'block';
-                            setTimeout(() => {
-                                loginPrompt.style.display = 'none';
-                            }, 3000);
-                        });
-                    } else {
-                        viewBtn.style.backgroundColor = '#ff9800';
-                    }
+                    viewBtn.style.backgroundColor = '#ff9800';
                 }
                 
                 card.appendChild(privacyBadge);
@@ -196,166 +197,60 @@
         async function loadPortfolios() {
             try {
                 console.log('Starting to load Class 4/2 portfolios...');
-                
                 const container = document.getElementById('portfoliosContainer');
-                if (!container) {
-                    console.error('portfoliosContainer element not found!');
+                container.innerHTML = '<p style="text-align: center; grid-column: 1/-1;">Loading portfolios...</p>';
+                
+                const authStatus = await checkAuth();
+                console.log('Auth status:', authStatus);
+                
+                const response = await fetch('/api/phumdham-students/Class4-2');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const students = await response.json();
+                console.log('Fetched students:', students);
+                
+                container.innerHTML = '';
+                
+                if (!students || students.length === 0) {
+                    container.innerHTML = '<p style="text-align: center; grid-column: 1/-1;">No portfolios found for Class 4/2</p>';
                     return;
                 }
-                console.log('Found portfoliosContainer element');
                 
-                // Check authentication status
-                try {
-                    const authResponse = await fetch('/check-auth');
-                    const authData = await authResponse.json();
-                    console.log('Auth status:', authData);
-                    
-                    // Update login status in localStorage
-                    localStorage.setItem('isAuthenticated', authData.authenticated);
-                    
-                    // Show login prompt if not authenticated
-                    const loginPrompt = document.getElementById('loginPrompt');
-                    if (loginPrompt) {
-                        if (!authData.authenticated) {
-                            loginPrompt.style.display = 'block';
-                        }
-                    } else {
-                        console.error('loginPrompt element not found!');
-                    }
-                } catch (authError) {
-                    console.error('Error fetching authentication status:', authError);
-                }
-
-                // Define Class 4/2 students
-                const students = [
-                    { username: 'Peter42', displayName: 'Peter42', path: '/portfolios/P4-2/Peter/Peter.html', avatar: '/portfolios/P4-2/Peter/images/Peter42.jpg', isPublic: false },
-                    { username: 'Darin', displayName: 'Darin', path: '/portfolios/P4-2/Darin/Darin.html', avatar: '/portfolios/P4-2/Darin/images/Darin.jpg', isPublic: false },
-                    { username: 'Sky', displayName: 'Sky', path: '/portfolios/P4-2/Sky/index.html', avatar: '/portfolios/P4-2/Sky/images/Sky.jpg', isPublic: false },
-                    { username: 'Perth', displayName: 'Perth', path: '/portfolios/P4-2/Perth/Perth.html', avatar: '/portfolios/P4-2/Perth/images/Perth.jpg', isPublic: false },
-                    { username: 'Tin', displayName: 'Tin', path: '/portfolios/P4-2/Tin/Tin.html', avatar: '/portfolios/P4-2/Tin/images/Tin.jpg', isPublic: false },
-                    { username: 'Tonmali', displayName: 'Tonmali', path: '/portfolios/P4-2/Tonmali/Tonmali.html', avatar: '/portfolios/P4-2/Tonmali/images/Tonmali.jpg', isPublic: false },
-                    { username: 'Zeno', displayName: 'Zeno', path: '/portfolios/P4-2/Zeno/Zeno.html', avatar: '/portfolios/P4-2/Zeno/images/Zeno.jpg', isPublic: false },
-                    { username: 'Chapter', displayName: 'Chapter', path: '/portfolios/P4-2/Chapter/Chapter.html', avatar: '/portfolios/P4-2/Chapter/images/Chapter.jpg', isPublic: false },
-                    { username: 'copter', displayName: 'Copter', path: '/portfolios/P4-2/copter/copter.html', avatar: '/portfolios/P4-2/copter/images/copter.jpg', isPublic: false },
-                    { username: 'Jdi', displayName: 'Jdi', path: '/portfolios/P4-2/Jdi/Jdi.html', avatar: '/portfolios/P4-2/Jdi/images/Jdi.jpg', isPublic: false },
-                    { username: 'nicha', displayName: 'Nicha', path: '/portfolios/P4-2/nicha.html', avatar: '/images/default-avatar.png', isPublic: false },
-                    { username: 'Ounjai', displayName: 'Ounjai', path: '/portfolios/P4-2/Ounjai/Ounjai.html', avatar: '/portfolios/P4-2/Ounjai/images/Ounjai.jpg', isPublic: false },
-                    { username: 'Paul', displayName: 'Paul', path: '/portfolios/P4-2/Paul/Paul.html', avatar: '/portfolios/P4-2/Paul/images/Paul.jpg', isPublic: false },
-                    { username: 'Peso', displayName: 'Peso', path: '/portfolios/P4-2/Peso/Peso.html', avatar: '/portfolios/P4-2/Peso/images/Peso.jpg', isPublic: false },
-                    { username: 'Peter', displayName: 'Peter', path: '/portfolios/P4-2/Peter/Peter.html', avatar: '/portfolios/P4-2/Peter/images/Peter.jpg', isPublic: false },
-                    { username: 'Pleng', displayName: 'Pleng', path: '/portfolios/P4-2/Pleng/Pleng.html', avatar: '/portfolios/P4-2/Pleng/images/Pleng.jpg', isPublic: false },
-                    { username: 'PoonPoon', displayName: 'PoonPoon', path: '/portfolios/P4-2/PoonPoon/PoonPoon.html', avatar: '/portfolios/P4-2/PoonPoon/images/PoonPoon.jpg', isPublic: false }
-                ];
+                // Filter portfolios based on authentication status
+                const portfoliosToShow = students.filter(student => 
+                    student.is_public || authStatus.isAuthenticated
+                );
                 
-                console.log('Hardcoded students:', students.length);
-                
-                // Try to fetch folder contents directly as a backup data source
-                let folderContents = [];
-                try {
-                    const folderResponse = await fetch('/api/folder-list/P4-2');
-                    const folderData = await folderResponse.json();
-                    console.log('Direct folder list:', folderData);
-                    folderContents = folderData.folders || [];
-                } catch (folderError) {
-                    console.error('Error fetching folder list:', folderError);
+                if (portfoliosToShow.length === 0) {
+                    container.innerHTML = '<p style="text-align: center; grid-column: 1/-1;">No public portfolios available. Please log in to view private portfolios.</p>';
+                    return;
                 }
                 
-                // Fetch privacy states from server
-                let privacyStates = {};
-                try {
-                    console.log('Fetching privacy states...');
-                    const privacyResponse = await fetch('/get-all-privacy-states');
-                    privacyStates = await privacyResponse.json();
-                    console.log('Privacy states received:', Object.keys(privacyStates).length);
-                    
-                    // Find P4-2 specific states
-                    const p42States = Object.entries(privacyStates)
-                        .filter(([path]) => path.toLowerCase().includes('p4-2'))
-                        .map(([path, isPublic]) => `${path}: ${isPublic}`);
-                    console.log('P4-2 privacy states:', p42States.length);
-                    if (p42States.length > 0) {
-                        console.log('First few P4-2 states:', p42States.slice(0, 3));
-                    }
-                } catch (privacyError) {
-                    console.error('Error fetching privacy states:', privacyError);
-                }
-                
-                // Update privacy states from server data
-                let updatedCount = 0;
-                students.forEach(student => {
-                    if (privacyStates[student.path] !== undefined) {
-                        student.isPublic = privacyStates[student.path];
-                        updatedCount++;
-                    }
+                portfoliosToShow.forEach(student => {
+                    const card = createPortfolioCard(
+                        student.username,
+                        student.avatar_url,
+                        student.is_public,
+                        student.portfolio_path,
+                        student.display_name
+                    );
+                    container.appendChild(card);
                 });
-                console.log(`Updated privacy states for ${updatedCount} students`);
                 
-                // Clear existing content
-                container.innerHTML = ''; 
-                console.log('Cleared container content');
-                
-                // Log before creating cards
-                console.log('Creating portfolio cards for', students.length, 'students');
-                
-                // Create portfolio cards for all students if authenticated, or only public ones if not
-                const portfoliosToShow = authData.authenticated ? students : students.filter(student => student.isPublic);
-                
-                // Sort portfolios
-                const sortedPortfolios = portfoliosToShow.sort((a, b) => a.username.localeCompare(b.username));
-                
-                // Create cards
-                let createdCount = 0;
-                for (const student of sortedPortfolios) {
-                    try {
-                        console.log(`Creating card for ${student.username}, public: ${student.isPublic}`);
-                        const card = createPortfolioCard(
-                            student.username,
-                            student.avatar,
-                            student.isPublic,
-                            student.path,
-                            student.displayName
-                        );
-                        container.appendChild(card);
-                        createdCount++;
-                    } catch (cardError) {
-                        console.error(`Error creating/appending card for ${student.username}:`, cardError);
-                    }
-                }
-                console.log(`Successfully created and appended ${createdCount} cards`);
-                
-                // If no portfolios found, show message
-                if (container.children.length === 0) {
-                    console.log('No portfolio cards were created');
-                    const message = document.createElement('p');
-                    message.style.textAlign = 'center';
-                    message.style.gridColumn = '1 / -1';
-                    message.style.padding = '20px';
-                    message.textContent = 'No portfolios found for Class 4/2';
-                    container.appendChild(message);
-                } else {
-                    console.log('Created', container.children.length, 'portfolio cards');
-                }
             } catch (error) {
                 console.error('Error loading portfolios:', error);
                 const container = document.getElementById('portfoliosContainer');
-                if (container) {
-                    container.innerHTML = '<p style="text-align: center; grid-column: 1 / -1; padding: 20px; color: #721c24;">Error loading portfolios. Please try again later.</p>';
-                } else {
-                    console.error('Cannot display error message: portfoliosContainer not found');
-                }
+                container.innerHTML = '<p style="text-align: center; grid-column: 1/-1;">Error loading portfolios. Please try again later.</p>';
             }
         }
 
         // Load portfolios when the page loads
-        document.addEventListener('DOMContentLoaded', loadPortfolios);
+        loadPortfolios();
         
-        // Backup - run after a short delay in case DOMContentLoaded didn't fire or has issues
-        if (document.readyState === 'complete' || document.readyState === 'interactive') {
-            console.log('Document already loaded, running loadPortfolios immediately');
-            setTimeout(loadPortfolios, 100);
-        } else {
-            console.log('Document not yet loaded, will wait for DOMContentLoaded event');
-        }
+        // Refresh portfolios periodically
+        setInterval(loadPortfolios, 30000); // Refresh every 30 seconds
     </script>
 </body>
 </html> 
