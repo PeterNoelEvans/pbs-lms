@@ -442,8 +442,35 @@ async function initializeApp() {
         });
 
         app.get('/logout', (req, res) => {
-            req.session.destroy();
-            res.redirect('/');
+            console.log('\n=== Logout Attempt ===');
+            console.log('Session before logout:', req.session);
+            console.log('User type:', req.session?.userType);
+            
+            if (!req.session) {
+                console.log('No session found during logout');
+                res.clearCookie('connect.sid');
+                return res.redirect('/');
+            }
+            
+            req.session.destroy((err) => {
+                if (err) {
+                    console.error('Error destroying session:', err);
+                    // Even if there's an error, try to clear everything
+                    req.session = null;
+                    res.clearCookie('connect.sid');
+                }
+                
+                // Clear the session cookie in all cases
+                res.clearCookie('connect.sid');
+                
+                // Redirect based on referer
+                const referer = req.get('Referer') || '';
+                if (referer.includes('schools.html')) {
+                    res.redirect('/schools.html');
+                } else {
+                    res.redirect('/');
+                }
+            });
         });
 
         app.get('/debug-session', (req, res) => {
