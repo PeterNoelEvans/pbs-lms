@@ -8,16 +8,17 @@
     <style>
         .class-selection {
             text-align: center;
-            margin: 20px 0;
+            margin: 40px 0;
         }
         .class-button {
             display: inline-block;
-            padding: 10px 20px;
-            margin: 5px;
+            padding: 15px 40px;
+            margin: 0 15px;
+            font-size: 1.2em;
             background-color: #4CAF50;
             color: white;
             text-decoration: none;
-            border-radius: 4px;
+            border-radius: 5px;
             transition: background-color 0.3s;
         }
         .class-button:hover {
@@ -88,7 +89,7 @@
         document.addEventListener('DOMContentLoaded', loadClasses);
 
         // Function to create a portfolio card
-        function createPortfolioCard(username, imagePath, isPublic, portfolioPath) {
+        function createPortfolioCard(username, imagePath, isPublic, portfolioPath, firstName, lastName, nickname) {
             const card = document.createElement('div');
             card.className = 'portfolio-card';
             
@@ -97,21 +98,40 @@
             privacyBadge.textContent = isPublic ? 'Public' : 'Private';
             
             const img = document.createElement('img');
-            img.src = imagePath || '/images/default-avatar.png';
+            // Default avatar as a data URL - light gray background with a simple user icon
+            const defaultAvatar = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDEwMCAxMDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CiAgPHJlY3Qgd2lkdGg9IjEwMCIgaGVpZ2h0PSIxMDAiIGZpbGw9IiNmMGYwZjAiLz4KICA8Y2lyY2xlIGN4PSI1MCIgY3k9IjM1IiByPSIyMCIgZmlsbD0iI2FhYWFhYSIvPgogIDxwYXRoIGQ9Ik0yMCA4MEMyMCA2MCAzNSA1MCA1MEM2NSA1MCA4MCA2MCA4MCA4MEw4MCA5MEwyMCA5MEwyMCA4MFoiIGZpbGw9IiNhYWFhYWEiLz4KPC9zdmc+';
+            
+            img.src = imagePath || defaultAvatar;
             img.alt = `${username}'s avatar`;
             img.className = 'avatar';
             img.onerror = function() {
-                this.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIwIiBoZWlnaHQ9IjEyMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTIwIiBoZWlnaHQ9IjEyMCIgZmlsbD0iI2YwZjBmMCIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTYiIGZpbGw9IiM2NjY2NjYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5ObyBJbWFnZTwvdGV4dD48L3N2Zz4=';
+                this.src = defaultAvatar;
             };
             
             const name = document.createElement('h3');
-            name.textContent = username;
+            // Use nickname, full name, or username in that order of preference
+            if (nickname) {
+                name.textContent = nickname;
+            } else if (firstName && lastName) {
+                name.textContent = `${firstName} ${lastName}`;
+            } else {
+                name.textContent = username;
+            }
 
             const classIndicator = document.createElement('div');
             classIndicator.style.marginTop = '5px';
             classIndicator.style.color = '#666';
             classIndicator.style.fontSize = '0.9em';
-            classIndicator.textContent = portfolioPath.includes('/P4-1/') ? 'Class 4/1' : 'Class 4/2';
+            // Update class indicator to handle M2 class
+            if (portfolioPath.includes('/P4-1/')) {
+                classIndicator.textContent = 'Class 4/1';
+            } else if (portfolioPath.includes('/P4-2/')) {
+                classIndicator.textContent = 'Class 4/2';
+            } else if (portfolioPath.includes('/ClassM2-001/')) {
+                classIndicator.textContent = 'M2 2025';
+            } else {
+                classIndicator.textContent = 'Unknown Class';
+            }
             
             const viewBtn = document.createElement('a');
             viewBtn.className = 'view-portfolio';
@@ -144,7 +164,13 @@
         async function loadPortfolios() {
             try {
                 // Check authentication status
-                const authResponse = await fetch('/check-auth');
+                const authResponse = await fetch('/check-auth', {
+                    cache: 'no-store',
+                    headers: {
+                        'Cache-Control': 'no-cache',
+                        'Pragma': 'no-cache'
+                    }
+                });
                 const authData = await authResponse.json();
                 
                 // Show login prompt if not authenticated
@@ -189,15 +215,27 @@
                     { username: 'Peter42', portfolio_path: '/portfolios/P4-2/Peter/Peter.html', avatar_path: '/portfolios/P4-2/Peter/images/Peter42.jpg' }
                 ];
 
-                // Fetch privacy states from server
-                const privacyResponse = await fetch('/get-all-privacy-states');
+                // Fetch privacy states from server with no caching
+                const privacyResponse = await fetch('/get-all-privacy-states', {
+                    cache: 'no-store',
+                    headers: {
+                        'Cache-Control': 'no-cache',
+                        'Pragma': 'no-cache'
+                    }
+                });
                 const privacyStates = await privacyResponse.json();
                 
+                console.log('Privacy states:', privacyStates); // Debug log
+                
                 // Update privacy states from server data
-                const studentsWithPrivacy = defaultStudents.map(student => ({
-                    ...student,
-                    is_public: privacyStates[student.portfolio_path] || false
-                }));
+                const studentsWithPrivacy = defaultStudents.map(student => {
+                    const isPublic = privacyStates[student.portfolio_path];
+                    console.log(`${student.username} privacy:`, isPublic); // Debug log
+                    return {
+                        ...student,
+                        is_public: isPublic
+                    };
+                });
                 
                 // If not authenticated, only show public portfolios
                 const portfoliosToShow = authData.authenticated 
@@ -216,7 +254,10 @@
                         user.username,
                         user.avatar_path || null,
                         user.is_public,
-                        user.portfolio_path
+                        user.portfolio_path,
+                        '',
+                        '',
+                        ''
                     );
                     container.appendChild(card);
                 }
