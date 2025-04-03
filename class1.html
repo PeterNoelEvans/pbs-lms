@@ -8,17 +8,16 @@
     <style>
         .class-selection {
             text-align: center;
-            margin: 40px 0;
+            margin: 20px 0;
         }
         .class-button {
             display: inline-block;
-            padding: 15px 40px;
-            margin: 0 15px;
-            font-size: 1.2em;
+            padding: 10px 20px;
+            margin: 5px;
             background-color: #4CAF50;
             color: white;
             text-decoration: none;
-            border-radius: 5px;
+            border-radius: 4px;
             transition: background-color 0.3s;
         }
         .class-button:hover {
@@ -43,8 +42,9 @@
 
         <div class="class-selection">
             <h2>Select Your Class</h2>
-            <a href="/class-4-1.html" class="class-button">Class 4/1</a>
-            <a href="/class-4-2.html" class="class-button">Class 4/2</a>
+            <div id="classButtons">
+                <!-- Class buttons will be loaded dynamically -->
+            </div>
         </div>
 
         <div class="login-container" id="loginPrompt" style="display: none;">
@@ -57,6 +57,36 @@
     </div>
 
     <script>
+        // Load schools configuration
+        async function loadClasses() {
+            try {
+                const response = await fetch('/api/schools');
+                const schools = await response.json();
+                const classButtonsContainer = document.getElementById('classButtons');
+                
+                // Clear existing buttons
+                classButtonsContainer.innerHTML = '';
+                
+                // Add buttons for all classes from all schools
+                schools.forEach(school => {
+                    school.classes.forEach(cls => {
+                        const button = document.createElement('a');
+                        button.href = cls.id.includes('Class4-') ? 
+                            `/class-${cls.id.replace('Class', '').toLowerCase()}.html` :
+                            `/classes?school=${school.id}&class=${cls.id}`;
+                        button.className = 'class-button';
+                        button.textContent = cls.displayName;
+                        classButtonsContainer.appendChild(button);
+                    });
+                });
+            } catch (error) {
+                console.error('Error loading classes:', error);
+            }
+        }
+
+        // Call loadClasses when the page loads
+        document.addEventListener('DOMContentLoaded', loadClasses);
+
         // Function to create a portfolio card
         function createPortfolioCard(username, imagePath, isPublic, portfolioPath) {
             const card = document.createElement('div');
@@ -114,13 +144,7 @@
         async function loadPortfolios() {
             try {
                 // Check authentication status
-                const authResponse = await fetch('/check-auth', {
-                    cache: 'no-store',
-                    headers: {
-                        'Cache-Control': 'no-cache',
-                        'Pragma': 'no-cache'
-                    }
-                });
+                const authResponse = await fetch('/check-auth');
                 const authData = await authResponse.json();
                 
                 // Show login prompt if not authenticated
@@ -165,27 +189,15 @@
                     { username: 'Peter42', portfolio_path: '/portfolios/P4-2/Peter/Peter.html', avatar_path: '/portfolios/P4-2/Peter/images/Peter42.jpg' }
                 ];
 
-                // Fetch privacy states from server with no caching
-                const privacyResponse = await fetch('/get-all-privacy-states', {
-                    cache: 'no-store',
-                    headers: {
-                        'Cache-Control': 'no-cache',
-                        'Pragma': 'no-cache'
-                    }
-                });
+                // Fetch privacy states from server
+                const privacyResponse = await fetch('/get-all-privacy-states');
                 const privacyStates = await privacyResponse.json();
                 
-                console.log('Privacy states:', privacyStates); // Debug log
-                
                 // Update privacy states from server data
-                const studentsWithPrivacy = defaultStudents.map(student => {
-                    const isPublic = privacyStates[student.portfolio_path];
-                    console.log(`${student.username} privacy:`, isPublic); // Debug log
-                    return {
-                        ...student,
-                        is_public: isPublic
-                    };
-                });
+                const studentsWithPrivacy = defaultStudents.map(student => ({
+                    ...student,
+                    is_public: privacyStates[student.portfolio_path] || false
+                }));
                 
                 // If not authenticated, only show public portfolios
                 const portfoliosToShow = authData.authenticated 

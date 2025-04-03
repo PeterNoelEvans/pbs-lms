@@ -85,11 +85,15 @@ async function convertCSVToJSON() {
             : `${firstName.toLowerCase()}_${lastName.toLowerCase()}`;
         }
         
+        // Generate display name (properly formatted name)
+        const displayName = `${firstName} ${lastName}`;
+        
         // Generate nickname as first 3 letters of first name if not provided
         const nickname = student.nickname || (firstName ? firstName.substring(0, 3) : '');
         
         return {
           username: student.username || username,
+          displayName: displayName,
           password: student.password || generatePassword(firstName, lastName),
           firstName: firstName,
           lastName: lastName,

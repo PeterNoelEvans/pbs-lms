@@ -290,23 +290,23 @@
             };
             
             const name = document.createElement('h3');
-            // Format the name more elegantly
-            if (nickname) {
+            // Use displayName if available, otherwise fall back to nickname or formatted username
+            if (displayName) {
+                name.textContent = displayName;
+            } else if (nickname) {
                 name.textContent = nickname;
-            } else if (firstName && lastName) {
-                name.textContent = `${firstName} ${lastName}`;
             } else {
-                // Format username more elegantly
+                // Format username more elegantly as a last resort
                 const nameParts = username.split('_');
                 // Remove the ID number if it exists (last part if numeric)
                 if (nameParts.length > 0 && /^\d+$/.test(nameParts[nameParts.length - 1])) {
                     nameParts.pop();
                 }
                 // Capitalize each part and join with spaces
-                const displayName = nameParts
+                const formattedName = nameParts
                     .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
                     .join(' ');
-                name.textContent = displayName;
+                name.textContent = formattedName;
             }
 
             const classIndicator = document.createElement('div');

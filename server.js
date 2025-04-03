@@ -240,7 +240,7 @@ async function initializeApp() {
                     req.session.cookie.maxAge = 30 * 24 * 60 * 60 * 1000; // 30 days
                 }
 
-                res.json({ 
+                res.json({
                     success: true,
                     redirect: '/dashboard'
                 });
@@ -658,7 +658,7 @@ app.post('/register', async (req, res) => {
                                 reject(new Error('Username already taken'));
                             }
                         } else {
-                            reject(err);
+                        reject(err);
                         }
                     } else {
                         resolve(this.lastID);
@@ -980,18 +980,18 @@ const db = new sqlite3.Database(dbPath, (err) => {
     db.serialize(async () => {
         // Create users table first
         await new Promise((resolve, reject) => {
-            db.run(`CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT UNIQUE,
-                password TEXT,
-                portfolio_path TEXT UNIQUE,
-                avatar_path TEXT,
+        db.run(`CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE,
+            password TEXT,
+            portfolio_path TEXT UNIQUE,
+            avatar_path TEXT,
                 is_public INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 last_login TIMESTAMP
             )`, (err) => {
-                if (err) {
-                    console.error('Error creating users table:', err);
+            if (err) {
+                console.error('Error creating users table:', err);
                     reject(err);
                 } else {
                     console.log('Users table ready');
@@ -1208,8 +1208,8 @@ app.get('/api/classes/:classId/students', async (req, res) => {
                     if (err) {
                         console.error('Database error:', err);
                         reject(err);
-                        return;
-                    }
+                return;
+            }
                     
                     console.log(`Found ${rows.length} students for M2 class`);
                     if (rows.length > 0) {
@@ -1768,7 +1768,7 @@ app.get('/api/filesystem-portfolios/:classId', (req, res) => {
         }
         
         res.json(students);
-    } catch (error) {
+            } catch (error) {
         console.error('Error in filesystem-based endpoint:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
