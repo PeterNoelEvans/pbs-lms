@@ -1,4 +1,6 @@
 require('dotenv').config();
+const fs = require('fs');
+const path = require('path');
 const CredentialManager = require('../utils/credentialManager');
 const StudentManager = require('../utils/studentManager');
 
@@ -46,13 +48,55 @@ const studentsM2 = [
     { username: 'Peter', password: 'Peter2025CC', portfolio_path: '/portfolios/ClassM2-001/Peter/Peter.html' }
 ];
 
+// Function to check if database exists and has data
+async function checkDatabaseExists() {
+    const isProduction = process.env.NODE_ENV === 'production';
+    const dbPath = isProduction ? '/opt/render/project/src/data/users.db' : 'users.db';
+    
+    // Check if database file exists
+    if (!fs.existsSync(dbPath)) {
+        console.log('Database file does not exist, will create new database');
+        return false;
+    }
+    
+    // Check if database has users table with data
+    try {
+        const sqlite3 = require('sqlite3').verbose();
+        const { open } = require('sqlite');
+        const db = await open({
+            filename: dbPath,
+            driver: sqlite3.Database
+        });
+        
+        const result = await db.get('SELECT COUNT(*) as count FROM users');
+        await db.close();
+        
+        if (result.count > 0) {
+            console.log('Database exists and contains data, skipping initialization');
+            return true;
+        }
+        
+        console.log('Database exists but is empty, will initialize data');
+        return false;
+    } catch (error) {
+        console.log('Error checking database:', error);
+        return false;
+    }
+}
+
 // Function to initialize the database
 async function initializeDatabase() {
     try {
-        console.log('Initializing database...');
+        // Check if database should be initialized
+        const hasExistingData = await checkDatabaseExists();
+        if (hasExistingData) {
+            console.log('Using existing database');
+            return;
+        }
+        
+        console.log('Initializing new database...');
         
         // Use a default key for initialization if CREDENTIAL_KEY is not available
-        // This is only for initialization during build - the real key will be used in production
         const credentialKey = process.env.CREDENTIAL_KEY || 
             '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
         
@@ -64,6 +108,41 @@ async function initializeDatabase() {
         
         // Initialize database schema
         await studentManager.initializeDatabase();
+        
+        // Create public visitors table
+        const sqlite3 = require('sqlite3').verbose();
+        const { open } = require('sqlite');
+        const isProduction = process.env.NODE_ENV === 'production';
+        const dbPath = isProduction ? '/opt/render/project/src/data/users.db' : 'users.db';
+        
+        const db = await open({
+            filename: dbPath,
+            driver: sqlite3.Database
+        });
+        
+        // Create public_visitors table
+        await db.exec(`
+            CREATE TABLE IF NOT EXISTS public_visitors (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                full_name TEXT NOT NULL,
+                email TEXT UNIQUE NOT NULL,
+                password TEXT NOT NULL,
+                reason TEXT,
+                registration_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        `);
+        
+        // Create visitor_logins table to track login history
+        await db.exec(`
+            CREATE TABLE IF NOT EXISTS visitor_logins (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                visitor_id INTEGER NOT NULL,
+                login_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (visitor_id) REFERENCES public_visitors(id)
+            )
+        `);
+        
+        await db.close();
         
         console.log('Registering Class 4/1 students...');
         for (const student of students41) {
