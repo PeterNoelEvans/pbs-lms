@@ -1133,11 +1133,11 @@ const db = new sqlite3.Database(dbPath, (err) => {
             }
         }
 
-        // Now check for Peter42 and create/update if needed
-        const peter42 = await new Promise((resolve, reject) => {
-            db.get('SELECT * FROM users WHERE username = ?', ['Peter42'], (err, row) => {
+        // Now check for Peter and create/update if needed
+        const peter = await new Promise((resolve, reject) => {
+            db.get('SELECT * FROM users WHERE username = ?', ['Peter'], (err, row) => {
                 if (err) {
-                    console.error('Error checking for Peter42:', err);
+                    console.error('Error checking for Peter:', err);
                     reject(err);
                 } else {
                     resolve(row);
@@ -1145,46 +1145,46 @@ const db = new sqlite3.Database(dbPath, (err) => {
             });
         });
 
-        if (!peter42) {
-            console.log('Peter42 not found, creating...');
-            const hashedPassword = await bcrypt.hash('Peter2025BB', 10);
-                    await new Promise((resolve, reject) => {
-                        db.run(
+        if (!peter) {
+            console.log('Peter not found, creating...');
+            const hashedPassword = await bcrypt.hash('Peter2025CC', 10);
+            await new Promise((resolve, reject) => {
+                db.run(
                     `INSERT INTO users (
                         username, password, portfolio_path, avatar_path, 
                         is_public, is_super_user, email
                     ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
                     [
-                        'Peter42',
+                        'Peter',
                         hashedPassword,
-                        '/portfolios/P4-2/Peter/Peter.html',
-                        '/portfolios/P4-2/Peter/images/Peter42.jpg',
+                        '/portfolios/M2-001/Peter/Peter.html',
+                        '/portfolios/M2-001/Peter/images/Peter.jpg',
                         1,
                         1,
-                        'peter42@example.com'
+                        'peter@example.com'
                     ],
-                            function(err) {
+                    function(err) {
                         if (err) {
-                            console.error('Error creating Peter42:', err);
+                            console.error('Error creating Peter:', err);
                             reject(err);
                         } else {
-                            console.log('Peter42 created successfully');
-                                    resolve();
-                                }
-                            }
-                        );
-                    });
-                } else {
-            // Update Peter42's super user status
-                    await new Promise((resolve, reject) => {
-                        db.run(
+                            console.log('Peter created successfully');
+                            resolve();
+                        }
+                    }
+                );
+            });
+        } else {
+            // Update Peter's super user status
+            await new Promise((resolve, reject) => {
+                db.run(
                     'UPDATE users SET is_super_user = 1 WHERE username = ?',
-                    ['Peter42'],
+                    ['Peter'],
                     (err) => {
                         if (err) {
-                            console.error('Error updating Peter42 super user status:', err);
+                            console.error('Error updating Peter super user status:', err);
                         } else {
-                            console.log('Peter42 updated to super user');
+                            console.log('Peter updated to super user');
                         }
                         resolve();
                     }
@@ -1851,6 +1851,8 @@ app.get('/api/m2-students', async (req, res) => {
             `;
             
             console.log('Executing query:', query);
+            console.log('Portfolio path pattern:', `${portfolioPath}%`);
+            
             db.all(query, [`${portfolioPath}%`], (err, rows) => {
                 if (err) {
                     console.error('Database error:', err);
@@ -1862,7 +1864,7 @@ app.get('/api/m2-students', async (req, res) => {
                 if (rows?.length > 0) {
                     console.log('Sample students:');
                     rows.slice(0, 3).forEach(student => {
-                        console.log(` - ${student.username}: ${student.portfolio_path}`);
+                        console.log(` - ${student.username}: ${student.portfolio_path} (Public: ${student.is_public === 1})`);
                     });
                 }
                 
@@ -1897,11 +1899,14 @@ app.get('/api/m2-students', async (req, res) => {
                         // Parse the student name
                         const { firstName, lastName, nickname } = parseStudentName(studentName);
                         
+                        // Check if student exists in database to get privacy setting
+                        const dbStudent = dbStudents.find(s => s.username === studentName);
+                        
                         filesystemStudents.push({
                             username: studentName,
                             portfolio_path: `${portfolioPath}/${studentName}/${htmlFile}`,
                             avatar_path: `${portfolioPath}/${studentName}/images/${studentName}.jpg`,
-                            is_public: false, // Set to private by default
+                            is_public: dbStudent ? dbStudent.is_public === 1 : false, // Use DB setting if available
                             first_name: firstName,
                             last_name: lastName,
                             nickname: nickname
@@ -1916,7 +1921,7 @@ app.get('/api/m2-students', async (req, res) => {
         // Merge database and filesystem results, preferring database entries
         const dbUsernames = new Set(dbStudents.map(s => s.username));
         const allStudents = [
-            ...dbStudents,
+            ...dbStudents.map(s => ({ ...s, is_public: s.is_public === 1 })), // Ensure boolean
             ...filesystemStudents.filter(s => !dbUsernames.has(s.username))
         ];
         
@@ -1924,6 +1929,11 @@ app.get('/api/m2-students', async (req, res) => {
         allStudents.sort((a, b) => a.username.localeCompare(b.username));
         
         console.log(`Returning ${allStudents.length} total students`);
+        console.log('Sample of returned students:');
+        allStudents.slice(0, 3).forEach(s => {
+            console.log(` - ${s.username}: ${s.portfolio_path} (Public: ${s.is_public})`);
+        });
+        
         res.json(allStudents);
         
     } catch (error) {
