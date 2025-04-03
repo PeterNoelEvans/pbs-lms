@@ -706,47 +706,73 @@
         // Function to update privacy states without rebuilding cards
         async function updatePrivacyStates() {
             try {
-                const authResponse = await fetch('/check-session');
-                const authData = await authResponse.json();
-                const isVisitor = authData.user?.userType === 'visitor' || authData.userType === 'visitor';
+                console.log('Updating privacy states...');
                 
-                // Get current portfolios
-                const apiUrl = currentClassId === 'M2-001' ? 
-                    '/api/m2-students' : 
-                    `/api/classes/${currentClassId}/students?portfolioPath=/portfolios/${currentClassId}`;
+                // Fetch privacy states from server with no caching
+                const privacyResponse = await fetch('/get-all-privacy-states', {
+                    cache: 'no-store',
+                    headers: {
+                        'Cache-Control': 'no-cache, no-store, must-revalidate',
+                        'Pragma': 'no-cache',
+                        'Expires': '0'
+                    }
+                });
                 
-                const response = await fetch(apiUrl);
-                if (!response.ok) return;
+                if (!privacyResponse.ok) {
+                    throw new Error(`Server returned ${privacyResponse.status}`);
+                }
                 
-                const students = await response.json();
+                const privacyStates = await privacyResponse.json();
+                console.log('Received privacy states:', privacyStates);
+                
+                // Update privacy states from server data
                 const container = document.getElementById('portfoliosContainer');
-                
-                if (!container) return; // Exit if container not found
-                
-                // Update existing cards
-                Array.from(container.children).forEach(card => {
+                const defaultStudents = Array.from(container.children).map(card => {
                     const viewBtn = card.querySelector('.view-portfolio');
-                    if (!viewBtn) return; // Skip if button not found
+                    if (!viewBtn) return null;
                     
                     const portfolioPath = viewBtn.getAttribute('href');
-                    if (!portfolioPath) return; // Skip if no href attribute
+                    if (!portfolioPath) return null;
                     
-                    const student = students.find(s => s.portfolio_path === portfolioPath);
+                    const student = {
+                        portfolio_path: portfolioPath
+                    };
+                    return student;
+                }).filter(student => student !== null);
+                
+                const studentsWithPrivacy = defaultStudents.map(student => {
+                    const isPublic = privacyStates[student.portfolio_path];
+                    console.log(`${student.username} privacy:`, isPublic);
+                    return {
+                        ...student,
+                        is_public: isPublic
+                    };
+                });
+                
+                // Update the UI
+                Array.from(container.children).forEach(card => {
+                    const viewBtn = card.querySelector('.view-portfolio');
+                    if (!viewBtn) return;
+                    
+                    const portfolioPath = viewBtn.getAttribute('href');
+                    if (!portfolioPath) return;
+                    
+                    const student = studentsWithPrivacy.find(s => s.portfolio_path === portfolioPath);
                     
                     if (student) {
                         const privacyBadge = card.querySelector('.privacy-badge');
-                        if (!privacyBadge) return; // Skip if badge not found
+                        if (!privacyBadge) return;
                         
-                        if (student.is_public !== (privacyBadge.textContent === 'Public')) {
-                            // Update badge
-                            privacyBadge.className = `privacy-badge ${student.is_public ? 'public' : 'private'}`;
-                            privacyBadge.textContent = student.is_public ? 'Public' : 'Private';
-                            
-                            // Update button
-                            viewBtn.style.backgroundColor = student.is_public ? '#4CAF50' : '#999';
-                            viewBtn.style.opacity = student.is_public ? '1' : '0.7';
-                            viewBtn.textContent = student.is_public ? 'View Portfolio' : 'Private Portfolio';
-                        }
+                        // Update badge
+                        privacyBadge.className = `privacy-badge ${student.is_public ? 'public' : 'private'}`;
+                        privacyBadge.textContent = student.is_public ? 'Public' : 'Private';
+                        
+                        // Update button
+                        viewBtn.style.backgroundColor = student.is_public ? '#4CAF50' : '#999';
+                        viewBtn.style.opacity = student.is_public ? '1' : '0.7';
+                        viewBtn.textContent = student.is_public ? 'View Portfolio' : 'Private Portfolio';
+                        
+                        console.log(`Updated ${student.username} to ${student.is_public ? 'public' : 'private'}`);
                     }
                 });
             } catch (error) {
@@ -754,8 +780,8 @@
             }
         }
         
-        // Check privacy states every 30 seconds
-        setInterval(updatePrivacyStates, 30000);
+        // Check privacy states more frequently
+        setInterval(updatePrivacyStates, 10000); // Every 10 seconds
         
         // Listen for privacy updates from the dashboard
         window.addEventListener('storage', (event) => {
@@ -764,6 +790,9 @@
                 updatePrivacyStates();
             }
         });
+        
+        // Initial update
+        updatePrivacyStates();
     </script>
 </body>
 </html> 
