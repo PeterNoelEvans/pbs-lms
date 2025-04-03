@@ -48,6 +48,38 @@ To add a new school to the system:
    - Create necessary portfolio directories
    - Set up class configurations
 
+## Adding Classes to Existing Schools
+To add a new class to an existing school:
+
+1. Edit `config/schools.js` directly:
+   ```javascript
+   {
+     id: 'PBSChonburi',
+     name: 'Prabhassorn Vidhaya School Chonburi',
+     classes: [
+       // Existing classes...
+       {
+         id: 'ClassM2-002',  // New class ID
+         name: 'Class 002',
+         displayName: 'M2 2026',
+         description: 'This is a presentation of M2 2026 002 Coding Class.',
+         portfolioPath: '/portfolios/ClassM2-002'
+       }
+     ]
+   }
+   ```
+
+2. Create the necessary portfolio directory:
+   ```bash
+   mkdir -p portfolios/ClassM2-002
+   ```
+
+3. The new class will automatically appear in:
+   - The registration form dropdown
+   - The schools page
+   - The class viewer
+   - All other parts of the system
+
 ## Registration Form
 The registration form (`register.html`) dynamically loads schools and classes:
 
@@ -107,11 +139,17 @@ To maintain the registration system:
    - Use the setup script for new schools
    - Update documentation for new schools
 
-2. **Modifying Schools**:
+2. **Adding Classes**:
+   - Edit `config/schools.js` to add new classes
+   - Create necessary portfolio directories
+   - No server restart required
+   - Changes are reflected immediately
+
+3. **Modifying Schools**:
    - Edit `config/schools.js` directly
    - Ensure portfolio paths are updated accordingly
 
-3. **Troubleshooting**:
+4. **Troubleshooting**:
    - Check server logs for API errors
    - Verify school/class configuration
    - Ensure portfolio directories exist 

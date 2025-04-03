@@ -266,8 +266,8 @@ async function initializeApp() {
                 const username = req.session.user.username;
                 
                 if (!userId) {
-                return res.status(401).json({ error: 'Not authenticated' });
-            }
+                    return res.status(401).json({ error: 'Not authenticated' });
+                }
 
                 console.log(`Toggling privacy for user: ${username} (ID: ${userId})`);
                 
@@ -276,7 +276,7 @@ async function initializeApp() {
                 // First, get the current state
                 const currentState = await new Promise((resolve, reject) => {
                     db.get('SELECT is_public FROM users WHERE id = ?', [userId], (err, result) => {
-                    if (err) {
+                        if (err) {
                             reject(err);
                             return;
                         }
@@ -308,10 +308,23 @@ async function initializeApp() {
                     });
                 });
                 
+                // Verify the update
+                const verifyState = await new Promise((resolve, reject) => {
+                    db.get('SELECT is_public FROM users WHERE id = ?', [userId], (err, result) => {
+                        if (err) {
+                            reject(err);
+                            return;
+                        }
+                        resolve(result);
+                    });
+                });
+                
+                console.log('Verified new state:', verifyState.is_public);
+                
                 db.close();
                 
                 // Return the new state
-                res.json({ success: true, is_public: newState === 1 });
+                res.json({ success: true, is_public: verifyState.is_public === 1 });
                 
             } catch (error) {
                 console.error('Error toggling privacy:', error);
