@@ -266,8 +266,8 @@ async function initializeApp() {
                 const username = req.session.user.username;
                 
                 if (!userId) {
-                    return res.status(401).json({ error: 'Not authenticated' });
-                }
+                return res.status(401).json({ error: 'Not authenticated' });
+            }
 
                 console.log(`Toggling privacy for user: ${username} (ID: ${userId})`);
                 
@@ -276,7 +276,7 @@ async function initializeApp() {
                 // First, get the current state
                 const currentState = await new Promise((resolve, reject) => {
                     db.get('SELECT is_public FROM users WHERE id = ?', [userId], (err, result) => {
-                        if (err) {
+                    if (err) {
                             reject(err);
                             return;
                         }
@@ -481,7 +481,7 @@ async function initializeApp() {
                 if (referer.includes('schools.html')) {
                     res.redirect('/schools.html');
                 } else {
-                    res.redirect('/');
+            res.redirect('/');
                 }
             });
         });
@@ -892,19 +892,27 @@ app.get('/portfolios/*', async (req, res, next) => {
         }
 
         // Create Class1 directory if it doesn't exist (for current students)
-        const class1Dir = path.join(portfoliosDir, 'Class1');
+        const class1Dir = path.join(portfoliosDir, 'P4-1');
         if (!fs.existsSync(class1Dir)) {
-            console.log('Class1 directory does not exist:', class1Dir);
+            console.log('P4-1 directory does not exist:', class1Dir);
             fs.mkdirSync(class1Dir, { recursive: true });
-            console.log('Created Class1 directory');
+            console.log('Created P4-1 directory');
         }
 
         // Create Class2 directory if it doesn't exist (for future students)
-        const class2Dir = path.join(portfoliosDir, 'Class2');
+        const class2Dir = path.join(portfoliosDir, 'P4-2');
         if (!fs.existsSync(class2Dir)) {
-            console.log('Class2 directory does not exist:', class2Dir);
+            console.log('P4-2 directory does not exist:', class2Dir);
             fs.mkdirSync(class2Dir, { recursive: true });
-            console.log('Created Class2 directory');
+            console.log('Created P4-2 directory');
+        }
+
+        // Create M2 directory if it doesn't exist
+        const m2Dir = path.join(portfoliosDir, 'M2-001');
+        if (!fs.existsSync(m2Dir)) {
+            console.log('M2-001 directory does not exist:', m2Dir);
+            fs.mkdirSync(m2Dir, { recursive: true });
+            console.log('Created M2-001 directory');
         }
 
         // Check if the file exists
@@ -1034,7 +1042,7 @@ const db = new sqlite3.Database(dbPath, (err) => {
                 console.error('Error creating users table:', err);
                     reject(err);
                 } else {
-                    console.log('Users table ready');
+            console.log('Users table ready');
                     resolve();
                 }
             });
@@ -1140,8 +1148,8 @@ const db = new sqlite3.Database(dbPath, (err) => {
         if (!peter42) {
             console.log('Peter42 not found, creating...');
             const hashedPassword = await bcrypt.hash('Peter2025BB', 10);
-            await new Promise((resolve, reject) => {
-                db.run(
+                    await new Promise((resolve, reject) => {
+                        db.run(
                     `INSERT INTO users (
                         username, password, portfolio_path, avatar_path, 
                         is_public, is_super_user, email
@@ -1155,21 +1163,21 @@ const db = new sqlite3.Database(dbPath, (err) => {
                         1,
                         'peter42@example.com'
                     ],
-                    function(err) {
+                            function(err) {
                         if (err) {
                             console.error('Error creating Peter42:', err);
                             reject(err);
                         } else {
                             console.log('Peter42 created successfully');
-                            resolve();
-                        }
-                    }
-                );
-            });
-        } else {
+                                    resolve();
+                                }
+                            }
+                        );
+                    });
+                } else {
             // Update Peter42's super user status
-            await new Promise((resolve, reject) => {
-                db.run(
+                    await new Promise((resolve, reject) => {
+                        db.run(
                     'UPDATE users SET is_super_user = 1 WHERE username = ?',
                     ['Peter42'],
                     (err) => {
@@ -1526,7 +1534,7 @@ app.post('/public-login', async (req, res) => {
                 userType: 'visitor'
             }
         });
-    } catch (error) {
+            } catch (error) {
         console.error('Error logging in public visitor:', error);
         res.status(500).json({ error: 'Server error' });
     } finally {
@@ -1664,12 +1672,12 @@ app.get('/api/filesystem-portfolios/:classId', (req, res) => {
     const folderMap = {
         'Class4-1': 'P4-1',
         'Class4-2': 'P4-2',
-        'ClassM2-001': 'ClassM2-001'
+        'ClassM2-001': 'M2-001'
     };
     
     // List of alternative folders to check for each class
     const altFolders = {
-        'ClassM2-001': ['ClassM2-001', 'M2', 'M2-001', 'M2-2025'],
+        'ClassM2-001': ['M2-001', 'M2', 'M2-2025'],
         'Class4-1': ['P4-1', 'Class4-1', '4-1'],
         'Class4-2': ['P4-2', 'Class4-2', '4-2']
     };

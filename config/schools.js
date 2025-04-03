@@ -9,11 +9,11 @@ const schools = [
     name: 'Prabhassorn Vidhaya School Chonburi',
     classes: [
       {
-        id: 'ClassM2-001',
-        name: 'Class 001',
+        id: 'M2-001',
+        name: 'M2 2025',
         displayName: 'M2 2025',
         description: 'This is a presentation of M2 2025 001 Coding Class.',
-        portfolioPath: '/portfolios/ClassM2-001'
+        portfolioPath: '/portfolios/M2-001'
       }
     ]
   },
@@ -22,14 +22,14 @@ const schools = [
     name: 'Phumdham Primary Learning Center',
     classes: [
       {
-        id: 'Class4-1',
+        id: 'P4-1',
         name: 'Class 4/1',
         displayName: 'Class 4/1',
         description: 'Grade 4/1 Coding Class',
         portfolioPath: '/portfolios/P4-1'
       },
       {
-        id: 'Class4-2',
+        id: 'P4-2',
         name: 'Class 4/2',
         displayName: 'Class 4/2',
         description: 'Grade 4/2 Coding Class',

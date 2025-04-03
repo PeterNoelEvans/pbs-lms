@@ -310,7 +310,7 @@
                 classIndicator.textContent = 'Class 4/1';
             } else if (portfolioPath.includes('/P4-2/')) {
                 classIndicator.textContent = 'Class 4/2';
-            } else if (portfolioPath.includes('/ClassM2-001/')) {
+            } else if (portfolioPath.includes('/M2-001/')) {
                 classIndicator.textContent = 'M2 2025';
             } else {
                 classIndicator.textContent = 'Unknown Class';
@@ -420,11 +420,11 @@
                         document.title = `${cls.displayName} Portfolios`;
                         
                         // Special handling for Class 4/1 and 4/2
-                        if (cls.id === 'Class4-1') {
+                        if (cls.id === 'P4-1') {
                             window.location.href = '/class-4-1.html';
                             return;
                         }
-                        if (cls.id === 'Class4-2') {
+                        if (cls.id === 'P4-2') {
                             window.location.href = '/class-4-2.html';
                             return;
                         }
@@ -463,11 +463,11 @@
                 window.history.pushState({}, '', url.toString());
                 
                 // Special handling for Class 4/1 and 4/2
-                if (currentClassId === 'Class4-1') {
+                if (currentClassId === 'P4-1') {
                     window.location.href = '/class-4-1.html';
                     return;
                 }
-                if (currentClassId === 'Class4-2') {
+                if (currentClassId === 'P4-2') {
                     window.location.href = '/class-4-2.html';
                     return;
                 }
@@ -532,7 +532,7 @@
                 
                 // Determine which API endpoint to use based on the class
                 let apiUrl;
-                if (classId === 'Class4-1' || classId === 'Class4-2') {
+                if (classId === 'P4-1' || classId === 'P4-2') {
                     apiUrl = `/api/phumdham-students/${classId}`;
                 } else if (classId === 'ClassM2-001') {
                     apiUrl = '/api/m2-students';

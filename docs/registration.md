@@ -1,155 +1,136 @@
 # Registration System Documentation
 
 ## Overview
-The registration system is designed to handle multiple schools and classes dynamically. It uses a configuration-based approach where schools and classes are defined in the system configuration and loaded at runtime.
+The registration system is designed to handle multiple schools and classes dynamically through a configuration-based approach. It supports both student and parent registrations, with different requirements for each type of user.
 
 ## School and Class Configuration
-Schools and classes are configured in `config/schools.js`. Each school can have multiple classes, and each class has its own configuration:
+Schools and their classes are defined in `config/schools.js`. Each school has:
+- A unique ID
+- A display name
+- A list of classes
 
+Example configuration:
 ```javascript
-const schools = [
-  {
-    id: 'PBSChonburi',
-    name: 'Prabhassorn Vidhaya School Chonburi',
+{
+    id: "prabhassorn",
+    name: "Prabhassorn Vidhaya School Chonburi",
     classes: [
-      {
-        id: 'ClassM2-001',
-        name: 'Class 001',
-        displayName: 'M2 2025',
-        description: 'This is a presentation of M2 2025 001 Coding Class.',
-        portfolioPath: '/portfolios/ClassM2-001'
-      }
+        {
+            id: "M2-001",
+            name: "M2 2025",
+            displayName: "M2 2025"
+        },
+        {
+            id: "P4-1",
+            name: "Class 4/1",
+            displayName: "Class 4/1"
+        },
+        {
+            id: "P4-2",
+            name: "Class 4/2",
+            displayName: "Class 4/2"
+        }
     ]
-  }
-  // More schools can be added here
-];
+}
 ```
 
 ## Adding New Schools
-To add a new school to the system:
-
-1. Use the `setup-new-school.js` script:
+To add a new school:
+1. Run the setup script:
    ```bash
    node scripts/setup-new-school.js
    ```
-
 2. Follow the prompts to:
-   - Enter school ID (e.g., 'school2')
+   - Enter school ID (e.g., "prabhassorn")
    - Enter school name
-   - Enter number of classes
-   - For each class:
-     - Enter class ID
-     - Enter class name
-     - Enter display name
-     - Enter description
+   - Specify number of classes
+   - Enter class details (ID, name, display name)
 
-3. The script will:
-   - Add the school to the configuration
-   - Create necessary portfolio directories
-   - Set up class configurations
+The script will:
+- Add the school to `config/schools.js`
+- Create necessary portfolio directories
+- Set up class configurations
 
 ## Adding Classes to Existing Schools
 To add a new class to an existing school:
-
-1. Edit `config/schools.js` directly:
-   ```javascript
-   {
-     id: 'PBSChonburi',
-     name: 'Prabhassorn Vidhaya School Chonburi',
-     classes: [
-       // Existing classes...
-       {
-         id: 'ClassM2-002',  // New class ID
-         name: 'Class 002',
-         displayName: 'M2 2026',
-         description: 'This is a presentation of M2 2026 002 Coding Class.',
-         portfolioPath: '/portfolios/ClassM2-002'
-       }
-     ]
-   }
-   ```
-
+1. Edit `config/schools.js` directly to add the new class configuration
 2. Create the necessary portfolio directory:
    ```bash
-   mkdir -p portfolios/ClassM2-002
+   mkdir -p portfolios/M2-002
    ```
 
-3. The new class will automatically appear in:
-   - The registration form dropdown
-   - The schools page
-   - The class viewer
-   - All other parts of the system
+The new class will automatically appear in:
+- Registration form dropdown
+- Schools page
+- Class viewer
+- Other parts of the system
+
+No server restart is required - changes are reflected immediately.
 
 ## Registration Form
-The registration form (`register.html`) dynamically loads schools and classes:
+The registration form (`register.html`) dynamically loads schools and classes from the server. When a user registers:
 
-1. **School Selection**:
-   - Loads all schools from `/api/schools`
-   - Displays school names in a dropdown
-   - When a school is selected, loads its classes
+1. They select their school from a dropdown
+2. They select their class from a dynamically populated dropdown
+3. They enter their username and password
+4. The system automatically generates the correct portfolio path
 
-2. **Class Selection**:
-   - Loads classes for the selected school from `/api/schools/{schoolId}/classes`
-   - Displays class display names in a dropdown
-   - Updates when school selection changes
-
-3. **Portfolio Path Generation**:
-   - Automatically generates the portfolio path based on:
-     - Selected class ID
-     - Entered username
-   - Format: `/portfolios/{classId}/{username}/{username}.html`
+Example portfolio paths:
+- For M2 students: `/portfolios/M2-001/Peter/Peter.html`
+- For P4 students: `/portfolios/P4-1/Peter41/Peter41.html`
 
 ## API Endpoints
-The system provides these API endpoints for registration:
-
-- `GET /api/schools`: Returns all configured schools
-- `GET /api/schools/{schoolId}`: Returns details of a specific school
-- `GET /api/schools/{schoolId}/classes`: Returns all classes for a school
-- `GET /api/schools/{schoolId}/classes/{classId}`: Returns details of a specific class
-- `POST /register`: Handles user registration
+- `GET /api/schools` - List all schools
+- `GET /api/schools/:schoolId/classes` - List classes for a school
+- `POST /register` - Register a new user
 
 ## Error Handling
-The registration form includes error handling for:
-- API failures when loading schools/classes
-- Missing required fields
-- Password validation
-- Password confirmation
-- Registration failures
+The registration form handles various error cases:
+- Invalid school/class selection
+- Username already exists
+- Password requirements not met
+- API connection failures
 
 ## Usage Notes
-1. **Student Registration**:
-   - Use the given username format (e.g., Peter41)
-   - Select the appropriate school and class
-   - Password must be at least 8 characters
+### Student Registration
+- Username: First name (e.g., "Peter")
+- Password: Year of graduation (e.g., "2025")
+- Portfolio path: Automatically generated based on class and username
 
-2. **Parent Registration**:
-   - Use format "parent-" + child's username (e.g., parent-peter41)
-   - Select the child's school and class
-   - Password must be at least 8 characters
-
-3. **Portfolio Path**:
-   - Automatically generated based on selections
-   - No manual entry required
-   - Ensures consistent path structure
+### Parent Registration
+- Username: Student's username + "Parent" (e.g., "PeterParent")
+- Password: Choose a secure password
+- Portfolio path: Same as student's portfolio
 
 ## Maintenance
-To maintain the registration system:
+### Adding Schools
+1. Use the setup script
+2. Verify directory creation
+3. Test registration with new school
 
-1. **Adding Schools**:
-   - Use the setup script for new schools
-   - Update documentation for new schools
+### Adding Classes
+1. Edit `config/schools.js`
+2. Create portfolio directory
+3. Verify in registration form
 
-2. **Adding Classes**:
-   - Edit `config/schools.js` to add new classes
-   - Create necessary portfolio directories
-   - No server restart required
-   - Changes are reflected immediately
+### Modifying Schools
+1. Edit `config/schools.js`
+2. Update portfolio directories if needed
+3. Test affected functionality
 
-3. **Modifying Schools**:
-   - Edit `config/schools.js` directly
-   - Ensure portfolio paths are updated accordingly
+### Troubleshooting
+Common issues and solutions:
+1. Registration fails
+   - Check school/class configuration
+   - Verify directory permissions
+   - Check database connection
 
-4. **Troubleshooting**:
-   - Check server logs for API errors
-   - Verify school/class configuration
-   - Ensure portfolio directories exist 
+2. Portfolio not found
+   - Verify portfolio path format
+   - Check directory structure
+   - Verify file permissions
+
+3. Class not appearing
+   - Check class configuration
+   - Verify API response
+   - Clear browser cache 
