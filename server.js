@@ -1524,22 +1524,17 @@ app.get('/api/phumdham-students/:classId', async (req, res) => {
             filesystemStudents = files
                 .filter(file => file.isDirectory())
                 .map(dir => {
-                    const nameParts = dir.name.split(/[_-]/);
-                    const formattedName = nameParts
-                        .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
-                        .join(' ');
-                    
+                    const { firstName, lastName, nickname } = parseStudentName(dir.name);
                     const portfolioPath = `/portfolios/P4-1/${dir.name}/index.html`;
-                    console.log(`Found student directory: ${dir.name} -> ${portfolioPath}`);
                     
                     return {
                         username: dir.name,
                         portfolio_path: portfolioPath,
                         avatar_path: `/portfolios/P4-1/${dir.name}/images/${dir.name}.png`,
-                        is_public: true, // Filesystem portfolios are public by default
-                        first_name: formattedName,
-                        last_name: '',
-                        nickname: ''
+                        is_public: false, // Set to private by default
+                        first_name: firstName,
+                        last_name: lastName,
+                        nickname: nickname
                     };
                 });
             
@@ -1694,28 +1689,8 @@ app.get('/api/filesystem-portfolios/:classId', (req, res) => {
                             console.log(`   Error finding avatar for ${studentName}: ${err.message}`);
                         }
                         
-                        // Format student name from directory
-                        const nameParts = studentName.split('_');
-                        let firstName = '', lastName = '', nickname = '';
-                        
-                        if (nameParts.length >= 2) {
-                            // If format is like "firstname_lastname_id"
-                            firstName = nameParts[0].charAt(0).toUpperCase() + nameParts[0].slice(1);
-                            lastName = nameParts[1].charAt(0).toUpperCase() + nameParts[1].slice(1);
-                            // Try to extract nickname from HTML file content
-                            try {
-                                const htmlContent = fs.readFileSync(path.join(studentPath, htmlFile), 'utf8');
-                                const nicknameMatch = htmlContent.match(/<h1[^>]*>([^<]+)<\/h1>/);
-                                if (nicknameMatch) {
-                                    nickname = nicknameMatch[1].trim();
-                                }
-                            } catch (err) {
-                                console.log(`Error reading HTML for nickname: ${err.message}`);
-                            }
-                        } else {
-                            // Single word name
-                            firstName = studentName.charAt(0).toUpperCase() + studentName.slice(1);
-                        }
+                        // Parse name from directory name (e.g., "firstname_lastname_id")
+                        const { firstName, lastName, nickname } = parseStudentName(studentName);
 
                         // Add student to list
                         students.push({
@@ -1725,7 +1700,7 @@ app.get('/api/filesystem-portfolios/:classId', (req, res) => {
                             is_public: false, // Default to private like other classes
                             first_name: firstName,
                             last_name: lastName,
-                            nickname: nickname || firstName
+                            nickname: nickname
                         });
                     }
                 } catch (err) {
@@ -1734,28 +1709,18 @@ app.get('/api/filesystem-portfolios/:classId', (req, res) => {
             } else if (entry.name.toLowerCase().endsWith('.html')) {
                 // Handle HTML files at root level
                 const studentName = entry.name.replace('.html', '');
+                const { firstName, lastName, nickname } = parseStudentName(studentName);
                 
                 console.log(`   Adding HTML file: ${entry.name}`);
                 
-                // Format student name from directory
-                const nameParts = studentName.split('_');
-                let firstName = '', lastName = '';
-                
-                if (nameParts.length >= 2) {
-                    firstName = nameParts[0].charAt(0).toUpperCase() + nameParts[0].slice(1);
-                    lastName = nameParts[1].charAt(0).toUpperCase() + nameParts[1].slice(1);
-                } else {
-                    firstName = studentName.charAt(0).toUpperCase() + studentName.slice(1);
-                }
-
                 students.push({
                     username: studentName,
                     portfolio_path: `/portfolios/${baseFolderName}/${entry.name}`,
                     avatar_path: '/images/default-avatar.png',
-                    is_public: false, // Default to private like other classes
+                    is_public: false, // Default to private
                     first_name: firstName,
                     last_name: lastName,
-                    nickname: firstName
+                    nickname: nickname
                 });
             }
         });
@@ -1844,14 +1809,17 @@ app.get('/api/m2-students', async (req, res) => {
                         // Prefer index.html if available
                         const htmlFile = htmlFiles.find(f => f.toLowerCase() === 'index.html') || htmlFiles[0];
                         
+                        // Parse the student name
+                        const { firstName, lastName, nickname } = parseStudentName(studentName);
+                        
                         filesystemStudents.push({
                             username: studentName,
                             portfolio_path: `${portfolioPath}/${studentName}/${htmlFile}`,
                             avatar_path: `${portfolioPath}/${studentName}/images/${studentName}.jpg`,
-                            is_public: true,
-                            first_name: studentName,
-                            last_name: '',
-                            nickname: studentName
+                            is_public: false, // Set to private by default
+                            first_name: firstName,
+                            last_name: lastName,
+                            nickname: nickname
                         });
                     }
                 } catch (error) {
@@ -1880,3 +1848,29 @@ app.get('/api/m2-students', async (req, res) => {
         db.close();
     }
 });
+
+// Helper function to parse student name
+function parseStudentName(dirName) {
+    const nameParts = dirName.split('_');
+    let firstName = '', lastName = '', nickname = '';
+    
+    if (nameParts.length >= 2) {
+        // Remove any numeric ID from the last part
+        const lastPart = nameParts[nameParts.length - 1].replace(/\d+$/, '');
+        if (lastPart) {
+            nameParts[nameParts.length - 1] = lastPart;
+        } else {
+            nameParts.pop(); // Remove the ID part if it was all numbers
+        }
+        
+        // Capitalize each part
+        firstName = nameParts[0].charAt(0).toUpperCase() + nameParts[0].slice(1).toLowerCase();
+        lastName = nameParts.slice(1).map(part => 
+            part.charAt(0).toUpperCase() + part.slice(1).toLowerCase()
+        ).join(' ');
+    } else {
+        firstName = dirName.charAt(0).toUpperCase() + dirName.slice(1).toLowerCase();
+    }
+    
+    return { firstName, lastName, nickname };
+}
