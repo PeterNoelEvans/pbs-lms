@@ -1138,22 +1138,22 @@ const db = new sqlite3.Database(dbPath, (err) => {
             {
                 username: 'Peter42',
                 password: 'Peter2025BB',
-                portfolio_path: '/portfolios/P4-2/Peter/Peter.html',
-                avatar_path: '/portfolios/P4-2/Peter/images/Peter42.jpg',
+                portfolio_path: '/portfolios/P4-2/Peter42/Peter.html',
+                avatar_path: '/portfolios/P4-2/Peter42/images/Peter42.jpg',
                 email: 'peter42@example.com'
             },
             {
                 username: 'Peter41',
                 password: 'Peter2025AA',
-                portfolio_path: '/portfolios/P4-1/Peter/Peter.html',
-                avatar_path: '/portfolios/P4-1/Peter/images/Peter41.jpg',
+                portfolio_path: '/portfolios/P4-1/Peter41/Peter.html',
+                avatar_path: '/portfolios/P4-1/Peter41/images/Peter41.jpg',
                 email: 'peter41@example.com'
             },
             {
                 username: 'PeterM2',
-                password: 'Peter2025CC',
-                portfolio_path: '/portfolios/M2-001/Peter/Peter.html',
-                avatar_path: '/portfolios/M2-001/Peter/images/PeterM2.jpg',
+                password: 'PeterM2-2025',
+                portfolio_path: '/portfolios/M2-001/PeterM2/Peter.html',
+                avatar_path: '/portfolios/M2-001/PeterM2/images/PeterM2.jpg',
                 email: 'peterm2@example.com'
             }
         ];
