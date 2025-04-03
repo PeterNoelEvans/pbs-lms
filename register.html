@@ -102,14 +102,6 @@
             </div>
 
             <div>
-                <label for="email">Email Address:</label>
-                <input type="email" id="email" name="email" required>
-                <p class="note">
-                    This email will be used for account recovery and notifications
-                </p>
-            </div>
-
-            <div>
                 <label for="password">Password:</label>
                 <input type="password" id="password" name="password" required>
                 <p class="note">
@@ -123,9 +115,20 @@
             </div>
 
             <div>
-                <label for="portfolioPath">Portfolio Path:</label>
-                <input type="text" id="portfolioPath" name="portfolioPath" required>
+                <label for="school">School:</label>
+                <select id="school" name="school" required>
+                    <option value="">Select a school</option>
+                </select>
             </div>
+
+            <div>
+                <label for="class">Class:</label>
+                <select id="class" name="class" required>
+                    <option value="">Select a class</option>
+                </select>
+            </div>
+
+            <input type="hidden" id="portfolioPath" name="portfolioPath">
 
             <div id="errorMessage" style="color: red; margin: 10px 0; display: none;"></div>
 
@@ -138,30 +141,100 @@
     </div>
 
     <script>
+        // Function to load schools from the server
+        async function loadSchools() {
+            try {
+                const response = await fetch('/api/schools');
+                const schools = await response.json();
+                
+                const schoolSelect = document.getElementById('school');
+                schoolSelect.innerHTML = '<option value="">Select a school</option>';
+                
+                schools.forEach(school => {
+                    const option = document.createElement('option');
+                    option.value = school.id;
+                    option.textContent = school.name;
+                    schoolSelect.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading schools:', error);
+                const errorDiv = document.getElementById('errorMessage');
+                errorDiv.textContent = 'Error loading schools. Please try again later.';
+                errorDiv.style.display = 'block';
+            }
+        }
+
+        // Function to load classes for a selected school
+        async function loadClasses(schoolId) {
+            try {
+                const response = await fetch(`/api/schools/${schoolId}/classes`);
+                const classes = await response.json();
+                
+                const classSelect = document.getElementById('class');
+                classSelect.innerHTML = '<option value="">Select a class</option>';
+                
+                classes.forEach(cls => {
+                    const option = document.createElement('option');
+                    option.value = cls.id;
+                    option.textContent = cls.displayName;
+                    classSelect.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading classes:', error);
+                const errorDiv = document.getElementById('errorMessage');
+                errorDiv.textContent = 'Error loading classes. Please try again later.';
+                errorDiv.style.display = 'block';
+            }
+        }
+
+        // Function to generate portfolio path
+        function generatePortfolioPath() {
+            const username = document.getElementById('username').value.trim();
+            const classId = document.getElementById('class').value;
+            if (username && classId) {
+                const path = `/portfolios/${classId}/${username}/${username}.html`;
+                document.getElementById('portfolioPath').value = path;
+            }
+        }
+
+        // Add event listeners
+        document.getElementById('school').addEventListener('change', function() {
+            if (this.value) {
+                loadClasses(this.value);
+            } else {
+                const classSelect = document.getElementById('class');
+                classSelect.innerHTML = '<option value="">Select a class</option>';
+            }
+            generatePortfolioPath();
+        });
+
+        document.getElementById('class').addEventListener('change', generatePortfolioPath);
+        document.getElementById('username').addEventListener('input', generatePortfolioPath);
+
+        // Load schools when the page loads
+        document.addEventListener('DOMContentLoaded', loadSchools);
+
         document.getElementById('registerForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             
             const username = document.getElementById('username').value.trim();
-            const email = document.getElementById('email').value.trim();
             const password = document.getElementById('password').value;
             const confirmPassword = document.getElementById('confirmPassword').value;
-            const portfolioPath = document.getElementById('portfolioPath').value.trim();
+            const school = document.getElementById('school').value;
+            const classId = document.getElementById('class').value;
             const errorDiv = document.getElementById('errorMessage');
+            
+            // Generate final portfolio path
+            generatePortfolioPath();
+            const portfolioPath = document.getElementById('portfolioPath').value;
             
             // Reset error message
             errorDiv.style.display = 'none';
             errorDiv.textContent = '';
             
             // Validate input
-            if (!username || !email || !password || !confirmPassword || !portfolioPath) {
+            if (!username || !password || !confirmPassword || !school || !classId) {
                 errorDiv.textContent = 'All fields are required';
-                errorDiv.style.display = 'block';
-                return;
-            }
-            
-            // Validate email format
-            if (!email.includes('@')) {
-                errorDiv.textContent = 'Please enter a valid email address';
                 errorDiv.style.display = 'block';
                 return;
             }
@@ -189,8 +262,7 @@
                         'Cache-Control': 'no-cache'
                     },
                     body: JSON.stringify({ 
-                        username, 
-                        email,
+                        username,
                         password,
                         portfolio_path: portfolioPath
                     })
