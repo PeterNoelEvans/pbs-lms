@@ -1000,6 +1000,44 @@ const db = new sqlite3.Database(dbPath, (err) => {
             });
         });
 
+        // Create public_visitors table
+        await new Promise((resolve, reject) => {
+            db.run(`CREATE TABLE IF NOT EXISTS public_visitors (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                full_name TEXT NOT NULL,
+                email TEXT UNIQUE NOT NULL,
+                password TEXT NOT NULL,
+                reason TEXT,
+                registration_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )`, (err) => {
+                if (err) {
+                    console.error('Error creating public_visitors table:', err);
+                    reject(err);
+                } else {
+                    console.log('Public visitors table ready');
+                    resolve();
+                }
+            });
+        });
+
+        // Create visitor_logins table to track login history
+        await new Promise((resolve, reject) => {
+            db.run(`CREATE TABLE IF NOT EXISTS visitor_logins (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                visitor_id INTEGER NOT NULL,
+                login_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (visitor_id) REFERENCES public_visitors(id)
+            )`, (err) => {
+                if (err) {
+                    console.error('Error creating visitor_logins table:', err);
+                    reject(err);
+                } else {
+                    console.log('Visitor logins table ready');
+                    resolve();
+                }
+            });
+        });
+
         // Check existing columns
         const columns = await new Promise((resolve, reject) => {
             db.all("PRAGMA table_info(users)", [], (err, rows) => {
