@@ -286,64 +286,53 @@
             img.alt = `${username}'s avatar`;
             img.className = 'avatar';
             img.onerror = function() {
-                this.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIwIiBoZWlnaHQ9IjEyMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTIwIiBoZWlnaHQ9IjEyMCIgZmlsbD0iI2YwZjBmMCIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTYiIGZpbGw9IiM2NjY2NjYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5ObyBJbWFnZTwvdGV4dD48L3N2Zz4=';
+                this.src = '/images/default-avatar.png';
             };
             
             const name = document.createElement('h3');
-            // Use displayName if available, otherwise fall back to nickname or formatted username
-            if (displayName) {
-                name.textContent = displayName;
-            } else if (nickname) {
+            // Use nickname, full name, or username in that order of preference
+            if (nickname) {
                 name.textContent = nickname;
+            } else if (firstName && lastName) {
+                name.textContent = `${firstName} ${lastName}`;
             } else {
-                // Format username more elegantly as a last resort
-                const nameParts = username.split('_');
-                // Remove the ID number if it exists (last part if numeric)
-                if (nameParts.length > 0 && /^\d+$/.test(nameParts[nameParts.length - 1])) {
-                    nameParts.pop();
-                }
-                // Capitalize each part and join with spaces
-                const formattedName = nameParts
-                    .map(part => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
-                    .join(' ');
-                name.textContent = formattedName;
+                // Format username by capitalizing first letter
+                const formattedUsername = username.charAt(0).toUpperCase() + username.slice(1);
+                name.textContent = formattedUsername;
             }
 
             const classIndicator = document.createElement('div');
             classIndicator.style.marginTop = '5px';
             classIndicator.style.color = '#666';
             classIndicator.style.fontSize = '0.9em';
-            // Format class name more elegantly
-            const className = portfolioPath.split('/')[2] || 'Unknown Class';
-            classIndicator.textContent = className.replace(/([A-Z])/g, ' $1').trim(); // Add spaces before capitals
+            // Update class indicator to handle M2 class
+            if (portfolioPath.includes('/P4-1/')) {
+                classIndicator.textContent = 'Class 4/1';
+            } else if (portfolioPath.includes('/P4-2/')) {
+                classIndicator.textContent = 'Class 4/2';
+            } else if (portfolioPath.includes('/ClassM2-001/')) {
+                classIndicator.textContent = 'M2 2025';
+            } else {
+                classIndicator.textContent = 'Unknown Class';
+            }
             
             const viewBtn = document.createElement('a');
             viewBtn.className = 'view-portfolio';
             viewBtn.textContent = 'View Portfolio';
             viewBtn.href = portfolioPath;
-            viewBtn.style.marginTop = '10px';
-            viewBtn.style.padding = '8px 16px';
-            viewBtn.style.backgroundColor = isPublic ? '#4CAF50' : '#ff9800';
-            viewBtn.style.color = 'white';
-            viewBtn.style.textDecoration = 'none';
-            viewBtn.style.borderRadius = '4px';
-            viewBtn.style.transition = 'background-color 0.3s';
             
-            // Visually indicate private portfolios
             if (!isPublic) {
                 viewBtn.textContent = 'Private Portfolio';
-                if (!isAuthenticated) {
-                    viewBtn.style.backgroundColor = '#999';
-                    viewBtn.style.opacity = '0.7';
-                    viewBtn.addEventListener('click', (e) => {
-                        e.preventDefault();
-                        const loginPrompt = document.getElementById('loginPrompt');
-                        loginPrompt.style.display = 'block';
-                        setTimeout(() => {
-                            loginPrompt.style.display = 'none';
-                        }, 3000);
-                    });
-                }
+                viewBtn.style.backgroundColor = '#999';
+                viewBtn.style.opacity = '0.7';
+                viewBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const loginPrompt = document.getElementById('loginPrompt');
+                    loginPrompt.style.display = 'block';
+                    setTimeout(() => {
+                        loginPrompt.style.display = 'none';
+                    }, 3000);
+                });
             }
             
             card.appendChild(privacyBadge);
