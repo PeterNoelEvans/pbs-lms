@@ -704,7 +704,7 @@
                 const isVisitor = authData.user?.userType === 'visitor' || authData.userType === 'visitor';
                 
                 // Get current portfolios
-                const apiUrl = currentClassId === 'ClassM2-001' ? 
+                const apiUrl = currentClassId === 'M2-001' ? 
                     '/api/m2-students' : 
                     `/api/classes/${currentClassId}/students?portfolioPath=/portfolios/${currentClassId}`;
                 
@@ -714,14 +714,21 @@
                 const students = await response.json();
                 const container = document.getElementById('portfoliosContainer');
                 
+                if (!container) return; // Exit if container not found
+                
                 // Update existing cards
                 Array.from(container.children).forEach(card => {
-                    const portfolioPath = card.querySelector('.view-portfolio').href;
+                    const viewBtn = card.querySelector('.view-portfolio');
+                    if (!viewBtn) return; // Skip if button not found
+                    
+                    const portfolioPath = viewBtn.getAttribute('href');
+                    if (!portfolioPath) return; // Skip if no href attribute
+                    
                     const student = students.find(s => s.portfolio_path === portfolioPath);
                     
                     if (student) {
                         const privacyBadge = card.querySelector('.privacy-badge');
-                        const viewBtn = card.querySelector('.view-portfolio');
+                        if (!privacyBadge) return; // Skip if badge not found
                         
                         if (student.is_public !== (privacyBadge.textContent === 'Public')) {
                             // Update badge
@@ -729,7 +736,8 @@
                             privacyBadge.textContent = student.is_public ? 'Public' : 'Private';
                             
                             // Update button
-                            viewBtn.style.backgroundColor = student.is_public ? '#4CAF50' : '#ff9800';
+                            viewBtn.style.backgroundColor = student.is_public ? '#4CAF50' : '#999';
+                            viewBtn.style.opacity = student.is_public ? '1' : '0.7';
                             viewBtn.textContent = student.is_public ? 'View Portfolio' : 'Private Portfolio';
                         }
                     }
@@ -739,7 +747,7 @@
             }
         }
         
-        // Check privacy states every 30 seconds instead of full refresh
+        // Check privacy states every 30 seconds
         setInterval(updatePrivacyStates, 30000);
         
         // Listen for privacy updates from the dashboard
