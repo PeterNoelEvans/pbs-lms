@@ -1133,63 +1133,89 @@ const db = new sqlite3.Database(dbPath, (err) => {
             }
         }
 
-        // Now check for Peter and create/update if needed
-        const peter = await new Promise((resolve, reject) => {
-            db.get('SELECT * FROM users WHERE username = ?', ['Peter'], (err, row) => {
-                if (err) {
-                    console.error('Error checking for Peter:', err);
-                    reject(err);
-                } else {
-                    resolve(row);
-                }
-            });
-        });
+        // Now check for Peter accounts and create/update if needed
+        const peterAccounts = [
+            {
+                username: 'Peter42',
+                password: 'Peter2025BB',
+                portfolio_path: '/portfolios/P4-2/Peter/Peter.html',
+                avatar_path: '/portfolios/P4-2/Peter/images/Peter42.jpg',
+                email: 'peter42@example.com'
+            },
+            {
+                username: 'Peter41',
+                password: 'Peter2025AA',
+                portfolio_path: '/portfolios/P4-1/Peter/Peter.html',
+                avatar_path: '/portfolios/P4-1/Peter/images/Peter41.jpg',
+                email: 'peter41@example.com'
+            },
+            {
+                username: 'PeterM2',
+                password: 'Peter2025CC',
+                portfolio_path: '/portfolios/M2-001/Peter/Peter.html',
+                avatar_path: '/portfolios/M2-001/Peter/images/PeterM2.jpg',
+                email: 'peterm2@example.com'
+            }
+        ];
 
-        if (!peter) {
-            console.log('Peter not found, creating...');
-            const hashedPassword = await bcrypt.hash('Peter2025CC', 10);
-            await new Promise((resolve, reject) => {
-                db.run(
-                    `INSERT INTO users (
-                        username, password, portfolio_path, avatar_path, 
-                        is_public, is_super_user, email
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-                    [
-                        'Peter',
-                        hashedPassword,
-                        '/portfolios/M2-001/Peter/Peter.html',
-                        '/portfolios/M2-001/Peter/images/Peter.jpg',
-                        1,
-                        1,
-                        'peter@example.com'
-                    ],
-                    function(err) {
-                        if (err) {
-                            console.error('Error creating Peter:', err);
-                            reject(err);
-                        } else {
-                            console.log('Peter created successfully');
+        for (const account of peterAccounts) {
+            const existingUser = await new Promise((resolve, reject) => {
+                db.get('SELECT * FROM users WHERE username = ?', [account.username], (err, row) => {
+                    if (err) {
+                        console.error(`Error checking for ${account.username}:`, err);
+                        reject(err);
+                    } else {
+                        resolve(row);
+                    }
+                });
+            });
+
+            if (!existingUser) {
+                console.log(`${account.username} not found, creating...`);
+                const hashedPassword = await bcrypt.hash(account.password, 10);
+                await new Promise((resolve, reject) => {
+                    db.run(
+                        `INSERT INTO users (
+                            username, password, portfolio_path, avatar_path, 
+                            is_public, is_super_user, email
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                        [
+                            account.username,
+                            hashedPassword,
+                            account.portfolio_path,
+                            account.avatar_path,
+                            1,
+                            1,
+                            account.email
+                        ],
+                        function(err) {
+                            if (err) {
+                                console.error(`Error creating ${account.username}:`, err);
+                                reject(err);
+                            } else {
+                                console.log(`${account.username} created successfully`);
+                                resolve();
+                            }
+                        }
+                    );
+                });
+            } else {
+                // Update super user status
+                await new Promise((resolve, reject) => {
+                    db.run(
+                        'UPDATE users SET is_super_user = 1 WHERE username = ?',
+                        [account.username],
+                        (err) => {
+                            if (err) {
+                                console.error(`Error updating ${account.username} super user status:`, err);
+                            } else {
+                                console.log(`${account.username} updated to super user`);
+                            }
                             resolve();
                         }
-                    }
-                );
-            });
-        } else {
-            // Update Peter's super user status
-            await new Promise((resolve, reject) => {
-                db.run(
-                    'UPDATE users SET is_super_user = 1 WHERE username = ?',
-                    ['Peter'],
-                    (err) => {
-                        if (err) {
-                            console.error('Error updating Peter super user status:', err);
-                        } else {
-                            console.log('Peter updated to super user');
-                        }
-                        resolve();
-                    }
-                );
-            });
+                    );
+                });
+            }
         }
     });
 });
