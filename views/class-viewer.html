@@ -694,6 +694,13 @@
             } catch (error) {
                 console.error('Error updating page title:', error);
             }
+            
+            // Set default class if none selected
+            if (!currentClassId) {
+                currentClassId = currentSchoolId === 'PhumdhamPrimary' ? 'P4-1' : 'M2-001';
+                localStorage.setItem('selectedClassId', currentClassId);
+                console.log(`Setting default class ID: ${currentClassId}`);
+            }
         });
         
         // Function to update privacy states without rebuilding cards

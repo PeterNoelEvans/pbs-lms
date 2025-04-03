@@ -1285,24 +1285,23 @@ app.get('/api/classes/:classId/students', async (req, res) => {
         }
         
         // Special handling for M2 class
-        if (classId === 'ClassM2-001') {
-            console.log(`Special handling for PBSChonburi M2 class: ${classId}`);
+        if (classId === 'M2-001') {
+            console.log('Handling M2-001 class');
             
-            // Direct query for M2 folders
-            const students = await new Promise((resolve, reject) => {
-                db.all('SELECT * FROM users WHERE portfolio_path LIKE ?', [`%ClassM2-001%`], (err, rows) => {
+            // Get students from database first
+            const dbStudents = await new Promise((resolve, reject) => {
+                db.all('SELECT * FROM users WHERE portfolio_path LIKE ?', [`%M2-001%`], (err, rows) => {
                     if (err) {
                         console.error('Database error:', err);
                         reject(err);
-                return;
-            }
+                    }
                     
-                    console.log(`Found ${rows.length} students for M2 class`);
-                    if (rows.length > 0) {
+                    console.log(`Found ${rows?.length || 0} students in database`);
+                    if (rows?.length > 0) {
                         console.log('Sample students:');
-                        for (let i = 0; i < Math.min(5, rows.length); i++) {
-                            console.log(` - ${rows[i].username}: ${rows[i].portfolio_path}`);
-                        }
+                        rows.slice(0, 3).forEach(student => {
+                            console.log(` - ${student.username}: ${student.portfolio_path}`);
+                        });
                     }
                     
                     resolve(rows || []);
@@ -1310,11 +1309,11 @@ app.get('/api/classes/:classId/students', async (req, res) => {
             });
             
             // If no students in database, check filesystem
-            if (!students.length) {
+            if (!dbStudents.length) {
                 console.log('No M2 students found in database, checking filesystem');
                 
                 try {
-                    const folderPath = path.join(__dirname, 'portfolios', 'ClassM2-001');
+                    const folderPath = path.join(__dirname, 'portfolios', 'M2-001');
                     if (fs.existsSync(folderPath)) {
                         console.log(`Found M2 directory: ${folderPath}`);
                         
@@ -1334,10 +1333,10 @@ app.get('/api/classes/:classId/students', async (req, res) => {
                             
                             if (htmlFiles.length) {
                                 const htmlFile = htmlFiles[0];
-                                students.push({
+                                dbStudents.push({
                                     username: studentName,
-                                    portfolio_path: `/portfolios/ClassM2-001/${studentName}/${htmlFile}`,
-                                    avatar_path: `/portfolios/ClassM2-001/${studentName}/images/${studentName}.jpg`,
+                                    portfolio_path: `/portfolios/M2-001/${studentName}/${htmlFile}`,
+                                    avatar_path: `/portfolios/M2-001/${studentName}/images/${studentName}.jpg`,
                                     is_public: 1
                                 });
                             }
@@ -1349,7 +1348,7 @@ app.get('/api/classes/:classId/students', async (req, res) => {
             }
             
             console.log(`==== END DEBUG ====\n`);
-            return res.json(students);
+            return res.json(dbStudents);
         }
         
         // Regular handling for other classes

@@ -45,7 +45,7 @@ const students42 = [
 
 // Student data for ClassM2-001
 const studentsM2 = [
-    { username: 'Peter', password: 'Peter2025CC', portfolio_path: '/portfolios/ClassM2-001/Peter/Peter.html' }
+    { username: 'Peter', password: 'Peter2025CC', portfolio_path: '/portfolios/M2-001/Peter/Peter.html' }
 ];
 
 // Function to check if database exists and has data

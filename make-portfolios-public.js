@@ -14,7 +14,7 @@ db.all('SELECT id, username, portfolio_path FROM users WHERE portfolio_path LIKE
         return;
     }
     
-    console.log(`Found ${students.length} students in ClassM2-001`);
+    console.log(`Found ${students.length} students in M2-001`);
     
     // Set approximately half of the portfolios to public
     const studentsToMakePublic = students.filter((_, index) => index % 2 === 0);
@@ -42,7 +42,7 @@ db.all('SELECT id, username, portfolio_path FROM users WHERE portfolio_path LIKE
             console.log('All updates completed');
             // Verify the changes
             return new Promise((resolve, reject) => {
-                db.all('SELECT username, portfolio_path, is_public FROM users WHERE portfolio_path LIKE "%ClassM2-001%"', [], (err, rows) => {
+                db.all('SELECT username, portfolio_path, is_public FROM users WHERE portfolio_path LIKE "%M2-001%"', [], (err, rows) => {
                     if (err) {
                         reject(err);
                     } else {
