@@ -1672,12 +1672,12 @@ app.get('/api/filesystem-portfolios/:classId', (req, res) => {
     const folderMap = {
         'Class4-1': 'P4-1',
         'Class4-2': 'P4-2',
-        'ClassM2-001': 'M2-001'
+        'M2-001': 'M2-001'
     };
     
     // List of alternative folders to check for each class
     const altFolders = {
-        'ClassM2-001': ['M2-001', 'M2', 'M2-2025'],
+        'M2-001': ['M2-001', 'M2', 'M2-2025'],
         'Class4-1': ['P4-1', 'Class4-1', '4-1'],
         'Class4-2': ['P4-2', 'Class4-2', '4-2']
     };
@@ -1833,7 +1833,7 @@ app.get('/api/m2-students', async (req, res) => {
         console.log(`\n==== M2 STUDENTS QUERY ====`);
         
         // Get class configuration
-        const m2Class = schoolConfig.getClass('PBSChonburi', 'ClassM2-001');
+        const m2Class = schoolConfig.getClass('PBSChonburi', 'M2-001');
         if (!m2Class) {
             console.error('M2 class configuration not found');
             return res.status(404).json({ error: 'Class not found' });
@@ -1873,7 +1873,7 @@ app.get('/api/m2-students', async (req, res) => {
         
         // Check filesystem for additional students
         let filesystemStudents = [];
-        const folderPath = path.join(__dirname, 'portfolios', 'ClassM2-001');
+        const folderPath = path.join(__dirname, 'portfolios', 'M2-001');
         
         if (fs.existsSync(folderPath)) {
             console.log(`Checking filesystem path: ${folderPath}`);
