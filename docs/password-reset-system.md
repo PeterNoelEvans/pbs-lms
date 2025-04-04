@@ -1,13 +1,13 @@
-# Password Reset System Documentation
+# Password Reset System (Planned Feature)
 
 ## Overview
-The password reset system provides a secure way for users to reset their passwords when forgotten. It includes email verification, secure token generation, and proper database handling.
+This document outlines the planned implementation of a password reset system for the teacher resource platform. The system will provide a secure way for users to reset their passwords when forgotten, including email verification, secure token generation, and proper database handling.
 
-## Implementation Progress
+## Implementation Plan
 
-### Completed Components
+### Required Components
 1. **Database Structure**
-   - Created `password_reset_tokens` table with:
+   - `password_reset_tokens` table with:
      - User ID (foreign key to users table)
      - Secure token
      - Expiration timestamp
@@ -16,7 +16,7 @@ The password reset system provides a secure way for users to reset their passwor
 
 2. **Email Configuration**
    - Set up nodemailer for sending reset emails
-   - Added environment variables:
+   - Required environment variables:
      - `EMAIL_USER`: Gmail account
      - `EMAIL_PASS`: App-specific password
 
@@ -28,21 +28,6 @@ The password reset system provides a secure way for users to reset their passwor
    - `/forgot-password`: Handles reset requests
    - `/reset-password`: Processes new passwords
    - Token validation and expiration checks
-
-### Pending Tasks
-1. **Testing**
-   - [ ] Test email delivery
-   - [ ] Verify token expiration
-   - [ ] Check database constraints
-   - [ ] Validate error handling
-
-2. **Security Review**
-   - [ ] Audit token generation
-   - [ ] Review email content
-   - [ ] Check rate limiting
-   - [ ] Verify session handling
-
-## Final Objectives
 
 ### Security Requirements
 1. **Token Security**
@@ -63,35 +48,9 @@ The password reset system provides a secure way for users to reset their passwor
    - Secure password hashing
    - Transaction support
 
-### User Experience
-1. **Flow**
-   - Simple request process
-   - Clear email instructions
-   - Intuitive reset form
-   - Success/error feedback
+### Technical Details
 
-2. **Error Handling**
-   - Clear error messages
-   - Graceful failure handling
-   - User-friendly notifications
-   - Proper redirection
-
-### Maintenance
-1. **Monitoring**
-   - Log failed attempts
-   - Track successful resets
-   - Monitor email delivery
-   - Audit token usage
-
-2. **Cleanup**
-   - Regular token cleanup
-   - Expired token removal
-   - Database optimization
-   - Log rotation
-
-## Technical Details
-
-### Database Schema
+#### Database Schema
 ```sql
 CREATE TABLE password_reset_tokens (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -104,80 +63,21 @@ CREATE TABLE password_reset_tokens (
 );
 ```
 
-### Environment Variables
+#### Required Dependencies
+- nodemailer: ^6.9.7
+- bcrypt: ^5.1.1
+- crypto: Built-in Node.js module
+
+#### Environment Variables
 ```env
 EMAIL_USER=your-email@gmail.com
 EMAIL_PASS=your-app-specific-password
 ```
 
-### Dependencies
-- nodemailer: ^6.9.7
-- bcrypt: ^5.1.1
-- crypto: Built-in Node.js module
+## Implementation Notes
 
-## Troubleshooting
-
-### Common Issues
-1. **Email Not Sending**
-   - Check Gmail credentials
-   - Verify app-specific password
-   - Check email server status
-   - Review email content
-
-2. **Token Issues**
-   - Verify token generation
-   - Check expiration time
-   - Validate database storage
-   - Review cleanup process
-
-3. **Database Errors**
-   - Check foreign key constraints
-   - Verify table structure
-   - Review transaction handling
-   - Monitor connection pool
-
-### Debug Steps
-1. Check server logs
-2. Verify email configuration
-3. Test token generation
-4. Monitor database queries
-5. Review error responses
-
-## Future Enhancements
-1. Add rate limiting
-2. Implement CAPTCHA
-3. Add security questions
-4. Support multiple email providers
-5. Add SMS verification option
-
-## Deployment Considerations
-
-### GitHub Configuration
-1. **Environment Variables**
-   - Never commit `.env` file to GitHub
-   - Add `.env` to `.gitignore`
-   - Use GitHub Secrets for sensitive data
-   - Document required environment variables
-
-2. **Repository Structure**
-   - Keep sensitive files out of version control
-   - Maintain proper file permissions
-   - Follow GitHub security best practices
-   - Use appropriate .gitignore rules
-
-### Render.com Configuration
-1. **Environment Setup**
-   - Set environment variables in Render dashboard:
-     ```
-     EMAIL_USER=your-email@gmail.com
-     EMAIL_PASS=your-app-specific-password
-     ```
-   - Use Render's environment variable management
-   - Configure build settings appropriately
-   - Set up proper deployment hooks
-
-2. **Email Service**
-   - Gmail may block automated emails from Render
+### Deployment Considerations
+1. **Email Service**
    - Consider using a transactional email service:
      - SendGrid
      - Mailgun
@@ -185,52 +85,35 @@ EMAIL_PASS=your-app-specific-password
    - Configure SPF and DKIM records
    - Set up proper email domain verification
 
-3. **Database Considerations**
-   - Render's free tier has limitations
-   - Plan for database scaling
-   - Implement proper connection pooling
-   - Handle database migrations carefully
-
-4. **Security Measures**
-   - Enable HTTPS in Render
+2. **Security Measures**
+   - Enable HTTPS
    - Configure proper CORS settings
    - Set up rate limiting
    - Implement proper session handling
 
-### Deployment Checklist
-1. **Pre-deployment**
-   - [ ] Verify all environment variables
-   - [ ] Test email configuration
-   - [ ] Check database migrations
-   - [ ] Review security settings
+### Testing Requirements
+1. **Email Testing**
+   - Test email delivery
+   - Verify token expiration
+   - Check database constraints
+   - Validate error handling
 
-2. **Post-deployment**
-   - [ ] Verify email functionality
-   - [ ] Test password reset flow
-   - [ ] Monitor error logs
-   - [ ] Check database connections
+2. **Security Testing**
+   - Audit token generation
+   - Review email content
+   - Check rate limiting
+   - Verify session handling
 
-3. **Monitoring**
-   - [ ] Set up error tracking
-   - [ ] Monitor email delivery
-   - [ ] Track database performance
-   - [ ] Watch for security alerts
+### Future Enhancements
+1. Add rate limiting
+2. Implement CAPTCHA
+3. Add security questions
+4. Support multiple email providers
+5. Add SMS verification option
 
-### Troubleshooting Deployment Issues
-1. **Email Problems**
-   - Check Render logs for email errors
-   - Verify SMTP settings
-   - Test email service connectivity
-   - Review email provider logs
-
-2. **Database Issues**
-   - Monitor connection limits
-   - Check query performance
-   - Review migration logs
-   - Verify data consistency
-
-3. **Performance**
-   - Monitor response times
-   - Check memory usage
-   - Review CPU utilization
-   - Optimize database queries 
+## Notes for Implementation
+- Keep this documentation updated as the system evolves
+- Review security best practices before implementation
+- Consider user experience in the design
+- Plan for proper error handling and user feedback
+- Document all changes and decisions made during implementation 
