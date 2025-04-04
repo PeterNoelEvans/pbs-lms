@@ -1059,9 +1059,9 @@ const db = new sqlite3.Database(dbPath, (err) => {
         // Create public_visitors table
         db.run(`CREATE TABLE IF NOT EXISTS public_visitors (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            full_name TEXT NOT NULL,
-            email TEXT UNIQUE NOT NULL,
+            username TEXT UNIQUE NOT NULL,
             password TEXT NOT NULL,
+            email TEXT UNIQUE NOT NULL,
             reason TEXT,
             registration_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )`);
@@ -1075,104 +1075,75 @@ const db = new sqlite3.Database(dbPath, (err) => {
         )`);
 
         // Check existing columns
-        const columns = db.all("PRAGMA table_info(users)", [], (err, rows) => {
+        db.all("PRAGMA table_info(users)", [], (err, rows) => {
             if (err) {
                 console.error('Error checking table schema:', err);
-                reject(err);
-            } else {
-                resolve(rows.map(row => row.name));
+                return;
             }
-        });
+            const columns = rows.map(row => row.name);
 
-        // Add columns one by one in sequence
-        const columnsToAdd = [
-            {
-                name: 'email',
-                type: 'TEXT',
-                afterAdd: () => {
-                    db.run('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email) WHERE email IS NOT NULL');
-                }
-            },
-            { name: 'is_super_user', type: 'INTEGER DEFAULT 0' },
-            { name: 'first_name', type: 'TEXT' },
-            { name: 'last_name', type: 'TEXT' },
-            { name: 'nickname', type: 'TEXT' },
-            { name: 'last_login', type: 'TIMESTAMP' }
-        ];
+            // Define columns to add
+            const columnsToAdd = [
+                { name: 'is_super_user', type: 'INTEGER DEFAULT 0' },
+                { name: 'is_public', type: 'INTEGER DEFAULT 0' },
+                { name: 'portfolio_path', type: 'TEXT' },
+                { name: 'avatar_path', type: 'TEXT' },
+                { name: 'last_login', type: 'TIMESTAMP' }
+            ];
 
-        for (const column of columnsToAdd) {
-            if (!columns.includes(column.name)) {
-                db.run(`ALTER TABLE users ADD COLUMN ${column.name} ${column.type}`, async (err) => {
-                    if (err) {
-                        console.error(`Error adding ${column.name} column:`, err);
-                    } else {
-                        console.log(`Added ${column.name} column successfully`);
-                        if (column.afterAdd) {
-                            await column.afterAdd();
+            // Add missing columns
+            for (const column of columnsToAdd) {
+                if (!columns.includes(column.name)) {
+                    console.log(`Adding ${column.name} column...`);
+                    db.run(`ALTER TABLE users ADD COLUMN ${column.name} ${column.type}`, (err) => {
+                        if (err) {
+                            console.error(`Error adding ${column.name} column:`, err);
                         }
+                    });
+                }
+            }
+
+            // Create Peter accounts if they don't exist
+            const peterAccounts = [
+                { username: 'peter41', password: 'peter41', is_super_user: 1 },
+                { username: 'peter42', password: 'peter42', is_super_user: 1 }
+            ];
+
+            for (const account of peterAccounts) {
+                db.get('SELECT * FROM users WHERE username = ?', [account.username], (err, row) => {
+                    if (err) {
+                        console.error(`Error checking for ${account.username}:`, err);
+                        return;
                     }
-                });
-            }
-        }
-
-        // Now check for Peter accounts and create/update if needed
-        const peterAccounts = [
-            {
-                username: 'Peter42',
-                password: 'Peter2025BB',
-                portfolio_path: '/portfolios/P4-2/Peter42/Peter.html',
-                avatar_path: '/portfolios/P4-2/Peter42/images/Peter42.jpg',
-                email: 'peter42@example.com'
-            },
-            {
-                username: 'Peter41',
-                password: 'Peter2025AA',
-                portfolio_path: '/portfolios/P4-1/Peter41/Peter.html',
-                avatar_path: '/portfolios/P4-1/Peter41/images/Peter41.jpg',
-                email: 'peter41@example.com'
-            },
-            {
-                username: 'PeterM2',
-                password: 'PeterM2-2025',
-                portfolio_path: '/portfolios/M2-001/PeterM2/Peter.html',
-                avatar_path: '/portfolios/M2-001/PeterM2/images/PeterM2.jpg',
-                email: 'peterm2@example.com'
-            }
-        ];
-
-        for (const account of peterAccounts) {
-            db.get('SELECT * FROM users WHERE username = ?', [account.username], (err, row) => {
-                if (err) {
-                    console.error(`Error checking for ${account.username}:`, err);
-                    reject(err);
-                } else {
                     if (!row) {
                         console.log(`${account.username} not found, creating...`);
-                        const hashedPassword = await bcrypt.hash(account.password, 10);
-                        db.run(
-                            `INSERT INTO users (
-                                username, password, portfolio_path, avatar_path, 
-                                is_public, is_super_user, email
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-                            [
-                                account.username,
-                                hashedPassword,
-                                account.portfolio_path,
-                                account.avatar_path,
-                                1,
-                                1,
-                                account.email
-                            ],
-                            function(err) {
-                                if (err) {
-                                    console.error(`Error creating ${account.username}:`, err);
-                                    reject(err);
-                                } else {
-                                    console.log(`${account.username} created successfully`);
-                                    resolve();
-                                }
+                        bcrypt.hash(account.password, 10, (err, hashedPassword) => {
+                            if (err) {
+                                console.error(`Error hashing password for ${account.username}:`, err);
+                                return;
                             }
-                        );
+                            db.run(
+                                `INSERT INTO users (
+                                    username, 
+                                    password, 
+                                    email, 
+                                    role, 
+                                    is_super_user
+                                ) VALUES (?, ?, ?, ?, ?)`,
+                                [
+                                    account.username,
+                                    hashedPassword,
+                                    `${account.username}@example.com`,
+                                    'admin',
+                                    account.is_super_user
+                                ],
+                                (err) => {
+                                    if (err) {
+                                        console.error(`Error creating ${account.username}:`, err);
+                                    }
+                                }
+                            );
+                        });
                     } else {
                         // Update super user status
                         db.run(
@@ -1180,17 +1151,14 @@ const db = new sqlite3.Database(dbPath, (err) => {
                             [account.username],
                             (err) => {
                                 if (err) {
-                                    console.error(`Error updating ${account.username} super user status:`, err);
-                                } else {
-                                    console.log(`${account.username} updated to super user`);
+                                    console.error(`Error updating ${account.username}:`, err);
                                 }
-                                resolve();
                             }
                         );
                     }
-                }
-            });
-        }
+                });
+            }
+        });
     });
 });
 
