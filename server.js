@@ -7,6 +7,8 @@ const sqlite3 = require('sqlite3').verbose();
 const app = express();
 const SQLiteStore = require('connect-sqlite3')(session);
 require('dotenv').config();
+const nodemailer = require('nodemailer');
+const crypto = require('crypto');
 
 const CredentialManager = require('./utils/credentialManager');
 const StudentManager = require('./utils/studentManager');
@@ -66,6 +68,15 @@ const sessionConfig = {
 
 // Require the school configuration
 const schoolConfig = require('./config/schools');
+
+// Create email transporter
+const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
+    }
+});
 
 // Initialize application
 async function initializeApp() {
@@ -1026,78 +1037,51 @@ const db = new sqlite3.Database(dbPath, (err) => {
     }
     console.log('Successfully connected to database');
     
-    // Create users table if it doesn't exist
-    db.serialize(async () => {
-        // Create users table first
-        await new Promise((resolve, reject) => {
+    // Initialize database
+    db.serialize(() => {
+        // Create users table
         db.run(`CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE,
-            password TEXT,
-            portfolio_path TEXT UNIQUE,
-            avatar_path TEXT,
-                is_public INTEGER DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                last_login TIMESTAMP
-            )`, (err) => {
-            if (err) {
-                console.error('Error creating users table:', err);
-                    reject(err);
-                } else {
-            console.log('Users table ready');
-                    resolve();
-                }
-            });
-        });
+            username TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            role TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`);
+
+        // Create schools table
+        db.run(`CREATE TABLE IF NOT EXISTS schools (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`);
 
         // Create public_visitors table
-        await new Promise((resolve, reject) => {
-            db.run(`CREATE TABLE IF NOT EXISTS public_visitors (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                full_name TEXT NOT NULL,
-                email TEXT UNIQUE NOT NULL,
-                password TEXT NOT NULL,
-                reason TEXT,
-                registration_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )`, (err) => {
-                if (err) {
-                    console.error('Error creating public_visitors table:', err);
-                    reject(err);
-                } else {
-                    console.log('Public visitors table ready');
-                    resolve();
-                }
-            });
-        });
+        db.run(`CREATE TABLE IF NOT EXISTS public_visitors (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            full_name TEXT NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL,
+            reason TEXT,
+            registration_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`);
 
         // Create visitor_logins table to track login history
-        await new Promise((resolve, reject) => {
-            db.run(`CREATE TABLE IF NOT EXISTS visitor_logins (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                visitor_id INTEGER NOT NULL,
-                login_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (visitor_id) REFERENCES public_visitors(id)
-            )`, (err) => {
-                if (err) {
-                    console.error('Error creating visitor_logins table:', err);
-                    reject(err);
-                } else {
-                    console.log('Visitor logins table ready');
-                    resolve();
-                }
-            });
-        });
+        db.run(`CREATE TABLE IF NOT EXISTS visitor_logins (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            visitor_id INTEGER NOT NULL,
+            login_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (visitor_id) REFERENCES public_visitors(id)
+        )`);
 
         // Check existing columns
-        const columns = await new Promise((resolve, reject) => {
-            db.all("PRAGMA table_info(users)", [], (err, rows) => {
-                if (err) {
-                    console.error('Error checking table schema:', err);
-                    reject(err);
-                } else {
-                    resolve(rows.map(row => row.name));
-                }
-            });
+        const columns = db.all("PRAGMA table_info(users)", [], (err, rows) => {
+            if (err) {
+                console.error('Error checking table schema:', err);
+                reject(err);
+            } else {
+                resolve(rows.map(row => row.name));
+            }
         });
 
         // Add columns one by one in sequence
@@ -1118,19 +1102,15 @@ const db = new sqlite3.Database(dbPath, (err) => {
 
         for (const column of columnsToAdd) {
             if (!columns.includes(column.name)) {
-                await new Promise((resolve, reject) => {
-                    console.log(`Adding ${column.name} column...`);
-                    db.run(`ALTER TABLE users ADD COLUMN ${column.name} ${column.type}`, async (err) => {
-                        if (err) {
-                            console.error(`Error adding ${column.name} column:`, err);
-                        } else {
-                            console.log(`Added ${column.name} column successfully`);
-                            if (column.afterAdd) {
-                                await column.afterAdd();
-                            }
+                db.run(`ALTER TABLE users ADD COLUMN ${column.name} ${column.type}`, async (err) => {
+                    if (err) {
+                        console.error(`Error adding ${column.name} column:`, err);
+                    } else {
+                        console.log(`Added ${column.name} column successfully`);
+                        if (column.afterAdd) {
+                            await column.afterAdd();
                         }
-                        resolve(); // Continue even if there's an error
-                    });
+                    }
                 });
             }
         }
@@ -1161,63 +1141,55 @@ const db = new sqlite3.Database(dbPath, (err) => {
         ];
 
         for (const account of peterAccounts) {
-            const existingUser = await new Promise((resolve, reject) => {
-                db.get('SELECT * FROM users WHERE username = ?', [account.username], (err, row) => {
-                    if (err) {
-                        console.error(`Error checking for ${account.username}:`, err);
-                        reject(err);
+            db.get('SELECT * FROM users WHERE username = ?', [account.username], (err, row) => {
+                if (err) {
+                    console.error(`Error checking for ${account.username}:`, err);
+                    reject(err);
+                } else {
+                    if (!row) {
+                        console.log(`${account.username} not found, creating...`);
+                        const hashedPassword = await bcrypt.hash(account.password, 10);
+                        db.run(
+                            `INSERT INTO users (
+                                username, password, portfolio_path, avatar_path, 
+                                is_public, is_super_user, email
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                            [
+                                account.username,
+                                hashedPassword,
+                                account.portfolio_path,
+                                account.avatar_path,
+                                1,
+                                1,
+                                account.email
+                            ],
+                            function(err) {
+                                if (err) {
+                                    console.error(`Error creating ${account.username}:`, err);
+                                    reject(err);
+                                } else {
+                                    console.log(`${account.username} created successfully`);
+                                    resolve();
+                                }
+                            }
+                        );
                     } else {
-                        resolve(row);
-                    }
-                });
-            });
-
-            if (!existingUser) {
-                console.log(`${account.username} not found, creating...`);
-                const hashedPassword = await bcrypt.hash(account.password, 10);
-                await new Promise((resolve, reject) => {
-                    db.run(
-                        `INSERT INTO users (
-                            username, password, portfolio_path, avatar_path, 
-                            is_public, is_super_user, email
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-                        [
-                            account.username,
-                            hashedPassword,
-                            account.portfolio_path,
-                            account.avatar_path,
-                            1,
-                            1,
-                            account.email
-                        ],
-                        function(err) {
-                            if (err) {
-                                console.error(`Error creating ${account.username}:`, err);
-                                reject(err);
-                            } else {
-                                console.log(`${account.username} created successfully`);
+                        // Update super user status
+                        db.run(
+                            'UPDATE users SET is_super_user = 1 WHERE username = ?',
+                            [account.username],
+                            (err) => {
+                                if (err) {
+                                    console.error(`Error updating ${account.username} super user status:`, err);
+                                } else {
+                                    console.log(`${account.username} updated to super user`);
+                                }
                                 resolve();
                             }
-                        }
-                    );
-                });
-            } else {
-                // Update super user status
-                await new Promise((resolve, reject) => {
-                    db.run(
-                        'UPDATE users SET is_super_user = 1 WHERE username = ?',
-                        [account.username],
-                        (err) => {
-                            if (err) {
-                                console.error(`Error updating ${account.username} super user status:`, err);
-                            } else {
-                                console.log(`${account.username} updated to super user`);
-                            }
-                            resolve();
-                        }
-                    );
-                });
-            }
+                        );
+                    }
+                }
+            });
         }
     });
 });
@@ -1997,3 +1969,181 @@ function parseStudentName(dirName) {
     
     return { firstName, lastName, nickname };
 }
+
+// Initialize database with password reset table
+async function initializeDatabase() {
+    const db = new sqlite3.Database(dbPath);
+    
+    try {
+        // Create password_reset_tokens table
+        await new Promise((resolve, reject) => {
+            db.run(`
+                CREATE TABLE IF NOT EXISTS password_reset_tokens (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    token TEXT NOT NULL,
+                    expires_at TIMESTAMP NOT NULL,
+                    used INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id)
+                )
+            `, (err) => {
+                if (err) reject(err);
+                else resolve();
+            });
+        });
+    } catch (error) {
+        console.error('Error initializing database:', error);
+    } finally {
+        db.close();
+    }
+}
+
+// Password reset routes
+app.post('/forgot-password', async (req, res) => {
+    const { email } = req.body;
+    
+    if (!email) {
+        return res.status(400).json({ error: 'Email is required' });
+    }
+    
+    const db = new sqlite3.Database(dbPath);
+    
+    try {
+        // Find user by email
+        const user = await new Promise((resolve, reject) => {
+            db.get('SELECT id, username FROM users WHERE email = ?', [email], (err, row) => {
+                if (err) reject(err);
+                else resolve(row);
+            });
+        });
+        
+        if (!user) {
+            // Don't reveal if email exists or not
+            return res.json({ success: true });
+        }
+        
+        // Generate reset token
+        const token = crypto.randomBytes(32).toString('hex');
+        const expiresAt = new Date();
+        expiresAt.setHours(expiresAt.getHours() + 1); // Token expires in 1 hour
+        
+        // Store token in database
+        await new Promise((resolve, reject) => {
+            db.run(
+                'INSERT INTO password_reset_tokens (user_id, token, expires_at) VALUES (?, ?, ?)',
+                [user.id, token, expiresAt.toISOString()],
+                (err) => {
+                    if (err) reject(err);
+                    else resolve();
+                }
+            );
+        });
+        
+        // Send reset email
+        const resetUrl = `${req.protocol}://${req.get('host')}/reset-password?token=${token}`;
+        await transporter.sendMail({
+            from: process.env.EMAIL_USER,
+            to: email,
+            subject: 'Password Reset Request',
+            html: `
+                <h2>Password Reset Request</h2>
+                <p>Hello ${user.username},</p>
+                <p>You have requested to reset your password. Click the link below to proceed:</p>
+                <p><a href="${resetUrl}">Reset Password</a></p>
+                <p>This link will expire in 1 hour.</p>
+                <p>If you did not request this reset, please ignore this email.</p>
+            `
+        });
+        
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Password reset error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    } finally {
+        db.close();
+    }
+});
+
+app.get('/reset-password', (req, res) => {
+    const { token } = req.query;
+    
+    if (!token) {
+        return res.status(400).send('Invalid reset link');
+    }
+    
+    res.sendFile(path.join(__dirname, 'reset-password.html'));
+});
+
+app.post('/reset-password', async (req, res) => {
+    const { token, password } = req.body;
+    
+    if (!token || !password) {
+        return res.status(400).json({ error: 'Token and password are required' });
+    }
+    
+    if (password.length < 8) {
+        return res.status(400).json({ error: 'Password must be at least 8 characters long' });
+    }
+    
+    const db = new sqlite3.Database(dbPath);
+    
+    try {
+        // Find valid token
+        const resetToken = await new Promise((resolve, reject) => {
+            db.get(`
+                SELECT * FROM password_reset_tokens 
+                WHERE token = ? AND used = 0 AND expires_at > CURRENT_TIMESTAMP
+            `, [token], (err, row) => {
+                if (err) reject(err);
+                else resolve(row);
+            });
+        });
+        
+        if (!resetToken) {
+            return res.status(400).json({ error: 'Invalid or expired reset link' });
+        }
+        
+        // Hash new password
+        const hashedPassword = await bcrypt.hash(password, 10);
+        
+        // Update password and mark token as used
+        await new Promise((resolve, reject) => {
+            db.run('BEGIN TRANSACTION');
+            
+            db.run(
+                'UPDATE users SET password = ? WHERE id = ?',
+                [hashedPassword, resetToken.user_id],
+                (err) => {
+                    if (err) {
+                        db.run('ROLLBACK');
+                        reject(err);
+                    }
+                }
+            );
+            
+            db.run(
+                'UPDATE password_reset_tokens SET used = 1 WHERE id = ?',
+                [resetToken.id],
+                (err) => {
+                    if (err) {
+                        db.run('ROLLBACK');
+                        reject(err);
+                    }
+                }
+            );
+            
+            db.run('COMMIT', (err) => {
+                if (err) reject(err);
+                else resolve();
+            });
+        });
+        
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Password reset error:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    } finally {
+        db.close();
+    }
+});
