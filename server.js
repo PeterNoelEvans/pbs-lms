@@ -1028,8 +1028,9 @@ const db = new sqlite3.Database(dbPath, (err) => {
     
     // Initialize database
     db.serialize(() => {
-        // Create users table with email column
-        db.run(`CREATE TABLE IF NOT EXISTS users (
+        // Drop and recreate users table with email column
+        db.run(`DROP TABLE IF EXISTS users`);
+        db.run(`CREATE TABLE users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE NOT NULL,
             password TEXT NOT NULL,
@@ -1068,92 +1069,61 @@ const db = new sqlite3.Database(dbPath, (err) => {
             FOREIGN KEY (visitor_id) REFERENCES public_visitors(id)
         )`);
 
-        // Check existing columns
-        db.all("PRAGMA table_info(users)", [], (err, rows) => {
-            if (err) {
-                console.error('Error checking table schema:', err);
-                return;
-            }
-            const columns = rows.map(row => row.name);
+        // Create Peter accounts if they don't exist
+        const peterAccounts = [
+            { username: 'peter41', password: 'peter41', is_super_user: 1 },
+            { username: 'peter42', password: 'peter42', is_super_user: 1 }
+        ];
 
-            // Define columns to add
-            const columnsToAdd = [
-                { name: 'role', type: 'TEXT NOT NULL' },
-                { name: 'is_super_user', type: 'INTEGER DEFAULT 0' },
-                { name: 'is_public', type: 'INTEGER DEFAULT 0' },
-                { name: 'portfolio_path', type: 'TEXT' },
-                { name: 'avatar_path', type: 'TEXT' },
-                { name: 'last_login', type: 'TIMESTAMP' }
-            ];
-
-            // Add missing columns
-            for (const column of columnsToAdd) {
-                if (!columns.includes(column.name)) {
-                    console.log(`Adding ${column.name} column...`);
-                    db.run(`ALTER TABLE users ADD COLUMN ${column.name} ${column.type}`, (err) => {
-                        if (err) {
-                            console.error(`Error adding ${column.name} column:`, err);
-                        }
-                    });
+        for (const account of peterAccounts) {
+            db.get('SELECT * FROM users WHERE username = ?', [account.username], (err, row) => {
+                if (err) {
+                    console.error(`Error checking for ${account.username}:`, err);
+                    return;
                 }
-            }
-
-            // Create Peter accounts if they don't exist
-            const peterAccounts = [
-                { username: 'peter41', password: 'peter41', is_super_user: 1 },
-                { username: 'peter42', password: 'peter42', is_super_user: 1 }
-            ];
-
-            for (const account of peterAccounts) {
-                db.get('SELECT * FROM users WHERE username = ?', [account.username], (err, row) => {
-                    if (err) {
-                        console.error(`Error checking for ${account.username}:`, err);
-                        return;
-                    }
-                    if (!row) {
-                        console.log(`${account.username} not found, creating...`);
-                        bcrypt.hash(account.password, 10, (err, hashedPassword) => {
-                            if (err) {
-                                console.error(`Error hashing password for ${account.username}:`, err);
-                                return;
-                            }
-                            db.run(
-                                `INSERT INTO users (
-                                    username, 
-                                    password, 
-                                    email, 
-                                    role, 
-                                    is_super_user
-                                ) VALUES (?, ?, ?, ?, ?)`,
-                                [
-                                    account.username,
-                                    hashedPassword,
-                                    `${account.username}@example.com`,
-                                    'admin',
-                                    account.is_super_user
-                                ],
-                                (err) => {
-                                    if (err) {
-                                        console.error(`Error creating ${account.username}:`, err);
-                                    }
-                                }
-                            );
-                        });
-                    } else {
-                        // Update super user status
+                if (!row) {
+                    console.log(`${account.username} not found, creating...`);
+                    bcrypt.hash(account.password, 10, (err, hashedPassword) => {
+                        if (err) {
+                            console.error(`Error hashing password for ${account.username}:`, err);
+                            return;
+                        }
                         db.run(
-                            'UPDATE users SET is_super_user = 1 WHERE username = ?',
-                            [account.username],
+                            `INSERT INTO users (
+                                username, 
+                                password, 
+                                email, 
+                                role, 
+                                is_super_user
+                            ) VALUES (?, ?, ?, ?, ?)`,
+                            [
+                                account.username,
+                                hashedPassword,
+                                `${account.username}@example.com`,
+                                'admin',
+                                account.is_super_user
+                            ],
                             (err) => {
                                 if (err) {
-                                    console.error(`Error updating ${account.username}:`, err);
+                                    console.error(`Error creating ${account.username}:`, err);
                                 }
                             }
                         );
-                    }
-                });
-            }
-        });
+                    });
+                } else {
+                    // Update super user status
+                    db.run(
+                        'UPDATE users SET is_super_user = 1 WHERE username = ?',
+                        [account.username],
+                        (err) => {
+                            if (err) {
+                                console.error(`Error updating ${account.username}:`, err);
+                            }
+                        }
+                    );
+                }
+            });
+        }
     });
 });
 
