@@ -482,31 +482,14 @@
             try {
                 const response = await fetch('/check-session');
                 const data = await response.json();
-                
-                const loginButton = document.getElementById('loginButton');
-                const userInfo = document.getElementById('userInfo');
-                const username = document.getElementById('username');
-                
-                if (data.authenticated || data.user) {
-                    loginButton.style.display = 'none';
-                    userInfo.style.display = 'block';
-                    
-                    // Handle both regular users and visitors
-                    if (data.user) {
-                        if (data.user.username) {
-                            username.textContent = data.user.username;
-                        } else if (data.user.fullName) {
-                            username.textContent = `Visitor: ${data.user.fullName}`;
-                        }
-                    } else if (data.fullName) {
-                        username.textContent = `Visitor: ${data.fullName}`;
-                    }
-                } else {
-                    loginButton.style.display = 'block';
-                    userInfo.style.display = 'none';
-                }
+                return {
+                    authenticated: data.authenticated || !!data.user,
+                    isVisitor: data.user?.userType === 'visitor' || data.userType === 'visitor',
+                    fullName: data.user?.fullName || data.fullName
+                };
             } catch (error) {
                 console.error('Error checking auth:', error);
+                return { authenticated: false, isVisitor: false };
             }
         }
 
@@ -805,6 +788,28 @@
         
         // Initial update
         updatePrivacyStates();
+
+        // Update back button based on auth status
+        async function updateBackButton() {
+            const authData = await checkAuth();
+            const backButton = document.getElementById('backButton');
+            
+            if (backButton) {
+                if (authData.authenticated) {
+                    backButton.href = '/dashboard.html';
+                    backButton.textContent = 'Back to Dashboard';
+                } else {
+                    backButton.href = '/schools.html';
+                    backButton.textContent = 'Back to Schools';
+                }
+            }
+        }
+
+        // Call updateBackButton when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            updateBackButton();
+            loadPortfolios();
+        });
     </script>
 </body>
 </html> 
