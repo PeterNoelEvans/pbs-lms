@@ -756,8 +756,14 @@ app.get('/check-access/*', (req, res) => {
                 return;
             }
 
+            // If portfolio is public, allow access to everyone
+            if (result.is_public) {
+                res.json({ hasAccess: true });
+                return;
+            }
+
             // If user is logged in
-            if (req.session.user) {
+            if (req.session?.user) {
                 // Check if the user is a parent
                 const isParent = req.session.user.username.toLowerCase().startsWith('parent-');
                 
@@ -765,7 +771,7 @@ app.get('/check-access/*', (req, res) => {
                     // Get the student's name from parent's username (after 'parent-')
                     const childName = req.session.user.username.substring('parent-'.length);
                     // Parents can only see public portfolios and their child's portfolio
-                    const hasAccess = result.is_public || result.username === childName;
+                    const hasAccess = result.username === childName;
                     res.json({ hasAccess });
                     return;
                 }
@@ -777,10 +783,8 @@ app.get('/check-access/*', (req, res) => {
                         return;
                     }
                     
-                    // Allow access if:
-                    // 1. Portfolio is public, OR
-                    // 2. User owns any portfolio (same username)
-                    const hasAccess = result.is_public || (user && result.username === user.username);
+                    // Allow access if user owns the portfolio
+                    const hasAccess = user && result.username === user.username;
                     res.json({ hasAccess });
                 });
             } else {
@@ -835,12 +839,7 @@ app.get('/classes', (req, res) => {
         return res.redirect('/class-4-2.html');
     }
     
-    // Allow access for both regular users and authenticated visitors
-    if (!req.session?.authenticated && !req.session?.user && !req.session?.visitorId) {
-        console.log('Unauthorized access attempt - redirecting to login');
-        return res.redirect('/login.html');
-    }
-    
+    // Allow access for everyone - authentication is handled in the frontend
     // Validate the parameters if provided
     if (schoolId && classId) {
         console.log(`Validating parameters: school=${schoolId}, class=${classId}`);
@@ -947,6 +946,12 @@ app.get('/portfolios/*', async (req, res, next) => {
             return res.status(404).send('Portfolio not found');
         }
 
+        // If portfolio is public, allow access to everyone
+        if (result.is_public) {
+            console.log('Access granted to public portfolio');
+            return next();
+        }
+
         // If user is logged in
         if (req.session?.user) {
             console.log('Authenticated access attempt by:', req.session.user.username);
@@ -958,17 +963,14 @@ app.get('/portfolios/*', async (req, res, next) => {
             
             if (isParent) {
                 const childName = req.session.user.username.substring('parent-'.length);
-                if (result.is_public || result.username === childName) {
+                if (result.username === childName) {
                     console.log('Access granted to parent');
                     return next();
                 }
-            } else if (result.is_public || result.username === req.session.user.username) {
+            } else if (result.username === req.session.user.username) {
                 console.log('Access granted to user');
                 return next();
             }
-        } else if (result.is_public) {
-            console.log('Access granted to public portfolio');
-            return next();
         }
 
         console.log('Access denied to portfolio:', portfolioPath);

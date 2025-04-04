@@ -517,9 +517,11 @@
                 const authResponse = await fetch('/check-session');
                 const authData = await authResponse.json();
                 const isVisitor = authData.user?.userType === 'visitor' || authData.userType === 'visitor';
+                const isAuthenticated = authData.authenticated || !!authData.user;
                 
                 console.log('Auth status:', authData);
                 console.log('Is visitor:', isVisitor);
+                console.log('Is authenticated:', isAuthenticated);
                 
                 // Clear existing content
                 const container = document.getElementById('portfoliosContainer');
@@ -551,10 +553,16 @@
                 // Sort students by username
                 students.sort((a, b) => a.username.localeCompare(b.username));
                 
+                let hasPublicPortfolios = false;
+                
                 students.forEach(student => {
-                    // For visitors, only show public portfolios
-                    if (isVisitor && !student.is_public) {
-                        return; // Skip private portfolios for visitors
+                    // For visitors and non-authenticated users, only show public portfolios
+                    if ((isVisitor || !isAuthenticated) && !student.is_public) {
+                        return; // Skip private portfolios
+                    }
+                    
+                    if (student.is_public) {
+                        hasPublicPortfolios = true;
                     }
                     
                     const card = createPortfolioCard(
@@ -573,9 +581,13 @@
                     const message = document.createElement('p');
                     message.style.textAlign = 'center';
                     message.style.padding = '20px';
-                    message.textContent = isVisitor ? 
-                        'No public portfolios available in this class.' :
-                        'No portfolios available in this class.';
+                    if (isVisitor || !isAuthenticated) {
+                        message.textContent = hasPublicPortfolios ? 
+                            'No public portfolios available in this class.' :
+                            'Please log in to view portfolios.';
+                    } else {
+                        message.textContent = 'No portfolios available in this class.';
+                    }
                     container.appendChild(message);
                 }
             } catch (error) {

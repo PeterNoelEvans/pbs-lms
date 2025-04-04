@@ -140,13 +140,30 @@
                 const authStatus = await checkAuth();
                 const container = document.getElementById('schoolsContainer');
                 
-                if (!authStatus) {
-                    container.innerHTML = `
-                        <div style="text-align: center; margin-bottom: 30px;">
-                            <p style="color: #666;">You are browsing as a guest. Only public portfolios will be visible.</p>
-                            <p style="color: #666;">Please <a href="/login" style="color: #2196F3;">log in</a> to see all portfolios.</p>
-                        </div>`;
+                // Show appropriate message based on authentication status
+                const authMessage = document.createElement('div');
+                authMessage.style.textAlign = 'center';
+                authMessage.style.marginBottom = '30px';
+                authMessage.style.padding = '20px';
+                authMessage.style.backgroundColor = '#f8f8f8';
+                authMessage.style.borderRadius = '8px';
+                
+                if (!authStatus.authenticated) {
+                    authMessage.innerHTML = `
+                        <p style="color: #666; margin-bottom: 10px;">You are browsing as a guest. Only public portfolios will be visible.</p>
+                        <p style="color: #666; margin-bottom: 15px;">To view all portfolios, please:</p>
+                        <div style="display: flex; justify-content: center; gap: 10px;">
+                            <a href="/public-register.html" class="button" style="background-color: #4CAF50;">Register as Visitor</a>
+                            <a href="/public-login.html" class="button" style="background-color: #2196F3;">Login as Visitor</a>
+                        </div>
+                    `;
+                } else if (authStatus.isVisitor) {
+                    authMessage.innerHTML = `
+                        <p style="color: #666;">You are logged in as a visitor. You can view all public portfolios.</p>
+                    `;
                 }
+                
+                container.insertBefore(authMessage, container.firstChild);
                 
                 const response = await fetch('/api/schools');
                 const schools = await response.json();
