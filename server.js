@@ -1028,14 +1028,19 @@ const db = new sqlite3.Database(dbPath, (err) => {
     
     // Initialize database
     db.serialize(() => {
-        // Create users table
+        // Create users table with email column
         db.run(`CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE NOT NULL,
             password TEXT NOT NULL,
             email TEXT UNIQUE NOT NULL,
             role TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            is_super_user INTEGER DEFAULT 0,
+            is_public INTEGER DEFAULT 0,
+            portfolio_path TEXT,
+            avatar_path TEXT,
+            last_login TIMESTAMP
         )`);
 
         // Create schools table
@@ -1073,6 +1078,7 @@ const db = new sqlite3.Database(dbPath, (err) => {
 
             // Define columns to add
             const columnsToAdd = [
+                { name: 'role', type: 'TEXT NOT NULL' },
                 { name: 'is_super_user', type: 'INTEGER DEFAULT 0' },
                 { name: 'is_public', type: 'INTEGER DEFAULT 0' },
                 { name: 'portfolio_path', type: 'TEXT' },
