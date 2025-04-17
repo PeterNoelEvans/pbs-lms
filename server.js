@@ -1,1904 +1,1187 @@
-const express = require('express');
-const path = require('path');
-const session = require('express-session');
-const bcrypt = require('bcryptjs');
-const fs = require('fs');
-const sqlite3 = require('sqlite3').verbose();
-const app = express();
-const SQLiteStore = require('connect-sqlite3')(session);
 require('dotenv').config();
+const express = require('express');
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+const path = require('path');
+const cors = require('cors');
+const auth = require('./middleware/auth');
+const { PrismaClient } = require('@prisma/client');
+const multer = require('multer');
 
-const CredentialManager = require('./utils/credentialManager');
-const StudentManager = require('./utils/studentManager');
+const app = express();
+const PORT = process.env.PORT || 3000;
 
-// Use environment variables or defaults
-const port = process.env.PORT || 10000;
-const isProduction = process.env.NODE_ENV === 'production';
-console.log('Running in', isProduction ? 'production mode' : 'development mode');
+// Middleware
+app.use(cors());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// Set database path based on environment
-const dbPath = process.env.DATABASE_PATH || path.join(__dirname, 'data', 'users.db');
+// Simple redirect for trailing slashes
+app.use((req, res, next) => {
+    if (req.path.length > 1 && req.path.endsWith('/')) {
+        res.redirect(301, req.path.slice(0, -1));
+    } else {
+        next();
+    }
+});
 
-// Create data directory in production
-if (isProduction) {
-    const dataDir = '/opt/render/project/src/data';
+// Serve static files
+app.use(express.static(path.join(__dirname, 'public'), {
+    extensions: ['html', 'htm']
+}));
+
+// Initialize Prisma Client
+const prisma = new PrismaClient();
+
+// Resource management endpoints
+const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        cb(null, 'uploads/resources')
+    },
+    filename: function (req, file, cb) {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9)
+        cb(null, uniqueSuffix + path.extname(file.originalname))
+    }
+});
+const upload = multer({ storage: storage });
+
+// Login endpoint
+app.post('/api/login', async (req, res) => {
     try {
-        if (!fs.existsSync(dataDir)) {
-            console.log('Creating data directory...');
-            fs.mkdirSync(dataDir, { recursive: true, mode: 0o755 });
+        const { email, password } = req.body;
+
+        // Find user using Prisma
+        const user = await prisma.user.findUnique({
+            where: { email },
+            select: {
+                id: true,
+                name: true,
+                email: true,
+                password: true,
+                role: true,
+                class: true,
+                yearLevel: true,
+                nickname: true
+            }
+        });
+
+        if (!user) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Invalid email or password' 
+            });
         }
-        fs.accessSync(dataDir, fs.constants.W_OK);
-        console.log('Data directory is writable');
+
+        // Validate password
+        const isValidPassword = await bcrypt.compare(password, user.password);
+        if (!isValidPassword) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Invalid email or password' 
+            });
+        }
+
+        // If class is M1/1 but year level is 1, update it to 7
+        if (user.class === 'M1/1' && user.yearLevel === 1) {
+            await prisma.user.update({
+                where: { id: user.id },
+                data: { yearLevel: 7 }
+            });
+            user.yearLevel = 7;
+        }
+
+        // Generate token
+        const token = jwt.sign(
+            { userId: user.id },
+            process.env.JWT_SECRET || 'your-secret-key',
+            { expiresIn: '24h' }
+        );
+
+        res.json({
+            success: true,
+            token,
+            user: {
+                id: user.id,
+                name: user.name,
+                email: user.email,
+                role: user.role.toUpperCase(),
+                class: user.class,
+                yearLevel: user.yearLevel,
+                nickname: user.nickname
+            }
+        });
     } catch (error) {
-        console.error('Error with directory setup:', error);
-        process.exit(1);
+        console.error('Login error:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: error.message 
+        });
     }
-}
-
-// Initialize managers
-const credentialManager = new CredentialManager(process.env.CREDENTIAL_KEY);
-const studentManager = new StudentManager(credentialManager);
-
-// Create data directory for SQLite session store
-const sessionDir = './data';
-if (!fs.existsSync(sessionDir)) {
-    fs.mkdirSync(sessionDir, { recursive: true });
-}
-
-// Session configuration with better security
-const sessionConfig = {
-    store: new SQLiteStore({
-        db: 'sessions.db',
-        dir: sessionDir,
-        concurrentDB: true // Enable concurrent access
-    }),
-    secret: process.env.SESSION_SECRET || 'your-secret-key-here',
-    resave: true,
-    saveUninitialized: true,
-    rolling: true, // Reset expiration with each request
-    cookie: {
-        secure: process.env.NODE_ENV === 'production',
-        httpOnly: true,
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-        sameSite: 'lax'
-    }
-};
-
-// Require the school configuration
-const schoolConfig = require('./config/schools');
-
-// Initialize application
-async function initializeApp() {
-    console.log('Initializing application...');
-    try {
-        // Essential middleware first
-        app.use(express.json());
-        app.use(express.urlencoded({ extended: true }));
-        
-        // Trust proxy settings - MUST be before session middleware
-        app.set('trust proxy', 1);
-        
-        // Trust Cloudflare headers
-        app.use((req, res, next) => {
-            if (req.headers['cf-visitor']) {
-                try {
-                    const cfVisitor = JSON.parse(req.headers['cf-visitor']);
-                    req.protocol = cfVisitor.scheme;
-                } catch (e) {
-                    console.error('Error parsing cf-visitor header:', e);
-                }
-            }
-            next();
-        });
-
-        // Initialize session middleware
-        app.use(session(sessionConfig));
-
-        // Health check endpoint
-        app.get('/health', (req, res) => {
-            res.status(200).json({
-                status: 'ok',
-                timestamp: new Date().toISOString()
-            });
-        });
-
-        // Debug middleware to log session and request details
-        app.use((req, res, next) => {
-            console.log('\n=== Request Debug Info ===');
-            console.log('URL:', req.url);
-            console.log('Method:', req.method);
-            console.log('Origin:', req.headers.origin);
-            console.log('Headers:', req.headers);
-            console.log('Session ID:', req.sessionID);
-            console.log('Session:', req.session);
-            console.log('Cookies:', req.headers.cookie);
-            console.log('=========================\n');
-            next();
-        });
-
-        // Authentication middleware
-        const requireAuth = (req, res, next) => {
-            console.log('\n=== Auth Check ===');
-            console.log('Session:', req.session);
-            console.log('User:', req.session?.user);
-            
-            if (!req.session || !req.session.user) {
-                console.log('No valid session, redirecting to login');
-                return res.redirect('/login.html');
-            }
-            next();
-        };
-
-        // Admin middleware with enhanced logging
-        const requireAdmin = (req, res, next) => {
-            const adminToken = req.headers['admin-token'];
-            console.log('\n=== Admin Access Attempt ===');
-            console.log('URL:', req.url);
-            console.log('Method:', req.method);
-            console.log('IP:', req.ip);
-            console.log('Token provided:', !!adminToken);
-            
-            if (adminToken === process.env.ADMIN_TOKEN || adminToken === 'your-secret-admin-token') {
-                console.log('Admin access granted');
-                next();
-            } else {
-                console.log('Admin access denied');
-                res.status(403).json({ error: 'Unauthorized' });
-            }
-        };
-
-        // Set up static file serving with enhanced options
-        app.use(express.static(__dirname, {
-            dotfiles: 'allow',
-            etag: true,
-            extensions: ['htm', 'html', 'png', 'jpg', 'jpeg', 'gif'],
-            index: false,
-            maxAge: '1d',
-            redirect: false,
-            setHeaders: function (res, path, stat) {
-                res.set('x-timestamp', Date.now());
-                res.set('Cache-Control', 'public, max-age=86400');
-            }
-        }));
-        app.use('/portfolios', express.static(path.join(__dirname, 'portfolios'), {
-            dotfiles: 'allow',
-            etag: true,
-            extensions: ['htm', 'html', 'png', 'jpg', 'jpeg', 'gif'],
-            index: false,
-            maxAge: '1d',
-            redirect: false,
-            setHeaders: function (res, path, stat) {
-                res.set('x-timestamp', Date.now());
-                res.set('Cache-Control', 'public, max-age=86400');
-            }
-        }));
-
-        // Rate limiting for login attempts
-        const rateLimit = require('express-rate-limit');
-        const loginLimiter = rateLimit({
-            windowMs: 5 * 60 * 1000, // 5 minutes instead of 15
-            max: 20, // Allow 20 requests instead of 5
-            message: { error: 'Too many login attempts, please try again later' },
-            standardHeaders: true,
-            legacyHeaders: false,
-            handler: (req, res) => {
-                res.status(429).json({
-                    error: 'Too many login attempts. Please wait 5 minutes before trying again.',
-                    retryAfter: Math.ceil(req.rateLimit.resetTime / 1000)
-                });
-            }
-        });
-
-        // Login route with rate limiting
-        app.post('/login', loginLimiter, async (req, res) => {
-            const { username, password, remember } = req.body;
-
-            try {
-                const db = new sqlite3.Database(dbPath);
-                
-                // Get user
-                const user = await new Promise((resolve, reject) => {
-                    db.get('SELECT * FROM users WHERE username = ?', [username], (err, row) => {
-                        if (err) reject(err);
-                        else resolve(row);
-                    });
-                });
-
-                if (!user) {
-                    return res.status(401).json({ error: 'Invalid username or password' });
-                }
-
-                // Verify password
-                const isValid = await bcrypt.compare(password, user.password);
-                if (!isValid) {
-                    return res.status(401).json({ error: 'Invalid username or password' });
-                }
-
-                // Update last login time
-                await new Promise((resolve, reject) => {
-                    db.run(
-                        'UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?',
-                        [user.id],
-                        function(err) {
-                            if (err) reject(err);
-                            else resolve();
-                        }
-                    );
-                });
-
-                // Set up session
-                req.session.user = {
-                    id: user.id,
-                    username: user.username,
-                    portfolio_path: user.portfolio_path,
-                    email: user.email,
-                    is_super_user: user.is_super_user
-                };
-
-                // If remember me is checked, set a longer session expiry
-                if (remember) {
-                    req.session.cookie.maxAge = 30 * 24 * 60 * 60 * 1000; // 30 days
-                }
-
-                res.json({
-                    success: true,
-                    redirect: '/dashboard'
-                });
-            } catch (error) {
-                console.error('Login error:', error);
-                res.status(500).json({ error: 'Server error' });
-            }
-        });
-
-        app.get('/dashboard', requireAuth, (req, res) => {
-            console.log('\n=== Dashboard Access Attempt ===');
-            console.log('Session:', req.session);
-            console.log('User:', req.session?.user);
-            console.log('Cookies:', req.headers.cookie);
-            
-            console.log('Valid session found, serving dashboard');
-            res.sendFile(path.join(__dirname, 'dashboard.html'));
-        });
-
-        app.post('/toggle-privacy', requireAuth, async (req, res) => {
-            try {
-                const userId = req.session.user.id;
-                const username = req.session.user.username;
-                
-                if (!userId) {
-                return res.status(401).json({ error: 'Not authenticated' });
-            }
-
-                console.log(`Toggling privacy for user: ${username} (ID: ${userId})`);
-                
-                const db = new sqlite3.Database(dbPath);
-                
-                // First, get the current state
-                const currentState = await new Promise((resolve, reject) => {
-                    db.get('SELECT is_public FROM users WHERE id = ?', [userId], (err, result) => {
-                    if (err) {
-                            reject(err);
-                            return;
-                        }
-                        if (!result) {
-                            reject(new Error('User not found'));
-                            return;
-                        }
-                        resolve(result);
-                    });
-                });
-                
-                console.log('Current privacy state:', currentState.is_public);
-                
-                // Calculate new state (toggle)
-                const newState = currentState.is_public ? 0 : 1;
-                
-                // Update the privacy setting
-                await new Promise((resolve, reject) => {
-                    db.run('UPDATE users SET is_public = ? WHERE id = ?', [newState, userId], function(err) {
-                        if (err) {
-                            reject(err);
-                            return;
-                        }
-                        if (this.changes === 0) {
-                            reject(new Error('User not found during update'));
-                            return;
-                        }
-                        resolve();
-                    });
-                });
-                
-                // Verify the update
-                const verifyState = await new Promise((resolve, reject) => {
-                    db.get('SELECT is_public FROM users WHERE id = ?', [userId], (err, result) => {
-                        if (err) {
-                            reject(err);
-                            return;
-                        }
-                        resolve(result);
-                    });
-                });
-                
-                console.log('Verified new state:', verifyState.is_public);
-                
-                db.close();
-                
-                // Return the new state
-                res.json({ success: true, is_public: verifyState.is_public === 1 });
-                
-            } catch (error) {
-                console.error('Error toggling privacy:', error);
-                res.status(500).json({ error: 'Failed to update privacy setting' });
-            }
-        });
-
-        app.get('/get-privacy-status', requireAuth, (req, res) => {
-            if (!req.session || !req.session.user || !req.session.user.id) {
-                return res.status(401).json({ error: 'Not authenticated' });
-            }
-
-            const db = new sqlite3.Database(dbPath);
-            db.get('SELECT is_public FROM users WHERE id = ?', [req.session.user.id], (err, result) => {
-                if (err) {
-                    console.error('Error getting privacy status:', err);
-                    return res.status(500).json({ error: 'Error getting privacy status' });
-                }
-                if (!result) {
-                    return res.status(404).json({ error: 'User not found' });
-                }
-                res.json({ is_public: result.is_public });
-            });
-        });
-
-        app.get('/get-all-privacy-states', async (req, res) => {
-            const db = new sqlite3.Database(dbPath);
-            
-            try {
-                console.log('\n=== Getting All Privacy States ===');
-                
-                const privacyStates = await new Promise((resolve, reject) => {
-                    db.all('SELECT portfolio_path, is_public FROM users', [], (err, rows) => {
-                        if (err) {
-                            console.error('Database error:', err);
-                            reject(err);
-                        } else {
-                            const stateMap = {};
-                            
-                            // Group portfolios by class for better logging
-                            const p41Portfolios = [];
-                            const p42Portfolios = [];
-                            const otherPortfolios = [];
-                            
-                            rows.forEach(row => {
-                                // Ensure strict boolean values - only true if is_public is exactly 1
-                                stateMap[row.portfolio_path] = row.is_public === 1;
-                                
-                                // Categorize for logging
-                                const pathLower = row.portfolio_path.toLowerCase();
-                                if (pathLower.includes('p4-1')) {
-                                    p41Portfolios.push({
-                                        path: row.portfolio_path,
-                                        isPublic: row.is_public === 1
-                                    });
-                                } else if (pathLower.includes('p4-2')) {
-                                    p42Portfolios.push({
-                                        path: row.portfolio_path,
-                                        isPublic: row.is_public === 1
-                                    });
-                                } else {
-                                    otherPortfolios.push({
-                                        path: row.portfolio_path,
-                                        isPublic: row.is_public === 1
-                                    });
-                                }
-                            });
-                            
-                            console.log(`Found privacy states for ${Object.keys(stateMap).length} portfolios`);
-                            console.log(`Class 4/1: ${p41Portfolios.length} portfolios`);
-                            p41Portfolios.forEach(p => {
-                                console.log(`  - ${p.path}: ${p.isPublic ? 'Public' : 'Private'}`);
-                            });
-                            
-                            console.log(`Class 4/2: ${p42Portfolios.length} portfolios`);
-                            p42Portfolios.forEach(p => {
-                                console.log(`  - ${p.path}: ${p.isPublic ? 'Public' : 'Private'}`);
-                            });
-                            
-                            console.log(`Other classes: ${otherPortfolios.length} portfolios`);
-                            
-                            resolve(stateMap);
-                        }
-                    });
-                });
-                
-                res.json(privacyStates);
-            } catch (error) {
-                console.error('Error getting privacy states:', error);
-                res.status(500).json({ error: 'Error getting privacy states' });
-            } finally {
-                db.close();
-            }
-        });
-
-        // Additional routes
-        app.get('/check-auth', (req, res) => {
-            console.log('\n=== Auth Check ===');
-            console.log('Session:', req.session);
-            console.log('User:', req.session?.user);
-            console.log('Visitor:', req.session?.visitorId);
-            
-            // Set no-cache headers
-            res.set({
-                'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-                'Pragma': 'no-cache',
-                'Expires': '0'
-            });
-            
-            if (req.session?.user) {
-                // Regular user
-                res.json({
-                    authenticated: true,
-                    username: req.session.user.username,
-                    portfolio_path: req.session.user.portfolio_path,
-                    userType: 'user'
-                });
-            } else if (req.session?.authenticated && req.session?.visitorId) {
-                // Visitor
-                res.json({
-                    authenticated: true,
-                    username: req.session.fullName,
-                    userType: 'visitor'
-                });
-            } else {
-                res.json({ authenticated: false });
-            }
-        });
-
-        app.get('/logout', (req, res) => {
-            console.log('\n=== Logout Attempt ===');
-            console.log('Session before logout:', req.session);
-            console.log('User type:', req.session?.userType);
-            
-            if (!req.session) {
-                console.log('No session found during logout');
-                res.clearCookie('connect.sid');
-                return res.redirect('/');
-            }
-            
-            req.session.destroy((err) => {
-                if (err) {
-                    console.error('Error destroying session:', err);
-                    // Even if there's an error, try to clear everything
-                    req.session = null;
-                    res.clearCookie('connect.sid');
-                }
-                
-                // Clear the session cookie in all cases
-                res.clearCookie('connect.sid');
-                
-                // Redirect based on referer
-                const referer = req.get('Referer') || '';
-                if (referer.includes('schools.html')) {
-                    res.redirect('/schools.html');
-                } else {
-            res.redirect('/');
-                }
-            });
-        });
-
-        app.get('/debug-session', (req, res) => {
-            console.log('\n=== Debug Session Info ===');
-            console.log('Session ID:', req.sessionID);
-            console.log('Session:', req.session);
-            console.log('Cookies:', req.headers.cookie);
-            console.log('Headers:', req.headers);
-            
-            res.json({
-                sessionId: req.sessionID,
-                session: req.session,
-                cookies: req.headers.cookie,
-                isProduction: isProduction,
-                timestamp: new Date().toISOString()
-            });
-        });
-
-        // Admin routes
-        app.get('/admin/users', requireAdmin, (req, res) => {
-            console.log('\n=== Viewing All Users ===');
-            db.all('SELECT id, username, portfolio_path, avatar_path, is_public FROM users', [], (err, rows) => {
-                if (err) {
-                    console.error('Database error when viewing users:', err);
-                    res.status(500).json({ error: 'Database error' });
-                    return;
-                }
-                console.log('Users in database:', rows.length);
-                res.json(rows);
-            });
-        });
-
-        app.delete('/admin/users/:id', requireAdmin, (req, res) => {
-            const userId = req.params.id;
-            console.log('\n=== Delete User Attempt ===');
-            console.log('User ID:', userId);
-            console.log('IP:', req.ip);
-            
-            db.get('SELECT username FROM users WHERE id = ?', [userId], (err, user) => {
-                if (err) {
-                    console.error('Error getting user details:', err);
-                    res.status(500).json({ error: 'Database error' });
-                    return;
-                }
-                
-                if (!user) {
-                    console.log('User not found for deletion');
-                    res.status(404).json({ error: 'User not found' });
-                    return;
-                }
-
-                console.log('Deleting user:', user.username);
-                
-                db.run('DELETE FROM users WHERE id = ?', [userId], (err) => {
-                    if (err) {
-                        console.error('Failed to delete user:', err);
-                        res.status(500).json({ error: 'Failed to delete user' });
-                        return;
-                    }
-                    console.log('User successfully deleted');
-                    res.json({ success: true });
-                });
-            });
-        });
-
-        // Admin routes with secure token verification
-        const adminLimiter = rateLimit({
-            windowMs: 60 * 60 * 1000, // 1 hour
-            max: 10 // limit each IP to 10 requests per windowMs
-        });
-
-        app.post('/admin/reset-password', adminLimiter, async (req, res) => {
-            const adminToken = req.headers['admin-token'];
-            
-            if (adminToken !== process.env.ADMIN_TOKEN) {
-                return res.status(403).json({ error: 'Unauthorized' });
-            }
-
-            const { username, newPassword } = req.body;
-
-            try {
-                await studentManager.resetPassword(username, newPassword);
-                res.json({ success: true, message: 'Password reset successful' });
-            } catch (error) {
-                console.error('Password reset error:', error);
-                res.status(500).json({ error: 'Internal server error' });
-            }
-        });
-
-        // Detailed health check endpoint for debugging
-        app.get('/health/detailed', async (req, res) => {
-            console.log('\n=== Detailed Health Check ===');
-            console.log('Request received at:', new Date().toISOString());
-            console.log('Environment:', isProduction ? 'production' : 'development');
-            
-            const health = {
-                status: 'ok',
-                timestamp: new Date().toISOString(),
-                environment: isProduction ? 'production' : 'development',
-                session: {
-                    exists: !!req.session,
-                    id: req.sessionID || null,
-                    cookie: req.session?.cookie || null
-                }
-            };
-
-            // Log the complete health status
-            console.log('Health check result:', JSON.stringify(health, null, 2));
-
-            // Always return 200 - detailed health check is for debugging
-            res.status(200).json(health);
-        });
-
-        // Create server instance
-        app.server = app.listen(port, () => {
-            console.log(`Server running on port ${port}`);
-            console.log('Running in', isProduction ? 'production mode' : 'development mode');
-        });
-
-    } catch (err) {
-        console.error('Failed to initialize application:', err);
-        process.exit(1);
-    }
-}
-
-// Initialize the application
-initializeApp().catch(err => {
-    console.error('Application startup failed:', err);
-    process.exit(1);
 });
 
-// Graceful shutdown handling
-process.on('SIGTERM', () => {
-    console.log('SIGTERM signal received. Starting graceful shutdown...');
-    
-    // Track shutdown state
-    let shutdownComplete = false;
-    
-    // Set a timeout for forceful shutdown
-    const forceShutdown = setTimeout(() => {
-        console.error('Forceful shutdown initiated after timeout');
-        process.exit(1);
-    }, 25000); // 25 seconds timeout (Render gives 30 seconds)
-    
-    Promise.all([
-        // Close the HTTP server
-        new Promise((resolve) => {
-            if (!app.server) {
-                resolve();
-                return;
+// Auth check endpoint
+app.get('/api/auth/check', auth, async (req, res) => {
+    try {
+        const user = await prisma.user.findUnique({
+            where: { id: req.user.userId },
+            select: {
+                id: true,
+                role: true,
+                name: true,
+                email: true
             }
-            console.log('Closing HTTP server...');
-            app.server.close(() => {
-                console.log('HTTP server closed');
-                resolve();
+        });
+
+        if (!user) {
+            return res.json({ 
+                authenticated: false,
+                role: null
             });
-        }),
-        // Close database connection
-        new Promise((resolve) => {
-            if (!db) {
-                resolve();
-                return;
-            }
-            console.log('Closing database connection...');
-            db.close((err) => {
-                if (err) {
-                    console.error('Error closing database:', err);
-                } else {
-                    console.log('Database connection closed');
-                }
-                resolve();
-            });
-        })
-    ]).then(() => {
-        console.log('Graceful shutdown completed');
-        clearTimeout(forceShutdown);
-        shutdownComplete = true;
-        process.exit(0);
-    }).catch((err) => {
-        console.error('Error during graceful shutdown:', err);
-        if (!shutdownComplete) {
-            process.exit(1);
         }
-    });
+
+        res.json({
+            authenticated: true,
+            role: user.role.toUpperCase(),
+            name: user.name,
+            email: user.email
+        });
+    } catch (error) {
+        console.error('Auth check error:', error);
+        res.status(500).json({ 
+            authenticated: false,
+            error: 'Failed to check authentication status'
+        });
+    }
 });
 
-// Routes
-app.post('/register', async (req, res) => {
-    const { username, password, portfolio_path, email } = req.body;
-
-    if (!username || !password || !portfolio_path) {
-        return res.status(400).json({ error: 'Missing required fields' });
-    }
-
+// CoreSubject routes
+app.post('/api/core-subjects', auth, async (req, res) => {
     try {
-        // Hash the password
+        const user = await prisma.user.findUnique({
+            where: { id: req.user.userId }
+        });
+
+        if (!user || (user.role !== 'ADMIN' && user.role !== 'TEACHER')) {
+            return res.status(403).json({ error: 'Only administrators and teachers can create core subjects' });
+        }
+
+        const { name, description } = req.body;
+
+        // Check if CoreSubject already exists
+        const existingSubject = await prisma.coreSubject.findUnique({
+            where: { name }
+        });
+
+        if (existingSubject) {
+            return res.status(400).json({ error: 'A core subject with this name already exists' });
+        }
+
+        // Create new CoreSubject
+        const coreSubject = await prisma.coreSubject.create({
+            data: {
+                name,
+                description
+            }
+        });
+
+        res.json(coreSubject);
+    } catch (error) {
+        console.error('Error creating core subject:', error);
+        res.status(500).json({ error: 'Failed to create core subject' });
+    }
+});
+
+app.get('/api/core-subjects', auth, async (req, res) => {
+    try {
+        const coreSubjects = await prisma.coreSubject.findMany({
+            orderBy: {
+                name: 'asc'
+            }
+        });
+        res.json(coreSubjects);
+    } catch (error) {
+        console.error('Error fetching core subjects:', error);
+        res.status(500).json({ error: 'Failed to fetch core subjects' });
+    }
+});
+
+// Registration endpoint
+app.post('/api/register', async (req, res) => {
+    try {
+        const { name, nickname, email, password, role, year, class: studentClass } = req.body;
+
+        // Check if user already exists
+        const existingUser = await prisma.user.findUnique({
+            where: { email }
+        });
+
+        if (existingUser) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Email already registered' 
+            });
+        }
+
+        // Hash password
         const hashedPassword = await bcrypt.hash(password, 10);
-        
-        // Insert the user with email
-        const db = new sqlite3.Database(dbPath);
-        
-        await new Promise((resolve, reject) => {
-            db.run(
-                'INSERT INTO users (username, email, password, portfolio_path, created_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)',
-                [username, email, hashedPassword, portfolio_path],
-                function(err) {
-                    if (err) {
-                        if (err.message.includes('UNIQUE constraint failed')) {
-                            if (err.message.includes('email')) {
-                                reject(new Error('Email already registered'));
-                            } else {
-                                reject(new Error('Username already taken'));
-                            }
-                        } else {
-                        reject(err);
-                        }
-                    } else {
-                        resolve(this.lastID);
-                    }
-                }
-            );
+
+        // Create new user
+        const user = await prisma.user.create({
+            data: {
+                name,
+                nickname,
+                email,
+                password: hashedPassword,
+                role: role.toUpperCase(),
+                yearLevel: year,
+                class: studentClass,
+                active: true
+            }
         });
 
-        // Set up session
-        req.session.user = {
-            id: this.lastID,
-            username,
-            portfolio_path,
-            email
-        };
-        
-        // Update last login time
-        await new Promise((resolve, reject) => {
-            db.run(
-                'UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?',
-                [this.lastID],
-                function(err) {
-                    if (err) reject(err);
-                    else resolve();
-                }
-            );
-        });
+        // Generate token
+        const token = jwt.sign(
+            { userId: user.id },
+            process.env.JWT_SECRET || 'your-secret-key',
+            { expiresIn: '24h' }
+        );
 
-        res.json({ 
-            success: true, 
-            message: 'Registration successful',
-            redirect: '/dashboard'
+        res.json({
+            success: true,
+            token,
+            user: {
+                id: user.id,
+                name: user.name,
+                email: user.email,
+                role: user.role,
+                class: user.class,
+                yearLevel: user.yearLevel,
+                nickname: user.nickname
+            }
         });
     } catch (error) {
         console.error('Registration error:', error);
-        res.status(500).json({ error: error.message || 'Error creating user' });
-    }
-});
-
-app.get('/check-access/*', (req, res) => {
-    // Remove /check-access from the start of the path
-    const portfolioPath = req.path.replace('/check-access', '');
-    
-    db.get('SELECT is_public, username FROM users WHERE portfolio_path = ?',
-        [portfolioPath],
-        (err, result) => {
-            if (err) {
-                res.status(500).json({ error: 'Database error' });
-                return;
-            }
-            
-            // If portfolio is not registered, default to private
-            if (!result) {
-                res.json({ hasAccess: false });
-                return;
-            }
-
-            // If portfolio is public, allow access to everyone
-            if (result.is_public) {
-                res.json({ hasAccess: true });
-                return;
-            }
-
-            // If user is logged in
-            if (req.session?.user) {
-                // Check if the user is a parent
-                const isParent = req.session.user.username.toLowerCase().startsWith('parent-');
-                
-                if (isParent) {
-                    // Get the student's name from parent's username (after 'parent-')
-                    const childName = req.session.user.username.substring('parent-'.length);
-                    // Parents can only see public portfolios and their child's portfolio
-                    const hasAccess = result.username === childName;
-                    res.json({ hasAccess });
-                    return;
-                }
-
-                // For students, check if they own the portfolio
-                db.get('SELECT username FROM users WHERE id = ?', [req.session.user.id], (err, user) => {
-                    if (err) {
-                        res.status(500).json({ error: 'Database error' });
-                        return;
-                    }
-                    
-                    // Allow access if user owns the portfolio
-                    const hasAccess = user && result.username === user.username;
-                    res.json({ hasAccess });
-                });
-            } else {
-                // Not logged in, only allow access to public portfolios
-                res.json({ hasAccess: result.is_public });
-            }
+        res.status(500).json({ 
+            success: false, 
+            error: error.message 
         });
-});
-
-// Serve the main pages
-app.get(['/', '/index.html', '/login.html', '/register.html', '/dashboard.html', '/schools.html'], (req, res) => {
-    res.sendFile(path.join(__dirname, req.path === '/' ? 'index.html' : req.path));
-});
-
-// Redirect old class pages to new class viewer
-app.get(['/class1.html', '/class2.html'], (req, res) => {
-    // Redirect to the new class viewer page
-    return res.redirect('/classes');
-});
-
-// Dedicated class pages (do not redirect)
-app.get(['/class-4-1.html', '/class-4-2.html'], (req, res) => {
-    const filePath = path.join(__dirname, 'views', req.path);
-    console.log('Serving dedicated class page:', filePath);
-    res.sendFile(filePath);
-});
-
-// Redirect direct class-viewer.html access to /classes
-app.get('/class-viewer.html', (req, res) => {
-    const { school, class: classId } = req.query;
-    return res.redirect(`/classes?school=${school}&class=${classId}`);
-});
-
-// Class viewer route - only for non-dedicated pages
-app.get('/classes', (req, res) => {
-    // Get query parameters
-    const schoolId = req.query.school;
-    const classId = req.query.class;
-    
-    console.log(`\n==== CLASS VIEWER REQUEST ====`);
-    console.log(`URL: ${req.url}`);
-    console.log(`Query parameters: school=${schoolId}, class=${classId}`);
-    console.log('Session:', req.session);
-    console.log('User type:', req.session?.userType);
-    console.log('Authenticated:', req.session?.authenticated);
-    
-    // Check if this is a dedicated class page request
-    if (classId === 'Class4-1') {
-        return res.redirect('/class-4-1.html');
     }
-    if (classId === 'Class4-2') {
-        return res.redirect('/class-4-2.html');
-    }
-    
-    // Allow access for everyone - authentication is handled in the frontend
-    // Validate the parameters if provided
-    if (schoolId && classId) {
-        console.log(`Validating parameters: school=${schoolId}, class=${classId}`);
-        
-        // Check if the school exists
-        const school = schoolConfig.getSchool(schoolId);
-        if (!school) {
-            console.log(`School not found: ${schoolId}`);
-            return res.status(404).send('School not found');
-        }
-        console.log(`School found: ${school.name}`);
-        
-        // Check if the class exists in the school
-        const cls = schoolConfig.getClass(schoolId, classId);
-        if (!cls) {
-            console.log(`Class not found: ${classId} in school ${schoolId}`);
-            return res.status(404).send('Class not found');
-        }
-        console.log(`Class found: ${cls.displayName} (${cls.id})`);
-    }
-    
-    // Send the HTML file
-    res.sendFile(path.join(__dirname, 'views/class-viewer.html'));
-    console.log(`==== END CLASS VIEWER REQUEST ====\n`);
 });
 
-// Protected portfolio access
-app.get('/portfolios/*', async (req, res, next) => {
-    const portfolioPath = req.path;
-    
-    // Check if this is a static file request (images, css, js, etc)
-    const staticFileExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.mp4', '.css', '.js', '.webp', '.ico', '.svg'];
-    if (staticFileExtensions.some(ext => portfolioPath.toLowerCase().endsWith(ext))) {
-        // Skip validation for static files
-        return next();
-    }
-    
-    console.log('\n=== Portfolio Access Attempt ===');
-    console.log('Accessing portfolio:', portfolioPath);
-    console.log('Current directory:', __dirname);
-
+// Debug endpoint for checking user role
+app.get('/api/debug/user-role', auth, async (req, res) => {
     try {
-        // First check if the portfolios directory exists
-        const portfoliosDir = path.join(__dirname, 'portfolios');
-        if (!fs.existsSync(portfoliosDir)) {
-            console.log('Portfolios directory does not exist:', portfoliosDir);
-            fs.mkdirSync(portfoliosDir, { recursive: true });
-            console.log('Created portfolios directory');
-        }
-
-        // Create Class1 directory if it doesn't exist (for current students)
-        const class1Dir = path.join(portfoliosDir, 'P4-1');
-        if (!fs.existsSync(class1Dir)) {
-            console.log('P4-1 directory does not exist:', class1Dir);
-            fs.mkdirSync(class1Dir, { recursive: true });
-            console.log('Created P4-1 directory');
-        }
-
-        // Create Class2 directory if it doesn't exist (for future students)
-        const class2Dir = path.join(portfoliosDir, 'P4-2');
-        if (!fs.existsSync(class2Dir)) {
-            console.log('P4-2 directory does not exist:', class2Dir);
-            fs.mkdirSync(class2Dir, { recursive: true });
-            console.log('Created P4-2 directory');
-        }
-
-        // Create M2 directory if it doesn't exist
-        const m2Dir = path.join(portfoliosDir, 'M2-001');
-        if (!fs.existsSync(m2Dir)) {
-            console.log('M2-001 directory does not exist:', m2Dir);
-            fs.mkdirSync(m2Dir, { recursive: true });
-            console.log('Created M2-001 directory');
-        }
-
-        // Check if the file exists
-        const fullPath = path.join(__dirname, portfolioPath);
-        console.log('Full path:', fullPath);
-        
-        const fileExists = fs.existsSync(fullPath);
-        console.log('File exists:', fileExists);
-
-        if (!fileExists) {
-            console.log('Portfolio file not found:', fullPath);
-            return res.status(404).send('Portfolio not found');
-        }
-
-        const result = await new Promise((resolve, reject) => {
-            db.get('SELECT is_public, username FROM users WHERE portfolio_path = ?',
-                [portfolioPath],
-                (err, row) => {
-                    if (err) {
-                        console.error('Database error:', err);
-                        reject(err);
-                    } else {
-                        console.log('Database result:', row);
-                        resolve(row);
-                    }
-                });
-        });
-
-        // If portfolio is not registered, deny access
-        if (!result) {
-            console.log('Portfolio not registered in database:', portfolioPath);
-            return res.status(404).send('Portfolio not found');
-        }
-
-        // If portfolio is public, allow access to everyone
-        if (result.is_public) {
-            console.log('Access granted to public portfolio');
-            return next();
-        }
-
-        // If user is logged in
-        if (req.session?.user) {
-            console.log('Authenticated access attempt by:', req.session.user.username);
-            console.log('Portfolio owner:', result.username);
-            console.log('Is public:', result.is_public);
-            
-            // Check if the user is a parent
-            const isParent = req.session.user.username.toLowerCase().startsWith('parent-');
-            
-            if (isParent) {
-                const childName = req.session.user.username.substring('parent-'.length);
-                if (result.username === childName) {
-                    console.log('Access granted to parent');
-                    return next();
-                }
-            } else if (result.username === req.session.user.username) {
-                console.log('Access granted to user');
-                return next();
+        const user = await prisma.user.findUnique({
+            where: { id: req.user.userId },
+            select: {
+                id: true,
+                name: true,
+                email: true,
+                role: true
             }
-        }
-
-        console.log('Access denied to portfolio:', portfolioPath);
-        res.status(403).send('Access denied');
-    } catch (error) {
-        console.error('Error checking portfolio access:', error);
-        console.error('Stack trace:', error.stack);
-        res.status(500).send('Server error');
-    }
-});
-
-// Add session check middleware
-app.use((req, res, next) => {
-    console.log('\n=== Session Check ===');
-    console.log('URL:', req.url);
-    console.log('Session exists:', !!req.session);
-    console.log('Session ID:', req.sessionID);
-    console.log('User in session:', req.session?.user);
-    console.log('Cookies:', req.headers.cookie);
-    next();
-});
-
-// Add session check endpoint
-app.get('/check-session', (req, res) => {
-    console.log('\n=== Detailed Session Check ===');
-    console.log('Headers:', req.headers);
-    console.log('Session ID:', req.sessionID);
-    console.log('Session:', req.session);
-    console.log('Cookies:', req.headers.cookie);
-    
-    // Set no-cache headers
-    res.set({
-        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-        'Pragma': 'no-cache',
-        'Expires': '0'
-    });
-    
-    res.json({
-        authenticated: !!req.session?.user,
-        user: req.session?.user,
-        sessionExists: !!req.session,
-        sessionID: req.sessionID,
-        hasCookies: !!req.headers.cookie
-    });
-});
-
-// Create SQLite database with proper error handling
-console.log('Initializing database at:', dbPath);
-const db = new sqlite3.Database(dbPath, (err) => {
-    if (err) {
-        console.error('Error opening database:', err);
-        process.exit(1);
-    }
-    console.log('Successfully connected to database');
-    
-    // Initialize database
-    db.serialize(() => {
-        // Drop and recreate users table with email column
-        db.run(`DROP TABLE IF EXISTS users`);
-        db.run(`CREATE TABLE users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL,
-            email TEXT UNIQUE NOT NULL,
-            role TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            is_super_user INTEGER DEFAULT 0,
-            is_public INTEGER DEFAULT 0,
-            portfolio_path TEXT,
-            avatar_path TEXT,
-            last_login TIMESTAMP
-        )`);
-
-        // Create schools table
-        db.run(`CREATE TABLE IF NOT EXISTS schools (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )`);
-
-        // Create public_visitors table
-        db.run(`CREATE TABLE IF NOT EXISTS public_visitors (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL,
-            email TEXT UNIQUE NOT NULL,
-            reason TEXT,
-            registration_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )`);
-
-        // Create visitor_logins table to track login history
-        db.run(`CREATE TABLE IF NOT EXISTS visitor_logins (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            visitor_id INTEGER NOT NULL,
-            login_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (visitor_id) REFERENCES public_visitors(id)
-        )`);
-
-        // Create Peter accounts if they don't exist
-        const peterAccounts = [
-            { username: 'peter41', password: 'peter41', is_super_user: 1 },
-            { username: 'peter42', password: 'peter42', is_super_user: 1 }
-        ];
-
-        for (const account of peterAccounts) {
-            db.get('SELECT * FROM users WHERE username = ?', [account.username], (err, row) => {
-                if (err) {
-                    console.error(`Error checking for ${account.username}:`, err);
-                    return;
-                }
-                if (!row) {
-                    console.log(`${account.username} not found, creating...`);
-                    bcrypt.hash(account.password, 10, (err, hashedPassword) => {
-                        if (err) {
-                            console.error(`Error hashing password for ${account.username}:`, err);
-                            return;
-                        }
-                        db.run(
-                            `INSERT INTO users (
-                                username, 
-                                password, 
-                                email, 
-                                role, 
-                                is_super_user
-                            ) VALUES (?, ?, ?, ?, ?)`,
-                            [
-                                account.username,
-                                hashedPassword,
-                                `${account.username}@example.com`,
-                                'admin',
-                                account.is_super_user
-                            ],
-                            (err) => {
-                                if (err) {
-                                    console.error(`Error creating ${account.username}:`, err);
-                                }
-                            }
-                        );
-                    });
-                } else {
-                    // Update super user status
-                    db.run(
-                        'UPDATE users SET is_super_user = 1 WHERE username = ?',
-                        [account.username],
-                        (err) => {
-                            if (err) {
-                                console.error(`Error updating ${account.username}:`, err);
-                            }
-                        }
-                    );
-                }
-            });
-        }
-    });
-});
-
-app.get('/debug-privacy/:username', (req, res) => {
-    const username = req.params.username;
-    console.log('\n=== Debug Privacy Status ===');
-    console.log('Checking privacy for:', username);
-    
-    const db = new sqlite3.Database(dbPath);
-    db.get('SELECT username, is_public, portfolio_path FROM users WHERE username = ?', [username], (err, result) => {
-        if (err) {
-            console.error('Error getting privacy status:', err);
-            return res.status(500).json({ error: 'Error getting privacy status' });
-        }
-        if (!result) {
+        });
+        
+        if (!user) {
             return res.status(404).json({ error: 'User not found' });
         }
-        res.json(result);
-    });
-});
-
-// School and class API endpoints
-app.get('/api/schools', (req, res) => {
-    res.json(schoolConfig.getSchools());
-});
-
-app.get('/api/schools/:schoolId', (req, res) => {
-    const school = schoolConfig.getSchool(req.params.schoolId);
-    if (!school) {
-        return res.status(404).json({ error: 'School not found' });
-    }
-    res.json(school);
-});
-
-app.get('/api/schools/:schoolId/classes', (req, res) => {
-    const classes = schoolConfig.getClasses(req.params.schoolId);
-    res.json(classes);
-});
-
-app.get('/api/schools/:schoolId/classes/:classId', (req, res) => {
-    const cls = schoolConfig.getClass(req.params.schoolId, req.params.classId);
-    if (!cls) {
-        return res.status(404).json({ error: 'Class not found' });
-    }
-    res.json(cls);
-});
-
-app.get('/api/classes/:classId/students', async (req, res) => {
-    const classId = req.params.classId;
-    const portfolioPath = req.query.portfolioPath;
-    const db = new sqlite3.Database(dbPath);
-    
-    try {
-        // Log the request for debugging
-        console.log(`\n==== STUDENT FETCH DEBUG ====`);
-        console.log(`Class ID: ${classId}`);
-        console.log(`Portfolio Path: ${portfolioPath}`);
         
-        if (!portfolioPath) {
-            return res.status(400).json({ error: 'portfolioPath parameter is required' });
-        }
-        
-        // Special handling for Phumdham classes
-        if (classId === 'Class4-1' || classId === 'Class4-2') {
-            const classNumber = classId === 'Class4-1' ? '1' : '2';
-            const searchPath = `P4-${classNumber}`;
-            
-            console.log(`Special handling for Phumdham class: ${classId}, searching for ${searchPath}`);
-            
-            // Direct query for P4-1 or P4-2 folders
-            const students = await new Promise((resolve, reject) => {
-                db.all('SELECT * FROM users WHERE portfolio_path LIKE ?', [`%${searchPath}%`], (err, rows) => {
-                    if (err) {
-                        console.error('Database error:', err);
-                        reject(err);
-                    }
-                    
-                    console.log(`Found ${rows.length} students for Phumdham ${classId}`);
-                    if (rows.length > 0) {
-                        console.log('Sample students:');
-                        for (let i = 0; i < Math.min(5, rows.length); i++) {
-                            console.log(` - ${rows[i].username}: ${rows[i].portfolio_path}`);
-                        }
-                    }
-                    
-                    resolve(rows || []);
-                });
-            });
-            
-            console.log(`==== END DEBUG ====\n`);
-            return res.json(students);
-        }
-        
-        // Special handling for M2 class
-        if (classId === 'M2-001') {
-            console.log('Handling M2-001 class');
-            
-            // Get students from database first
-            const dbStudents = await new Promise((resolve, reject) => {
-                db.all('SELECT * FROM users WHERE portfolio_path LIKE ?', [`%M2-001%`], (err, rows) => {
-                    if (err) {
-                        console.error('Database error:', err);
-                        reject(err);
-                    }
-                    
-                    console.log(`Found ${rows?.length || 0} students in database`);
-                    if (rows?.length > 0) {
-                        console.log('Sample students:');
-                        rows.slice(0, 3).forEach(student => {
-                            console.log(` - ${student.username}: ${student.portfolio_path}`);
-                        });
-                    }
-                    
-                    resolve(rows || []);
-                });
-            });
-            
-            // If no students in database, check filesystem
-            if (!dbStudents.length) {
-                console.log('No M2 students found in database, checking filesystem');
-                
-                try {
-                    const folderPath = path.join(__dirname, 'portfolios', 'M2-001');
-                    if (fs.existsSync(folderPath)) {
-                        console.log(`Found M2 directory: ${folderPath}`);
-                        
-                        // Get files and directories
-                        const entries = fs.readdirSync(folderPath, { withFileTypes: true });
-                        const studentDirs = entries.filter(entry => entry.isDirectory());
-                        
-                        console.log(`Found ${studentDirs.length} student directories in ${folderPath}`);
-                        
-                        for (const dir of studentDirs) {
-                            const studentName = dir.name;
-                            const studentPath = path.join(folderPath, studentName);
-                            
-                            // Find HTML files
-                            const files = fs.readdirSync(studentPath);
-                            const htmlFiles = files.filter(file => file.toLowerCase().endsWith('.html'));
-                            
-                            if (htmlFiles.length) {
-                                const htmlFile = htmlFiles[0];
-                                dbStudents.push({
-                                    username: studentName,
-                                    portfolio_path: `/portfolios/M2-001/${studentName}/${htmlFile}`,
-                                    avatar_path: `/portfolios/M2-001/${studentName}/images/${studentName}.jpg`,
-                                    is_public: 1
-                                });
-                            }
-                        }
-                    }
-                } catch (error) {
-                    console.error('Error reading filesystem for M2:', error);
-                }
-            }
-            
-            console.log(`==== END DEBUG ====\n`);
-            return res.json(dbStudents);
-        }
-        
-        // Regular handling for other classes
-        const students = await new Promise((resolve, reject) => {
-            db.all('SELECT * FROM users', [], (err, rows) => {
-                if (err) {
-                    console.error('Database error:', err);
-                    reject(err);
-                }
-                console.log(`Total users in database: ${rows.length}`);
-                
-                // Print all portfolio paths for debugging
-                console.log("All portfolio paths in database:");
-                rows.forEach((user, i) => {
-                    if (user.portfolio_path) {
-                        console.log(`${i+1}. ${user.username}: ${user.portfolio_path}`);
-                    }
-                });
-                
-                // Extract the folder name from portfolioPath for more flexible matching
-                const pathParts = portfolioPath.split('/');
-                const folderName = pathParts[pathParts.length - 1];
-                
-                console.log(`Looking for portfolios with folder name: ${folderName}`);
-                
-                // Filter students based on the portfolio path (case-insensitive)
-                // Try multiple matching strategies
-                const filteredStudents = rows.filter(user => {
-                    // Make sure user has a portfolio path before checking
-                    if (!user.portfolio_path) return false;
-                    
-                    // Convert to lowercase for case-insensitive comparison
-                    const userPath = user.portfolio_path.toLowerCase();
-                    const searchPath = portfolioPath.toLowerCase();
-                    const searchFolder = folderName.toLowerCase();
-                    
-                    // Try different matching strategies
-                    return userPath.includes(searchPath) || 
-                           userPath.includes(searchFolder) || 
-                           userPath.includes(`portfolios/${searchFolder}`) ||
-                           userPath.includes(`/portfolios/${searchFolder}`);
-                });
-                
-                console.log(`Found ${filteredStudents.length} students for path: ${portfolioPath}`);
-                
-                if (filteredStudents.length > 0) {
-                    // Log first 5 students for debugging
-                    console.log('Sample students:');
-                    for (let i = 0; i < Math.min(5, filteredStudents.length); i++) {
-                        const s = filteredStudents[i];
-                        console.log(` - ${s.username}: ${s.portfolio_path}`);
-                    }
-                } else {
-                    console.log('No students found! Check database entries and portfolio paths.');
-                }
-                
-                resolve(filteredStudents || []);
-            });
-        });
-        
-        console.log(`==== END DEBUG ====\n`);
-        res.json(students);
+        res.json(user);
     } catch (error) {
-        console.error('Error getting students:', error);
-        res.status(500).json({ error: 'Error getting students' });
-    } finally {
-        db.close();
-    }
-});
-
-// Public visitor registration
-app.post('/public-register', async (req, res) => {
-    const { fullName, email, password, reason } = req.body;
-    
-    if (!fullName || !email || !password) {
-        return res.status(400).json({ error: 'All fields are required' });
-    }
-    
-    // Validate email format
-    if (!email.includes('@')) {
-        return res.status(400).json({ error: 'Invalid email format' });
-    }
-    
-    const db = new sqlite3.Database(dbPath);
-    
-    try {
-        // Check if email already exists
-        const emailExists = await new Promise((resolve, reject) => {
-            db.get('SELECT id FROM public_visitors WHERE email = ?', [email], (err, row) => {
-                        if (err) reject(err);
-                        else resolve(row);
-                    });
-                });
-
-        if (emailExists) {
-            return res.status(400).json({ error: 'Email already registered' });
-        }
-        
-        // Hash the password
-        const hashedPassword = await bcrypt.hash(password, 10);
-        
-        // Insert the visitor
-                    await new Promise((resolve, reject) => {
-                        db.run(
-                'INSERT INTO public_visitors (full_name, email, password, reason, registration_date) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)',
-                [fullName, email, hashedPassword, reason || ''],
-                            function(err) {
-                                if (err) reject(err);
-                    else resolve(this.lastID);
-                            }
-                        );
-                    });
-        
-        // Success
-        res.status(201).json({ success: true, message: 'Registration successful' });
-    } catch (error) {
-        console.error('Error registering public visitor:', error);
-        res.status(500).json({ error: 'Server error' });
-    } finally {
-        db.close();
-    }
-});
-
-// Public visitor login
-app.post('/public-login', async (req, res) => {
-    const { email, password } = req.body;
-    
-    if (!email || !password) {
-        return res.status(400).json({ error: 'Email and password are required' });
-    }
-    
-    const db = new sqlite3.Database(dbPath);
-    
-    try {
-        // Get visitor by email
-        const visitor = await new Promise((resolve, reject) => {
-            db.get('SELECT id, full_name, email, password FROM public_visitors WHERE email = ?', [email], (err, row) => {
-                if (err) reject(err);
-                else resolve(row);
-            });
-        });
-        
-        if (!visitor) {
-            return res.status(401).json({ error: 'Invalid email or password' });
-        }
-        
-        // Check password
-        const passwordMatch = await bcrypt.compare(password, visitor.password);
-        
-        if (!passwordMatch) {
-            return res.status(401).json({ error: 'Invalid email or password' });
-        }
-        
-        // Log activity
-                        db.run(
-            'INSERT INTO visitor_logins (visitor_id, login_date) VALUES (?, CURRENT_TIMESTAMP)',
-            [visitor.id]
-        );
-        
-        // Set session with all necessary flags
-        req.session.authenticated = true;
-        req.session.userType = 'visitor';
-        req.session.visitorId = visitor.id;
-        req.session.fullName = visitor.full_name;
-        req.session.email = visitor.email;
-        
-        // Save session explicitly
-        await new Promise((resolve, reject) => {
-            req.session.save((err) => {
-                                if (err) reject(err);
-                else resolve();
-            });
-        });
-        
-        // Success
-        res.json({ 
-            success: true, 
-            user: { 
-                id: visitor.id, 
-                fullName: visitor.full_name, 
-                email: visitor.email,
-                userType: 'visitor'
-            }
-        });
-            } catch (error) {
-        console.error('Error logging in public visitor:', error);
-        res.status(500).json({ error: 'Server error' });
-    } finally {
-        db.close();
-    }
-});
-
-// Special endpoint for Phumdham students
-app.get('/api/phumdham-students/:classId', async (req, res) => {
-    const classId = req.params.classId;
-    const db = new sqlite3.Database(dbPath);
-    
-    try {
-        console.log(`\n==== PHUMDHAM STUDENTS QUERY ====`);
-        console.log(`Class ID: ${classId}`);
-        console.log(`Session:`, req.session);
-        
-        // Check authentication
-        const isAuthenticated = req.session?.authenticated || !!req.session?.user;
-        const isVisitor = req.session?.userType === 'visitor' || req.session?.user?.userType === 'visitor';
-        console.log('Auth status:', { isAuthenticated, isVisitor });
-        
-        // Get all students from the database first
-        const dbStudents = await new Promise((resolve, reject) => {
-            // Use multiple patterns to match both with and without leading slash
-            const patterns = [
-                'P4-1%',           // No slash
-                '/P4-1%',          // With slash
-                '%/P4-1/%',        // Full path with slashes
-                'portfolios/P4-1%', // Standard format
-                '/portfolios/P4-1%' // Standard format with leading slash
-            ];
-            
-            // Build query to match any pattern
-            const placeholders = patterns.map(() => 'portfolio_path LIKE ?').join(' OR ');
-            const query = `
-                SELECT username, portfolio_path, avatar_path, is_public, first_name, last_name, nickname 
-                FROM users 
-                WHERE ${placeholders}
-            `;
-            
-            console.log('Executing query:', query);
-            console.log('With patterns:', patterns);
-            
-            db.all(query, patterns, (err, rows) => {
-                if (err) {
-                    console.error('Database error:', err);
-                    reject(err);
-                    return;
-                }
-                
-                if (rows?.length > 0) {
-                    console.log(`Found ${rows.length} students in database`);
-                    console.log('Sample students:');
-                    rows.slice(0, 3).forEach(student => {
-                        console.log(` - ${student.username}: ${student.portfolio_path} (${student.is_public ? 'Public' : 'Private'})`);
-                    });
-                } else {
-                    console.log('No students found in database');
-                }
-                
-                resolve(rows || []);
-            });
-        });
-        
-        // Then check the filesystem
-        const folderPath = path.join(__dirname, 'portfolios', 'P4-1');
-        let filesystemStudents = [];
-        
-        if (fs.existsSync(folderPath)) {
-            console.log(`Checking filesystem path: ${folderPath}`);
-            const files = fs.readdirSync(folderPath, { withFileTypes: true });
-            filesystemStudents = files
-                .filter(file => file.isDirectory())
-                .map(dir => {
-                    const { firstName, lastName, nickname } = parseStudentName(dir.name);
-                    const portfolioPath = `/portfolios/P4-1/${dir.name}/index.html`;
-                    
-                    return {
-                        username: dir.name,
-                        portfolio_path: portfolioPath,
-                        avatar_path: `/portfolios/P4-1/${dir.name}/images/${dir.name}.png`,
-                        is_public: false, // Set to private by default
-                        first_name: firstName,
-                        last_name: lastName,
-                        nickname: nickname
-                    };
-                });
-            
-            console.log(`Found ${filesystemStudents.length} students in filesystem`);
-        } else {
-            console.log(`Filesystem path not found: ${folderPath}`);
-        }
-        
-        // Merge database and filesystem results, preferring database entries
-        const dbUsernames = new Set(dbStudents.map(s => s.username));
-        const allStudents = [
-            ...dbStudents,
-            ...filesystemStudents.filter(s => !dbUsernames.has(s.username))
-        ];
-        
-        // Process each student
-        const processedStudents = allStudents.map(student => ({
-            ...student,
-            is_public: student.is_public === 1 || student.is_public === true,
-            first_name: student.first_name || student.username,
-            nickname: student.nickname || student.first_name || student.username
-        }));
-        
-        console.log(`Found ${processedStudents.length} total students`);
-        if (processedStudents.length > 0) {
-            console.log('First 3 students in response:');
-            processedStudents.slice(0, 3).forEach(student => {
-                console.log(` - ${student.username}: ${student.portfolio_path} (${student.is_public ? 'Public' : 'Private'})`);
-            });
-        }
-        
-        res.json(processedStudents);
-        
-    } catch (error) {
-        console.error('Error in Phumdham students API:', error);
+        console.error('Error retrieving user role:', error);
         res.status(500).json({ error: 'Internal server error' });
-    } finally {
-        db.close();
     }
 });
 
-// Direct filesystem-based endpoint for Phumdham portfolios
-app.get('/api/filesystem-portfolios/:classId', (req, res) => {
-    const classId = req.params.classId;
-    console.log(`\n==== DIRECT FILESYSTEM PORTFOLIO CHECK ====`);
-    console.log(`Checking portfolios for class: ${classId}`);
-    
-    // Map class ID to folder name (case-sensitive)
-    const folderMap = {
-        'Class4-1': 'P4-1',
-        'Class4-2': 'P4-2',
-        'M2-001': 'M2-001'
-    };
-    
-    // List of alternative folders to check for each class
-    const altFolders = {
-        'M2-001': ['M2-001', 'M2', 'M2-2025'],
-        'Class4-1': ['P4-1', 'Class4-1', '4-1'],
-        'Class4-2': ['P4-2', 'Class4-2', '4-2']
-    };
-    
-    // Set initial folder name from map or use class ID as fallback
-    const folderName = folderMap[classId] || classId;
-    let resolvedFolderPath = path.join(__dirname, 'portfolios', folderName);
-    
-    console.log(`Looking for portfolios in: ${resolvedFolderPath}`);
-    
+// Subject routes
+app.get('/api/subjects/available', auth, async (req, res) => {
     try {
-        // Check if the directory exists
-        if (!fs.existsSync(resolvedFolderPath)) {
-            console.log(`Portfolio directory not found: ${resolvedFolderPath}`);
-            
-            // Try alternative folder names
-            let foundAlternative = false;
-            
-            if (altFolders[classId]) {
-                for (const altName of altFolders[classId]) {
-                    if (altName === folderName) continue; // Skip the one we already tried
-                    
-                    const altPath = path.join(__dirname, 'portfolios', altName);
-                    console.log(`Trying alternative path: ${altPath}`);
-                    
-                    if (fs.existsSync(altPath)) {
-                        console.log(`Found alternative directory: ${altPath}`);
-                        resolvedFolderPath = altPath;
-                        foundAlternative = true;
-                        break;
+        console.log('Fetching available subjects for user:', req.user.userId);
+        
+        const user = await prisma.user.findUnique({
+            where: { id: req.user.userId },
+            select: {
+                yearLevel: true,
+                studentCourses: {
+                    select: {
+                        subjectId: true
                     }
                 }
             }
-            
-            // If we still haven't found a valid folder, return empty list
-            if (!foundAlternative) {
-                console.log(`No portfolio directories found for ${classId}`);
-                return res.json([]);
-            }
-        }
-        
-        // Read directory with EXACT case from filesystem
-        const files = fs.readdirSync(resolvedFolderPath, { withFileTypes: true });
-        console.log(`Found ${files.length} items in ${resolvedFolderPath}`);
-        
-        // Process all files and directories as they exist in the filesystem (preserving case)
-        const students = [];
-        
-        // Get base folder name for paths (e.g., 'P4-2' from full path)
-        const baseFolderName = path.basename(resolvedFolderPath);
+        });
 
-        files.forEach(entry => {
-            console.log(` - Found: ${entry.name} (${entry.isDirectory() ? 'Directory' : 'File'})`);
-            
-            if (entry.isDirectory()) {
-                // Use exact name from filesystem
-                const studentName = entry.name;
-                const studentPath = path.join(resolvedFolderPath, studentName);
-                
-                // Find HTML files in the directory
-                try {
-                    const studentFiles = fs.readdirSync(studentPath);
-                    const htmlFiles = studentFiles.filter(file => file.toLowerCase().endsWith('.html') || file.toLowerCase() === 'index.html');
-                    
-                    // If found HTML files, add to students array
-                    if (htmlFiles.length > 0) {
-                        let htmlFile = htmlFiles[0]; // Default to first HTML file
-                        
-                        // Prefer index.html if available
-                        const indexHtml = htmlFiles.find(file => file.toLowerCase() === 'index.html');
-                        if (indexHtml) {
-                            htmlFile = indexHtml;
+        console.log('User details:', {
+            userId: req.user.userId,
+            yearLevel: user?.yearLevel,
+            hasStudentCourses: user?.studentCourses?.length > 0
+        });
+
+        if (!user || !user.yearLevel) {
+            console.log('User or year level not found:', user);
+            return res.status(400).json({ success: false, message: 'User or year level not found' });
+        }
+
+        // Get enrolled subject IDs
+        const enrolledSubjectIds = user.studentCourses.map(course => course.subjectId);
+        console.log('Currently enrolled subject IDs:', enrolledSubjectIds);
+
+        // First, get all subjects for the user's year level
+        const allSubjectsForYear = await prisma.subject.findMany({
+            where: {
+                yearLevel: user.yearLevel
+            },
+            include: {
+                coreSubject: true
+            }
+        });
+        console.log('All subjects for year level', user.yearLevel, ':', 
+            allSubjectsForYear.map(s => ({
+                id: s.id,
+                name: s.name,
+                coreSubject: s.coreSubject.name
+            }))
+        );
+
+        // Then filter out enrolled ones
+        const availableSubjects = await prisma.subject.findMany({
+            where: {
+                yearLevel: user.yearLevel,
+                id: {
+                    notIn: enrolledSubjectIds
+                }
+            },
+            include: {
+                coreSubject: true
+            }
+        });
+
+        console.log('Available subjects after filtering:', 
+            availableSubjects.map(s => ({
+                id: s.id,
+                name: s.name,
+                coreSubject: s.coreSubject.name
+            }))
+        );
+
+        res.json({ success: true, subjects: availableSubjects });
+    } catch (error) {
+        console.error('Error fetching available subjects:', error);
+        res.status(500).json({ success: false, message: 'Error fetching available subjects' });
+    }
+});
+
+app.get('/api/subjects', auth, async (req, res) => {
+    try {
+        const subjects = await prisma.subject.findMany({
+            include: {
+                coreSubject: true,
+                teachers: {
+                    include: {
+                        teacher: true
+                    }
+                }
+            },
+            where: {
+                OR: [
+                    {
+                        teachers: {
+                            some: {
+                                teacherId: req.user.userId
+                            }
                         }
-                        
-                        console.log(`   Found HTML file: ${htmlFile}`);
-                        
-                        // Look for an avatar image
-                        let avatarPath = null;
-                        try {
-                            const imagesPath = path.join(studentPath, 'images');
-                            if (fs.existsSync(imagesPath)) {
-                                const imageFiles = fs.readdirSync(imagesPath).filter(file => 
-                                    file.toLowerCase().endsWith('.jpg') || 
-                                    file.toLowerCase().endsWith('.png') || 
-                                    file.toLowerCase().endsWith('.jpeg')
-                                );
-                                
-                                if (imageFiles.length > 0) {
-                                    // Use exact filename from filesystem
-                                    avatarPath = `/portfolios/${baseFolderName}/${studentName}/images/${imageFiles[0]}`;
-                                    console.log(`   Found avatar: ${imageFiles[0]}`);
+                    },
+                    {
+                        isArchived: false
+                    }
+                ]
+            },
+            orderBy: {
+                name: 'asc'
+            }
+        });
+        res.json(subjects);
+    } catch (error) {
+        console.error('Error fetching subjects:', error);
+        res.status(500).json({ error: 'Failed to fetch subjects' });
+    }
+});
+
+app.post('/api/subjects', auth, async (req, res) => {
+    try {
+        const { name, description, yearLevel, coreSubjectId } = req.body;
+
+        // Validate input
+        if (!name || !yearLevel || !coreSubjectId) {
+            return res.status(400).json({ error: 'Name, year level, and core subject are required' });
+        }
+
+        // Check if core subject exists
+        const coreSubject = await prisma.coreSubject.findUnique({
+            where: { id: coreSubjectId }
+        });
+
+        if (!coreSubject) {
+            return res.status(404).json({ error: 'Core subject not found' });
+        }
+
+        // Create the subject
+        const subject = await prisma.subject.create({
+            data: {
+                name,
+                description,
+                yearLevel,
+                coreSubject: {
+                    connect: { id: coreSubjectId }
+                },
+                teachers: {
+                    create: {
+                        teacherId: req.user.userId
+                    }
+                }
+            },
+            include: {
+                coreSubject: true,
+                teachers: {
+                    include: {
+                        teacher: true
+                    }
+                }
+            }
+        });
+
+        res.json(subject);
+    } catch (error) {
+        console.error('Error creating subject:', error);
+        if (error.code === 'P2002') {
+            res.status(400).json({ error: 'A subject with this name already exists for this core subject and year level' });
+        } else {
+            res.status(500).json({ error: 'Failed to create subject' });
+        }
+    }
+});
+
+// Get a single subject by ID
+app.get('/api/subjects/:subjectId', auth, async (req, res) => {
+    try {
+        const { subjectId } = req.params;
+        
+        const subject = await prisma.subject.findUnique({
+            where: { id: subjectId },
+            include: {
+                coreSubject: true,
+                teachers: {
+                    include: {
+                        teacher: true
+                    }
+                }
+            }
+        });
+
+        if (!subject) {
+            return res.status(404).json({ error: 'Subject not found' });
+        }
+
+        res.json(subject);
+    } catch (error) {
+        console.error('Error fetching subject:', error);
+        res.status(500).json({ error: 'Failed to fetch subject' });
+    }
+});
+
+// Get units for a subject
+app.get('/api/subjects/:subjectId/units', auth, async (req, res) => {
+    try {
+        const { subjectId } = req.params;
+
+        const subject = await prisma.subject.findUnique({
+            where: { id: subjectId },
+            include: {
+                units: {
+                    include: {
+                        parts: {
+                            include: {
+                                sections: true
+                            }
+                        }
+                    },
+                    orderBy: {
+                        order: 'asc'
+                    }
+                }
+            }
+        });
+
+        if (!subject) {
+            return res.status(404).json({ error: 'Subject not found' });
+        }
+
+        res.json(subject.units);
+    } catch (error) {
+        console.error('Error fetching units:', error);
+        res.status(500).json({ error: 'Failed to fetch units' });
+    }
+});
+
+// Create a unit for a subject
+app.post('/api/subjects/:subjectId/units', auth, async (req, res) => {
+    try {
+        const { subjectId } = req.params;
+        const { name, description } = req.body;
+
+        // Get the current highest order number
+        const highestOrder = await prisma.unit.findFirst({
+            where: { subjectId },
+            orderBy: { order: 'desc' },
+            select: { order: true }
+        });
+
+        const newOrder = (highestOrder?.order || 0) + 1;
+
+        const unit = await prisma.unit.create({
+            data: {
+                name,
+                description,
+                order: newOrder,
+                subject: {
+                    connect: { id: subjectId }
+                }
+            }
+        });
+
+        res.json(unit);
+    } catch (error) {
+        console.error('Error creating unit:', error);
+        res.status(500).json({ error: 'Failed to create unit' });
+    }
+});
+
+// Update a unit
+app.put('/api/units/:unitId', auth, async (req, res) => {
+    try {
+        const { unitId } = req.params;
+        const { name, description } = req.body;
+
+        const unit = await prisma.unit.update({
+            where: { id: unitId },
+            data: { name, description }
+        });
+
+        res.json(unit);
+    } catch (error) {
+        console.error('Error updating unit:', error);
+        res.status(500).json({ error: 'Failed to update unit' });
+    }
+});
+
+// Delete a unit
+app.delete('/api/units/:unitId', auth, async (req, res) => {
+    try {
+        const { unitId } = req.params;
+
+        await prisma.unit.delete({
+            where: { id: unitId }
+        });
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Error deleting unit:', error);
+        res.status(500).json({ error: 'Failed to delete unit' });
+    }
+});
+
+// Update a subject
+app.put('/api/subjects/:subjectId', auth, async (req, res) => {
+    try {
+        const { subjectId } = req.params;
+        const { name, description, yearLevel, coreSubjectId } = req.body;
+
+        // Check if subject exists
+        const existingSubject = await prisma.subject.findUnique({
+            where: { id: subjectId }
+        });
+
+        if (!existingSubject) {
+            return res.status(404).json({ error: 'Subject not found' });
+        }
+
+        // Update the subject
+        const subject = await prisma.subject.update({
+            where: { id: subjectId },
+            data: {
+            name,
+                description,
+                yearLevel,
+                coreSubject: coreSubjectId ? {
+                    connect: { id: coreSubjectId }
+                } : undefined
+            },
+            include: {
+                coreSubject: true,
+                teachers: {
+                    include: {
+                        teacher: true
+                    }
+                }
+            }
+        });
+
+        res.json(subject);
+    } catch (error) {
+        console.error('Error updating subject:', error);
+        if (error.code === 'P2002') {
+            res.status(400).json({ error: 'A subject with this name already exists for this core subject and year level' });
+        } else {
+            res.status(500).json({ error: 'Failed to update subject' });
+        }
+    }
+});
+
+// Get resources for a subject
+app.get('/api/subjects/:subjectId/resources', auth, async (req, res) => {
+    try {
+        const { subjectId } = req.params;
+        
+        const subject = await prisma.subject.findUnique({
+            where: { id: subjectId },
+            include: {
+                units: {
+                    include: {
+                        parts: {
+                            include: {
+                                sections: {
+                                    include: {
+                                        resources: true
+                                    }
                                 }
                             }
-                        } catch (err) {
-                            console.log(`   Error finding avatar for ${studentName}: ${err.message}`);
                         }
-                        
-                        // Parse name from directory name (e.g., "firstname_lastname_id")
-                        const { firstName, lastName, nickname } = parseStudentName(studentName);
-
-                        // Add student to list
-                        students.push({
-                            username: studentName,
-                            portfolio_path: `/portfolios/${baseFolderName}/${studentName}/${htmlFile}`,
-                            avatar_path: avatarPath || '/images/default-avatar.png',
-                            is_public: false, // Default to private like other classes
-                            first_name: firstName,
-                            last_name: lastName,
-                            nickname: nickname
-                        });
                     }
-                } catch (err) {
-                    console.log(`   Error processing directory ${studentName}: ${err.message}`);
                 }
-            } else if (entry.name.toLowerCase().endsWith('.html')) {
-                // Handle HTML files at root level
-                const studentName = entry.name.replace('.html', '');
-                const { firstName, lastName, nickname } = parseStudentName(studentName);
-                
-                console.log(`   Adding HTML file: ${entry.name}`);
-                
-                students.push({
-                    username: studentName,
-                    portfolio_path: `/portfolios/${baseFolderName}/${entry.name}`,
-                    avatar_path: '/images/default-avatar.png',
-                    is_public: false, // Default to private
-                    first_name: firstName,
-                    last_name: lastName,
-                    nickname: nickname
-                });
             }
         });
-        
-        console.log(`\nReturning ${students.length} portfolios from filesystem`);
-        if (students.length > 0) {
-            for (let i = 0; i < Math.min(5, students.length); i++) {
-                console.log(` - ${students[i].username}: ${students[i].portfolio_path} (${students[i].is_public ? 'Public' : 'Private'})`);
-            }
-        }
-        
-        res.json(students);
-            } catch (error) {
-        console.error('Error in filesystem-based endpoint:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
 
-// Special endpoint for M2 students
-app.get('/api/m2-students', async (req, res) => {
-    const db = new sqlite3.Database(dbPath);
-    
-    try {
-        console.log(`\n==== M2 STUDENTS QUERY ====`);
-        
-        // Get class configuration
-        const m2Class = schoolConfig.getClass('PBSChonburi', 'M2-001');
-        if (!m2Class) {
-            console.error('M2 class configuration not found');
-            return res.status(404).json({ error: 'Class not found' });
+        if (!subject) {
+            return res.status(404).json({ error: 'Subject not found' });
         }
-        
-        // Use the configured portfolio path
-        const portfolioPath = m2Class.portfolioPath;
-        console.log('Using portfolio path:', portfolioPath);
-        
-        // Get students from database
-        const dbStudents = await new Promise((resolve, reject) => {
-            const query = `
-                SELECT username, portfolio_path, avatar_path, is_public, first_name, last_name, nickname 
-                FROM users 
-                WHERE portfolio_path LIKE ?
-            `;
-            
-            console.log('Executing query:', query);
-            console.log('Portfolio path pattern:', `${portfolioPath}%`);
-            
-            db.all(query, [`${portfolioPath}%`], (err, rows) => {
-                if (err) {
-                    console.error('Database error:', err);
-                    reject(err);
-                    return;
-                }
-                
-                console.log(`Found ${rows?.length || 0} students in database`);
-                if (rows?.length > 0) {
-                    console.log('Sample students:');
-                    rows.slice(0, 3).forEach(student => {
-                        console.log(` - ${student.username}: ${student.portfolio_path} (Public: ${student.is_public === 1})`);
+
+        // Flatten the resources array
+        const resources = [];
+        subject.units.forEach(unit => {
+            unit.parts.forEach(part => {
+                part.sections.forEach(section => {
+                    section.resources.forEach(resource => {
+                        resources.push({
+                            ...resource,
+                            unitId: unit.id,
+                            partId: part.id,
+                            sectionId: section.id
+                        });
                     });
-                }
-                
-                resolve(rows || []);
+                });
             });
         });
-        
-        // Check filesystem for additional students
-        let filesystemStudents = [];
-        const folderPath = path.join(__dirname, 'portfolios', 'M2-001');
-        
-        if (fs.existsSync(folderPath)) {
-            console.log(`Checking filesystem path: ${folderPath}`);
-            const files = fs.readdirSync(folderPath, { withFileTypes: true });
-            const studentDirs = files.filter(file => file.isDirectory());
-            
-            studentDirs.forEach(dir => {
-                const studentName = dir.name;
-                const studentPath = path.join(folderPath, studentName);
-                
-                try {
-                    const studentFiles = fs.readdirSync(studentPath);
-                    const htmlFiles = studentFiles.filter(file => 
-                        file.toLowerCase().endsWith('.html') || 
-                        file.toLowerCase() === 'index.html'
-                    );
-                    
-                    if (htmlFiles.length > 0) {
-                        // Prefer index.html if available
-                        const htmlFile = htmlFiles.find(f => f.toLowerCase() === 'index.html') || htmlFiles[0];
-                        
-                        // Parse the student name
-                        const { firstName, lastName, nickname } = parseStudentName(studentName);
-                        
-                        // Check if student exists in database to get privacy setting
-                        const dbStudent = dbStudents.find(s => s.username === studentName);
-                        
-                        filesystemStudents.push({
-                            username: studentName,
-                            portfolio_path: `${portfolioPath}/${studentName}/${htmlFile}`,
-                            avatar_path: `${portfolioPath}/${studentName}/images/${studentName}.jpg`,
-                            is_public: dbStudent ? dbStudent.is_public === 1 : false, // Use DB setting if available
-                            first_name: firstName,
-                            last_name: lastName,
-                            nickname: nickname
-                        });
-                    }
-                } catch (error) {
-                    console.error(`Error processing student directory ${studentName}:`, error);
-                }
-            });
-        }
-        
-        // Merge database and filesystem results, preferring database entries
-        const dbUsernames = new Set(dbStudents.map(s => s.username));
-        const allStudents = [
-            ...dbStudents.map(s => ({ ...s, is_public: s.is_public === 1 })), // Ensure boolean
-            ...filesystemStudents.filter(s => !dbUsernames.has(s.username))
-        ];
-        
-        // Sort students by username
-        allStudents.sort((a, b) => a.username.localeCompare(b.username));
-        
-        console.log(`Returning ${allStudents.length} total students`);
-        console.log('Sample of returned students:');
-        allStudents.slice(0, 3).forEach(s => {
-            console.log(` - ${s.username}: ${s.portfolio_path} (Public: ${s.is_public})`);
-        });
-        
-        res.json(allStudents);
-        
+
+        res.json(resources);
     } catch (error) {
-        console.error('Error in M2 students API:', error);
-        res.status(500).json({ error: 'Internal server error' });
-    } finally {
-        db.close();
+        console.error('Error fetching resources:', error);
+        res.status(500).json({ error: 'Failed to fetch resources' });
     }
 });
 
-// Helper function to parse student name
-function parseStudentName(dirName) {
-    const nameParts = dirName.split('_');
-    let firstName = '', lastName = '', nickname = '';
-    
-    if (nameParts.length >= 2) {
-        // Remove any numeric ID from the last part
-        const lastPart = nameParts[nameParts.length - 1].replace(/\d+$/, '');
-        if (lastPart) {
-            nameParts[nameParts.length - 1] = lastPart;
-        } else {
-            nameParts.pop(); // Remove the ID part if it was all numbers
-        }
+// Add a new resource
+app.post('/api/resources', auth, upload.single('file'), async (req, res) => {
+    try {
+        const { title, description, type, url, subjectId, unitId, partId, sectionId } = req.body;
         
-        // Capitalize each part
-        firstName = nameParts[0].charAt(0).toUpperCase() + nameParts[0].slice(1).toLowerCase();
-        lastName = nameParts.slice(1).map(part => 
-            part.charAt(0).toUpperCase() + part.slice(1).toLowerCase()
-        ).join(' ');
-    } else {
-        firstName = dirName.charAt(0).toUpperCase() + dirName.slice(1).toLowerCase();
+        const resource = await prisma.resource.create({
+            data: {
+                title,
+                description,
+                type,
+                url: type === 'link' ? url : req.file ? `/uploads/resources/${req.file.filename}` : null,
+                subject: { connect: { id: subjectId } },
+                unit: unitId ? { connect: { id: unitId } } : undefined,
+                part: partId ? { connect: { id: partId } } : undefined,
+                section: sectionId ? { connect: { id: sectionId } } : undefined,
+                uploadedBy: { connect: { id: req.user.userId } }
+            }
+        });
+
+        res.json(resource);
+    } catch (error) {
+        console.error('Error creating resource:', error);
+        res.status(500).json({ error: 'Failed to create resource' });
     }
-    
-    return { firstName, lastName, nickname };
-}
+});
+
+// Delete a resource
+app.delete('/api/resources/:resourceId', auth, async (req, res) => {
+    try {
+        const { resourceId } = req.params;
+        
+        await prisma.resource.delete({
+            where: { id: resourceId }
+        });
+
+        res.json({ message: 'Resource deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting resource:', error);
+        res.status(500).json({ error: 'Failed to delete resource' });
+    }
+});
+
+// Get units, parts, and sections for a subject
+app.get('/api/subjects/:subjectId/structure', auth, async (req, res) => {
+    try {
+        const { subjectId } = req.params;
+        
+        const structure = await prisma.subject.findUnique({
+            where: { id: subjectId },
+            include: {
+                units: {
+                    include: {
+                        parts: {
+                            include: {
+                                sections: true
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        if (!structure) {
+            return res.status(404).json({ error: 'Subject not found' });
+        }
+
+        res.json(structure);
+    } catch (error) {
+        console.error('Error fetching subject structure:', error);
+        res.status(500).json({ error: 'Failed to fetch subject structure' });
+    }
+});
+
+// User Info endpoint
+app.get('/api/user/info', auth, async (req, res) => {
+    try {
+        const user = await prisma.user.findUnique({
+            where: { id: req.user.userId },
+            select: {
+                id: true,
+                name: true,
+                email: true,
+                role: true,
+                yearLevel: true,
+                class: true,
+                studentCourses: {
+                    include: {
+                        subject: {
+                            include: {
+                                coreSubject: true
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+
+        // Format the response
+        const userInfo = {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            role: user.role,
+            yearLevel: user.yearLevel,
+            class: user.class,
+            subjects: user.studentCourses.map(course => ({
+                id: course.subject.id,
+                name: course.subject.name,
+                description: course.subject.description,
+                yearLevel: course.subject.yearLevel,
+                coreSubject: course.subject.coreSubject
+            }))
+        };
+
+        res.json({ success: true, user: userInfo });
+    } catch (error) {
+        console.error('Error fetching user info:', error);
+        res.status(500).json({ success: false, message: 'Error fetching user information' });
+    }
+});
+
+// Enroll in a subject
+app.post('/api/subjects/enroll', auth, async (req, res) => {
+    try {
+        const { subjectId } = req.body;
+
+        if (!subjectId) {
+            return res.status(400).json({ success: false, message: 'Subject ID is required' });
+        }
+
+        // Check if subject exists and matches student's year level
+        const user = await prisma.user.findUnique({
+            where: { id: req.user.userId },
+            select: {
+                yearLevel: true,
+                studentCourses: {
+                    where: {
+                        subjectId: subjectId
+                    }
+                }
+            }
+        });
+
+        const subject = await prisma.subject.findUnique({
+            where: { id: subjectId }
+        });
+
+        if (!subject || !user) {
+            return res.status(404).json({ success: false, message: 'Subject or user not found' });
+        }
+
+        if (subject.yearLevel !== user.yearLevel) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'This subject is not available for your year level' 
+            });
+        }
+
+        // Check if already enrolled
+        if (user.studentCourses.length > 0) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Already enrolled in this subject' 
+            });
+        }
+
+        // Create enrollment
+        const enrollment = await prisma.studentCourse.create({
+            data: {
+                studentId: req.user.userId,
+                subjectId: subject.id
+            }
+        });
+
+        res.json({ success: true, enrollment });
+    } catch (error) {
+        console.error('Error enrolling in subject:', error);
+        res.status(500).json({ success: false, message: 'Error enrolling in subject' });
+    }
+});
+
+// Save student course selections
+app.post('/api/student/courses', auth, async (req, res) => {
+    try {
+        const { courseIds } = req.body;
+        console.log('Received course selection request:', { courseIds });
+        
+        if (!Array.isArray(courseIds)) {
+            console.log('Invalid courseIds format:', courseIds);
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Course IDs must be provided as an array' 
+            });
+        }
+
+        // Get user's current year level
+        const user = await prisma.user.findUnique({
+            where: { id: req.user.userId },
+            select: { 
+                yearLevel: true,
+                studentCourses: true
+            }
+        });
+        console.log('User info:', { userId: req.user.userId, yearLevel: user?.yearLevel });
+
+        if (!user || !user.yearLevel) {
+            console.log('User or year level not found:', user);
+            return res.status(400).json({
+                success: false,
+                message: 'User year level not found'
+            });
+        }
+
+        // Verify all courses exist and match user's year level
+        const courses = await prisma.subject.findMany({
+            where: {
+                id: { in: courseIds },
+                yearLevel: user.yearLevel
+            }
+        });
+        console.log('Found courses:', courses.map(c => ({ id: c.id, name: c.name, yearLevel: c.yearLevel })));
+
+        if (courses.length !== courseIds.length) {
+            console.log('Course count mismatch:', {
+                requestedCount: courseIds.length,
+                foundCount: courses.length,
+                requestedIds: courseIds,
+                foundIds: courses.map(c => c.id)
+            });
+            return res.status(400).json({
+                success: false,
+                message: 'One or more selected courses are not available for your year level'
+            });
+        }
+
+        // Remove existing enrollments
+        const deleteResult = await prisma.studentCourse.deleteMany({
+            where: { studentId: req.user.userId }
+        });
+        console.log('Deleted existing enrollments:', deleteResult);
+
+        // Create new enrollments
+        const enrollments = await Promise.all(
+            courseIds.map(courseId =>
+                prisma.studentCourse.create({
+                    data: {
+                        studentId: req.user.userId,
+                        subjectId: courseId
+                    }
+                })
+            )
+        );
+        console.log('Created new enrollments:', enrollments);
+
+        res.json({ success: true, enrollments });
+    } catch (error) {
+        console.error('Error saving course selections:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Failed to save course selections' 
+        });
+    }
+});
+
+// Debug endpoint to check all subjects
+app.get('/api/debug/subjects', auth, async (req, res) => {
+    try {
+        const user = await prisma.user.findUnique({
+            where: { id: req.user.userId },
+            select: {
+                yearLevel: true,
+                role: true
+            }
+        });
+
+        const allSubjects = await prisma.subject.findMany({
+            include: {
+                coreSubject: true
+            }
+        });
+
+        const subjectsForUserYear = await prisma.subject.findMany({
+            where: {
+                yearLevel: user.yearLevel
+            },
+            include: {
+                coreSubject: true
+            }
+        });
+
+        res.json({
+            userYearLevel: user.yearLevel,
+            userRole: user.role,
+            totalSubjects: allSubjects.length,
+            subjectsForUserYear: subjectsForUserYear,
+            allSubjects: allSubjects
+        });
+    } catch (error) {
+        console.error('Debug error:', error);
+        res.status(500).json({ error: 'Debug endpoint error' });
+    }
+});
+
+// Debug endpoint to check M1 subjects
+app.get('/api/debug/m1subjects', auth, async (req, res) => {
+    try {
+        const m1Subjects = await prisma.subject.findMany({
+            where: {
+                yearLevel: 7  // M1 corresponds to year level 7
+            },
+            include: {
+                coreSubject: true
+            }
+        });
+
+        console.log('Found M1 subjects:', m1Subjects);
+        
+        res.json({
+            success: true,
+            totalM1Subjects: m1Subjects.length,
+            subjects: m1Subjects.map(s => ({
+                id: s.id,
+                name: s.name,
+                yearLevel: s.yearLevel,
+                coreSubject: s.coreSubject.name
+            }))
+        });
+    } catch (error) {
+        console.error('Error checking M1 subjects:', error);
+        res.status(500).json({ success: false, message: 'Error checking M1 subjects' });
+    }
+});
+
+// Debug endpoint to check all subjects and year levels
+app.get('/api/debug/all-subjects', async (req, res) => {
+    try {
+        const subjects = await prisma.subject.findMany({
+            include: {
+                coreSubject: true
+            }
+        });
+        
+        res.json({
+            totalSubjects: subjects.length,
+            subjects: subjects.map(s => ({
+                id: s.id,
+                name: s.name,
+                yearLevel: s.yearLevel,
+                coreSubject: s.coreSubject.name
+            }))
+        });
+    } catch (error) {
+        console.error('Debug error:', error);
+        res.status(500).json({ error: 'Debug endpoint error' });
+    }
+});
+
+// Debug endpoint to update student year level
+app.post('/api/debug/update-year-level', auth, async (req, res) => {
+    try {
+        const user = await prisma.user.update({
+            where: { id: req.user.userId },
+            data: {
+                yearLevel: 7  // Set to M1
+            },
+            select: {
+                id: true,
+                name: true,
+                email: true,
+                role: true,
+                yearLevel: true,
+                class: true
+            }
+        });
+        
+        res.json({
+            success: true,
+            message: 'Year level updated to M1 (7)',
+            user
+        });
+    } catch (error) {
+        console.error('Debug error:', error);
+        res.status(500).json({ error: 'Failed to update year level' });
+    }
+});
+
+// Debug endpoint to update student info
+app.get('/api/debug/update-student-info', auth, async (req, res) => {
+    try {
+        const user = await prisma.user.findUnique({
+            where: { id: req.user.userId },
+            select: {
+                id: true,
+                name: true,
+                email: true,
+                role: true,
+                yearLevel: true,
+                class: true
+            }
+        });
+        
+        // Create a form to update the user info
+        res.send(`
+            <form method="POST">
+                <h2>Update Student Info</h2>
+                <p>Current year level: ${user.yearLevel ? (user.yearLevel <= 6 ? `P${user.yearLevel}` : `M${user.yearLevel - 6}`) : 'Not set'}</p>
+                <p>Current class: ${user.class || 'Not set'}</p>
+                <p style="color: red;">Note: Your class is set to M1/1 but your year level is P1. This needs to be fixed.</p>
+                <input type="hidden" name="yearLevel" value="7">
+                <button type="submit">Update to M1 (Year 7)</button>
+            </form>
+        `);
+    } catch (error) {
+        console.error('Debug error:', error);
+        res.status(500).json({ error: 'Failed to load student info' });
+    }
+});
+
+app.post('/api/debug/update-student-info', auth, async (req, res) => {
+    try {
+        const yearLevel = 7; // M1
+        const user = await prisma.user.update({
+            where: { id: req.user.userId },
+            data: {
+                yearLevel: yearLevel,
+                class: 'M1/1'  // Keep their existing M1/1 class
+            }
+        });
+        
+        res.send(`
+            <h2>Update Successful!</h2>
+            <p>Your year level has been updated to M1 (Year 7) to match your class M1/1.</p>
+            <p>Please:</p>
+            <ol>
+                <li>Log out</li>
+                <li>Clear your browser's localStorage</li>
+                <li>Log back in</li>
+            </ol>
+            <p><a href="/student/dashboard">Go to Dashboard</a></p>
+        `);
+    } catch (error) {
+        console.error('Debug error:', error);
+        res.status(500).json({ error: 'Failed to update student info' });
+    }
+});
+
+// Handle favicon.ico requests
+app.get('/favicon.ico', (req, res) => {
+    res.status(204).end(); // No content response
+});
+
+// Create a part for a unit
+app.post('/api/units/:unitId/parts', auth, async (req, res) => {
+    try {
+        const { unitId } = req.params;
+        const { name, description, order } = req.body;
+
+        // Validate input
+        if (!name || !order) {
+            return res.status(400).json({ error: 'Name and order are required' });
+        }
+
+        // Check if unit exists
+        const unit = await prisma.unit.findUnique({
+            where: { id: unitId }
+        });
+
+        if (!unit) {
+            return res.status(404).json({ error: 'Unit not found' });
+        }
+
+        // Create the part
+        const part = await prisma.part.create({
+            data: {
+                name,
+                description,
+                order,
+                unit: {
+                    connect: { id: unitId }
+                }
+            }
+        });
+
+        res.json(part);
+    } catch (error) {
+        console.error('Error creating part:', error);
+        res.status(500).json({ error: 'Failed to create part' });
+    }
+});
+
+// Start server
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+});

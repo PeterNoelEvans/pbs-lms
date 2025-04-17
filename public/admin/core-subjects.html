@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manage Core Subjects - Admin Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/admin/dashboard.html">Admin Dashboard</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/admin/core-subjects.html">Core Subjects</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <h1>Manage Core Subjects</h1>
+        
+        <!-- Add Core Subject Form -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Add New Core Subject</h5>
+            </div>
+            <div class="card-body">
+                <form id="addCoreSubjectForm">
+                    <div class="mb-3">
+                        <label for="name" class="form-label">Subject Name</label>
+                        <input type="text" class="form-control" id="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Description</label>
+                        <textarea class="form-control" id="description" rows="3"></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Add Core Subject</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Core Subjects List -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">Existing Core Subjects</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Description</th>
+                                <th>Created At</th>
+                            </tr>
+                        </thead>
+                        <tbody id="coreSubjectsList">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Check if user is logged in and is admin
+        fetch('/api/auth/check')
+            .then(response => response.json())
+            .then(data => {
+                if (!data.authenticated || data.role !== 'ADMIN') {
+                    window.location.href = '/login.html';
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                window.location.href = '/login.html';
+            });
+
+        // Load existing core subjects
+        function loadCoreSubjects() {
+            fetch('/api/core-subjects')
+                .then(response => response.json())
+                .then(subjects => {
+                    const tbody = document.getElementById('coreSubjectsList');
+                    tbody.innerHTML = '';
+                    subjects.forEach(subject => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${subject.name}</td>
+                            <td>${subject.description || ''}</td>
+                            <td>${new Date(subject.createdAt).toLocaleDateString()}</td>
+                        `;
+                        tbody.appendChild(row);
+                    });
+                })
+                .catch(error => console.error('Error:', error));
+        }
+
+        // Handle form submission
+        document.getElementById('addCoreSubjectForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const data = {
+                name: document.getElementById('name').value,
+                description: document.getElementById('description').value
+            };
+
+            fetch('/api/core-subjects', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(result => {
+                if (result.error) {
+                    alert(result.error);
+                } else {
+                    // Clear form
+                    document.getElementById('name').value = '';
+                    document.getElementById('description').value = '';
+                    // Reload subjects list
+                    loadCoreSubjects();
+                    alert('Core subject added successfully!');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Failed to add core subject');
+            });
+        });
+
+        // Load core subjects when page loads
+        loadCoreSubjects();
+    </script>
+</body>
+</html> 

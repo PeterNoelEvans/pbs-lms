@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quiz Management - Teacher Resource Platform</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            min-height: 100vh;
+        }
+        .container {
+            padding: 2rem;
+        }
+        .card {
+            margin-bottom: 1rem;
+        }
+        .question-card {
+            border: 1px solid #dee2e6;
+            border-radius: 0.25rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+        .choice-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+        .choice-item input[type="radio"] {
+            margin-right: 0.5rem;
+        }
+        .json-preview {
+            background-color: #f8f9fa;
+            padding: 1rem;
+            border-radius: 0.25rem;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm">
+        <div class="container">
+            <a class="navbar-brand" href="#">Teacher Resource Platform</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/teacher/dashboard">Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/teacher/quizzes">Quizzes</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" id="logoutBtn">Logout</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="row mb-4">
+            <div class="col">
+                <h1>Quiz Management</h1>
+                <p class="text-muted">Create and manage quizzes for your students</p>
+            </div>
+            <div class="col-auto">
+                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createQuizModal">
+                    Create New Quiz
+                </button>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Upload Quiz Questions</h5>
+                        <p class="card-text">Upload questions in JSON format</p>
+                        <div class="mb-3">
+                            <label for="quizFile" class="form-label">Quiz JSON File</label>
+                            <input class="form-control" type="file" id="quizFile" accept=".json">
+                        </div>
+                        <button class="btn btn-primary" id="uploadBtn">Upload</button>
+                    </div>
+                </div>
+
+                <div class="card mt-4">
+                    <div class="card-body">
+                        <h5 class="card-title">JSON Format Example</h5>
+                        <div class="json-preview">
+{
+  "title": "English Grammar Quiz",
+  "description": "Test your knowledge of English grammar",
+  "questions": [
+    {
+      "text": "What is the correct form of the verb in this sentence?",
+      "choices": [
+        {"text": "He go to school", "explanation": "Incorrect. The subject is singular."},
+        {"text": "He goes to school", "explanation": "Correct! The subject is singular, so we use 'goes'."},
+        {"text": "He going to school", "explanation": "Incorrect. This is not a complete verb form."},
+        {"text": "He gone to school", "explanation": "Incorrect. This is the past participle."}
+      ],
+      "correctIndex": 1
+    }
+  ]
+}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Your Quizzes</h5>
+                        <div id="quizList">
+                            <!-- Quizzes will be loaded here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Quiz Modal -->
+    <div class="modal fade" id="createQuizModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Create New Quiz</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="quizForm">
+                        <div class="mb-3">
+                            <label for="quizTitle" class="form-label">Quiz Title</label>
+                            <input type="text" class="form-control" id="quizTitle" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="quizDescription" class="form-label">Description</label>
+                            <textarea class="form-control" id="quizDescription" rows="3"></textarea>
+                        </div>
+                        <div id="questionsContainer">
+                            <!-- Questions will be added here -->
+                        </div>
+                        <button type="button" class="btn btn-secondary" onclick="addQuestion()">Add Question</button>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="saveQuiz()">Save Quiz</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Check if user is logged in
+        const token = localStorage.getItem('token');
+        if (!token) {
+            window.location.href = '/login';
+        }
+
+        // Logout functionality
+        document.getElementById('logoutBtn').addEventListener('click', function(e) {
+            e.preventDefault();
+            localStorage.removeItem('token');
+            window.location.href = '/login';
+        });
+
+        // Load quizzes
+        async function loadQuizzes() {
+            try {
+                const response = await fetch('/api/quizzes', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                const quizzes = await response.json();
+                
+                const quizList = document.getElementById('quizList');
+                quizList.innerHTML = '';
+                
+                quizzes.forEach(quiz => {
+                    const quizItem = document.createElement('div');
+                    quizItem.className = 'card mb-2';
+                    quizItem.innerHTML = `
+                        <div class="card-body">
+                            <h6 class="card-title">${quiz.title}</h6>
+                            <p class="card-text small">${quiz.description}</p>
+                            <p class="card-text small">${quiz.questions.length} questions</p>
+                            <button class="btn btn-sm btn-danger" onclick="deleteQuiz('${quiz.id}')">Delete</button>
+                        </div>
+                    `;
+                    quizList.appendChild(quizItem);
+                });
+            } catch (error) {
+                console.error('Error loading quizzes:', error);
+            }
+        }
+
+        // Add question to form
+        function addQuestion() {
+            const container = document.getElementById('questionsContainer');
+            const questionIndex = container.children.length;
+            
+            const questionCard = document.createElement('div');
+            questionCard.className = 'question-card';
+            questionCard.innerHTML = `
+                <h6>Question ${questionIndex + 1}</h6>
+                <div class="mb-3">
+                    <label class="form-label">Question Text</label>
+                    <input type="text" class="form-control" name="questionText" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Choices</label>
+                    <div id="choices${questionIndex}">
+                        <div class="choice-item">
+                            <input type="radio" name="correct${questionIndex}" value="0" required>
+                            <input type="text" class="form-control" name="choiceText" placeholder="Choice text" required>
+                            <input type="text" class="form-control" name="explanation" placeholder="Explanation" required>
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-secondary" onclick="addChoice(${questionIndex})">Add Choice</button>
+                </div>
+                <button type="button" class="btn btn-sm btn-danger" onclick="this.parentElement.remove()">Remove Question</button>
+            `;
+            container.appendChild(questionCard);
+        }
+
+        // Add choice to question
+        function addChoice(questionIndex) {
+            const container = document.getElementById(`choices${questionIndex}`);
+            const choiceIndex = container.children.length;
+            
+            const choiceItem = document.createElement('div');
+            choiceItem.className = 'choice-item';
+            choiceItem.innerHTML = `
+                <input type="radio" name="correct${questionIndex}" value="${choiceIndex}" required>
+                <input type="text" class="form-control" name="choiceText" placeholder="Choice text" required>
+                <input type="text" class="form-control" name="explanation" placeholder="Explanation" required>
+            `;
+            container.appendChild(choiceItem);
+        }
+
+        // Save quiz
+        async function saveQuiz() {
+            const form = document.getElementById('quizForm');
+            const questions = [];
+            
+            // Collect questions
+            form.querySelectorAll('.question-card').forEach(card => {
+                const questionText = card.querySelector('[name="questionText"]').value;
+                const choices = [];
+                let correctIndex = -1;
+                
+                card.querySelectorAll('.choice-item').forEach((item, index) => {
+                    const isCorrect = item.querySelector('input[type="radio"]').checked;
+                    if (isCorrect) correctIndex = index;
+                    
+                    choices.push({
+                        text: item.querySelector('[name="choiceText"]').value,
+                        explanation: item.querySelector('[name="explanation"]').value
+                    });
+                });
+                
+                questions.push({
+                    text: questionText,
+                    choices: choices,
+                    correctIndex: correctIndex
+                });
+            });
+            
+            const quizData = {
+                title: document.getElementById('quizTitle').value,
+                description: document.getElementById('quizDescription').value,
+                questions: questions
+            };
+            
+            try {
+                const response = await fetch('/api/quizzes', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(quizData)
+                });
+                
+                if (response.ok) {
+                    alert('Quiz saved successfully!');
+                    bootstrap.Modal.getInstance(document.getElementById('createQuizModal')).hide();
+                    loadQuizzes();
+                } else {
+                    alert('Failed to save quiz. Please try again.');
+                }
+            } catch (error) {
+                console.error('Error saving quiz:', error);
+                alert('An error occurred while saving the quiz.');
+            }
+        }
+
+        // Delete quiz
+        async function deleteQuiz(quizId) {
+            if (!confirm('Are you sure you want to delete this quiz?')) return;
+            
+            try {
+                const response = await fetch(`/api/quizzes/${quizId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (response.ok) {
+                    loadQuizzes();
+                } else {
+                    alert('Failed to delete quiz. Please try again.');
+                }
+            } catch (error) {
+                console.error('Error deleting quiz:', error);
+                alert('An error occurred while deleting the quiz.');
+            }
+        }
+
+        // Handle file upload
+        document.getElementById('uploadBtn').addEventListener('click', async function() {
+            const fileInput = document.getElementById('quizFile');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                alert('Please select a file');
+                return;
+            }
+            
+            try {
+                const text = await file.text();
+                const quizData = JSON.parse(text);
+                
+                const response = await fetch('/api/quizzes/upload', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: text
+                });
+                
+                if (response.ok) {
+                    alert('Quiz uploaded successfully!');
+                    loadQuizzes();
+                } else {
+                    alert('Failed to upload quiz. Please check the JSON format.');
+                }
+            } catch (error) {
+                console.error('Error uploading quiz:', error);
+                alert('An error occurred while uploading the quiz. Please check the JSON format.');
+            }
+        });
+
+        // Load quizzes on page load
+        loadQuizzes();
+    </script>
+</body>
+</html> 

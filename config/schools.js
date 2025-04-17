@@ -1,97 +1,158 @@
 /**
- * School and Class Configuration
- * This file defines the schools and classes in the system
+ * Subject and Topic Configuration
+ * This file defines the subjects and major topics in the system
  */
 
-const schools = [
+const subjects = [
   {
-    id: 'PBSChonburi',
-    name: 'Prabhassorn Vidhaya School Chonburi',
-    classes: [
+    id: 'Math',
+    name: 'Mathematics',
+    topics: [
       {
-        id: 'M2-001',
-        name: 'M2 2025',
-        displayName: 'M2 2025',
-        description: 'This is a presentation of M2 2025 001 Coding Class.',
-        portfolioPath: '/portfolios/M2-001'
+        id: 'numbers-operations',
+        name: 'Numbers and Operations',
+        displayName: 'Numbers and Operations',
+        description: 'Whole numbers, factors, multiples, HCF & LCM, integers',
+        resourcePath: '/resources/math/numbers-operations'
+      },
+      {
+        id: 'fractions-decimals',
+        name: 'Fractions, Decimals, and Percentages',
+        displayName: 'Fractions, Decimals, and Percentages',
+        description: 'Converting between forms, operations, real-world applications',
+        resourcePath: '/resources/math/fractions-decimals'
+      },
+      {
+        id: 'algebra',
+        name: 'Introduction to Algebra',
+        displayName: 'Introduction to Algebra',
+        description: 'Algebraic expressions, substitution, simple linear equations',
+        resourcePath: '/resources/math/algebra'
+      },
+      {
+        id: 'geometry-basics',
+        name: 'Geometry Basics',
+        displayName: 'Geometry Basics',
+        description: 'Points, lines, angles, angle properties',
+        resourcePath: '/resources/math/geometry-basics'
+      },
+      {
+        id: 'triangles-quadrilaterals',
+        name: 'Triangles and Quadrilaterals',
+        displayName: 'Triangles and Quadrilaterals',
+        description: 'Classifying shapes, angle sums, congruence',
+        resourcePath: '/resources/math/triangles-quadrilaterals'
       }
     ]
   },
   {
-    id: 'PhumdhamPrimary',
-    name: 'Phumdham Primary Learning Center',
-    classes: [
+    id: 'Science',
+    name: 'Science',
+    topics: [
       {
-        id: 'P4-1',
-        name: 'Class 4/1',
-        displayName: 'Class 4/1',
-        description: 'Grade 4/1 Coding Class',
-        portfolioPath: '/portfolios/P4-1'
+        id: 'biology',
+        name: 'Biology',
+        displayName: 'Biology',
+        description: 'Living organisms and their interactions',
+        resourcePath: '/resources/science/biology'
       },
       {
-        id: 'P4-2',
-        name: 'Class 4/2',
-        displayName: 'Class 4/2',
-        description: 'Grade 4/2 Coding Class',
-        portfolioPath: '/portfolios/P4-2'
+        id: 'chemistry',
+        name: 'Chemistry',
+        displayName: 'Chemistry',
+        description: 'Matter and its properties',
+        resourcePath: '/resources/science/chemistry'
+      },
+      {
+        id: 'physics',
+        name: 'Physics',
+        displayName: 'Physics',
+        description: 'Forces, energy, and motion',
+        resourcePath: '/resources/science/physics'
+      }
+    ]
+  },
+  {
+    id: 'English',
+    name: 'English Language',
+    topics: [
+      {
+        id: 'grammar',
+        name: 'Grammar',
+        displayName: 'Grammar',
+        description: 'English grammar rules and usage',
+        resourcePath: '/resources/english/grammar'
+      },
+      {
+        id: 'vocabulary',
+        name: 'Vocabulary',
+        displayName: 'Vocabulary',
+        description: 'Word meanings and usage',
+        resourcePath: '/resources/english/vocabulary'
+      },
+      {
+        id: 'reading',
+        name: 'Reading Comprehension',
+        displayName: 'Reading Comprehension',
+        description: 'Understanding and analyzing texts',
+        resourcePath: '/resources/english/reading'
       }
     ]
   }
-  // Add more schools as needed
 ];
 
 /**
- * Get all schools
- * @returns {Array} Array of school objects
+ * Get all subjects
+ * @returns {Array} Array of subject objects
  */
-function getSchools() {
-  return schools;
+function getSubjects() {
+  return subjects;
 }
 
 /**
- * Get a school by ID
- * @param {string} schoolId - School ID
- * @returns {Object|null} School object or null if not found
+ * Get a subject by ID
+ * @param {string} subjectId - Subject ID
+ * @returns {Object|null} Subject object or null if not found
  */
-function getSchool(schoolId) {
-  return schools.find(school => school.id === schoolId) || null;
+function getSubject(subjectId) {
+  return subjects.find(subject => subject.id === subjectId) || null;
 }
 
 /**
- * Get all classes for a school
- * @param {string} schoolId - School ID
- * @returns {Array} Array of class objects or empty array if school not found
+ * Get all topics for a subject
+ * @param {string} subjectId - Subject ID
+ * @returns {Array} Array of topic objects or empty array if subject not found
  */
-function getClasses(schoolId) {
-  const school = getSchool(schoolId);
-  return school ? school.classes : [];
+function getTopics(subjectId) {
+  const subject = getSubject(subjectId);
+  return subject ? subject.topics : [];
 }
 
 /**
- * Get a class by ID
- * @param {string} schoolId - School ID
- * @param {string} classId - Class ID
- * @returns {Object|null} Class object or null if not found
+ * Get a topic by ID
+ * @param {string} subjectId - Subject ID
+ * @param {string} topicId - Topic ID
+ * @returns {Object|null} Topic object or null if not found
  */
-function getClass(schoolId, classId) {
-  const classes = getClasses(schoolId);
-  return classes.find(cls => cls.id === classId) || null;
+function getTopic(subjectId, topicId) {
+  const topics = getTopics(subjectId);
+  return topics.find(topic => topic.id === topicId) || null;
 }
 
 /**
- * Get all class IDs across all schools
- * @returns {Array} Array of class IDs
+ * Get all topic IDs across all subjects
+ * @returns {Array} Array of topic IDs
  */
-function getAllClassIds() {
-  return schools.flatMap(school => 
-    school.classes.map(cls => cls.id)
+function getAllTopicIds() {
+  return subjects.flatMap(subject => 
+    subject.topics.map(topic => topic.id)
   );
 }
 
 module.exports = {
-  getSchools,
-  getSchool,
-  getClasses,
-  getClass,
-  getAllClassIds
+  getSubjects,
+  getSubject,
+  getTopics,
+  getTopic,
+  getAllTopicIds
 };

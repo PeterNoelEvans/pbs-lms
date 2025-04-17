@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Topic Details - Learning Resource Hub</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans Thai', Arial, sans-serif;
+            background-color: #f8f9fa;
+        }
+        .container {
+            max-width: 1200px;
+            padding: 20px;
+        }
+        .topic-card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 15px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+        .topic-header {
+            padding: 20px;
+            background: linear-gradient(45deg, #4a90e2, #67b26f);
+            color: white;
+        }
+        .topic-content {
+            padding: 20px;
+        }
+        .description {
+            white-space: pre-line;
+            font-family: 'Noto Sans Thai', Arial, sans-serif;
+            margin-bottom: 20px;
+        }
+        .section {
+            margin-bottom: 30px;
+        }
+        .section-title {
+            color: #4a90e2;
+            margin-bottom: 15px;
+        }
+        .resource-link {
+            display: block;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            color: #495057;
+            text-decoration: none;
+            transition: background-color 0.2s;
+        }
+        .resource-link:hover {
+            background: #e9ecef;
+        }
+        .nav-link {
+            color: #495057;
+            font-weight: 500;
+        }
+        .nav-link.active {
+            color: #0d6efd;
+            border-bottom: 2px solid #0d6efd;
+        }
+        .progress-section {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm">
+        <div class="container">
+            <a class="navbar-brand" href="/student/dashboard">Learning Hub</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/student/dashboard">Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/student/subjects">Subjects</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/student/progress">Progress</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/student/resources">Resources</a>
+                    </li>
+                </ul>
+                <button class="btn btn-outline-danger ms-auto" onclick="logout()">Logout</button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="/student/subjects">Subjects</a></li>
+                <li class="breadcrumb-item" id="subjectBreadcrumb">Subject</li>
+                <li class="breadcrumb-item active" id="topicBreadcrumb">Topic</li>
+            </ol>
+        </nav>
+
+        <div id="topicContainer">
+            <!-- Topic details will be loaded here -->
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const token = localStorage.getItem('token');
+        if (!token) {
+            window.location.href = '/login';
+        }
+
+        function logout() {
+            localStorage.removeItem('token');
+            window.location.href = '/login';
+        }
+
+        async function loadTopicDetails() {
+            try {
+                const urlParams = new URLSearchParams(window.location.search);
+                const topicId = urlParams.get('topicId');
+                
+                if (!topicId) {
+                    throw new Error('Topic ID not provided');
+                }
+
+                const response = await fetch(`/api/topics/${topicId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to load topic details');
+                }
+
+                const topic = await response.json();
+                
+                // Update breadcrumbs
+                document.getElementById('subjectBreadcrumb').textContent = topic.subject.coreSubject.name;
+                document.getElementById('topicBreadcrumb').textContent = topic.name;
+
+                const container = document.getElementById('topicContainer');
+                container.innerHTML = `
+                    <div class="topic-card">
+                        <div class="topic-header">
+                            <h1 class="mb-2">${topic.name}</h1>
+                            <p class="mb-0">Subject: ${topic.subject.coreSubject.name}</p>
+                        </div>
+                        <div class="topic-content">
+                            <div class="progress-section">
+                                <h5>Progress Status</h5>
+                                <span class="badge ${topic.studentProgress?.length > 0 && topic.studentProgress[0].status === 'COMPLETED' 
+                                    ? 'bg-success' 
+                                    : 'bg-success'}">${topic.studentProgress?.length > 0 && topic.studentProgress[0].status === 'COMPLETED' 
+                                        ? 'Completed' 
+                                        : 'In Progress'}</span>
+                            </div>
+
+                            <div class="section">
+                                <h5 class="section-title">Description</h5>
+                                <div class="description">${topic.description || 'No description available'}</div>
+                            </div>
+
+                            ${topic.learningObjectives ? `
+                                <div class="section">
+                                    <h5 class="section-title">Learning Objectives</h5>
+                                    <div class="description">${topic.learningObjectives}</div>
+                                </div>
+                            ` : ''}
+
+                            ${topic.prerequisites ? `
+                                <div class="section">
+                                    <h5 class="section-title">Prerequisites</h5>
+                                    <div class="description">${topic.prerequisites}</div>
+                                </div>
+                            ` : ''}
+
+                            ${topic.keyPoints ? `
+                                <div class="section">
+                                    <h5 class="section-title">Key Points</h5>
+                                    <div class="description">${topic.keyPoints}</div>
+                                </div>
+                            ` : ''}
+
+                            ${topic.assessments && topic.assessments.length > 0 ? `
+                                <div class="section">
+                                    <h5 class="section-title">Assessments</h5>
+                                    <div class="list-group">
+                                        ${topic.assessments.map(assessment => `
+                                            <a href="/student/assessment?id=${assessment.id}" 
+                                               class="list-group-item list-group-item-action">
+                                                ${assessment.title}
+                                            </a>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                            ` : ''}
+
+                            <div class="mt-4">
+                                <a href="/student/subjects" class="btn btn-outline-primary">Back to Subjects</a>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } catch (error) {
+                console.error('Error loading topic details:', error);
+                const container = document.getElementById('topicContainer');
+                container.innerHTML = `
+                    <div class="alert alert-danger">
+                        Error loading topic details. Please try again later.
+                    </div>
+                `;
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', loadTopicDetails);
+    </script>
+</body>
+</html> 

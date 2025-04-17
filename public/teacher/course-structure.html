@@ -1,0 +1,992 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Course Structure - Teacher Resource Platform</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css">
+    <style>
+        .unit-card {
+            margin-bottom: 2rem;
+            border: none;
+            background-color: #f8f9fa;
+            border-radius: 0.5rem;
+            padding: 1rem;
+        }
+        .parts-container {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+            padding: 0.5rem;
+        }
+        .part-card {
+            margin: 0;
+            border: none;
+            background-color: #e3f2fd;
+            border-radius: 0.25rem;
+            padding: 0.5rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            height: fit-content;
+        }
+        .sections-container {
+            display: grid;
+            grid-template-columns: repeat(1, 1fr);
+            gap: 0.25rem;
+            margin-top: 0.5rem;
+        }
+        .section-card {
+            margin: 0;
+            border: none;
+            background-color: #fff;
+            border-radius: 0.25rem;
+            border: 1px solid rgba(0,0,0,0.08);
+            padding: 0.25rem;
+        }
+        .add-button {
+            margin-bottom: 1rem;
+        }
+        .drag-handle {
+            cursor: move;
+            margin-right: 0.25rem;
+            color: #6c757d;
+            font-size: 0.8rem;
+        }
+        .card-text {
+            margin-bottom: 1rem;
+            white-space: pre-wrap;
+            font-family: inherit;
+        }
+        textarea.form-control {
+            white-space: pre-wrap;
+            min-height: 150px;
+        }
+        .content-card {
+            border: 1px solid rgba(0,0,0,0.08);
+            border-radius: 0.25rem;
+            padding: 0.5rem;
+            background-color: #fff;
+            margin: 0.25rem 0;
+            white-space: pre-wrap;
+            font-family: inherit;
+            line-height: 1.3;
+            font-size: 0.8rem;
+        }
+        .description-preview {
+            max-height: 2.6em;
+            overflow: hidden;
+            position: relative;
+            cursor: pointer;
+            font-size: 0.8rem;
+            margin: 0;
+            white-space: normal;
+            word-wrap: break-word;
+        }
+        .description-preview.expanded {
+            max-height: none;
+        }
+        .description-preview:not(.expanded)::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 1.5em;
+            background: linear-gradient(transparent, white);
+        }
+        .expand-button {
+            color: #0d6efd;
+            cursor: pointer;
+            font-size: 0.75em;
+            margin-top: 0.25em;
+            display: inline-block;
+        }
+        .expand-button:hover {
+            text-decoration: underline;
+        }
+        .unit-header {
+            padding: 0.5rem;
+            border-radius: 0.25rem;
+            margin-bottom: 0.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .part-header {
+            padding: 0.25rem 0;
+            margin-bottom: 0.25rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.25rem;
+        }
+        .part-header h6 {
+            font-size: 0.9rem;
+            margin: 0;
+            font-weight: 600;
+            flex: 1;
+            white-space: normal;
+            line-height: 1.2;
+        }
+        .part-header .btn-group {
+            display: flex;
+            gap: 0.25rem;
+            flex-shrink: 0;
+        }
+        .section-header {
+            padding: 0.25rem 0;
+            margin-bottom: 0.25rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .section-header span {
+            font-size: 0.8rem;
+            font-weight: 500;
+            white-space: normal;
+            line-height: 1.2;
+            margin-right: 0.5rem;
+            flex: 1;
+        }
+        .section-header .btn-group {
+            display: flex;
+            gap: 0.25rem;
+            flex-shrink: 0;
+        }
+        .section-content {
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+        @media (max-width: 1400px) {
+            .parts-container {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            .sections-container {
+                grid-template-columns: 1fr;
+            }
+        }
+        @media (max-width: 768px) {
+            .parts-container {
+                grid-template-columns: 1fr;
+            }
+            .sections-container {
+                grid-template-columns: 1fr;
+            }
+        }
+        .col-md-9 {
+            flex: 0 0 auto;
+            width: 75%;
+        }
+        .col-md-3 {
+            flex: 0 0 auto;
+            width: 25%;
+        }
+        .btn-sm {
+            padding: 0.15rem 0.35rem;
+            font-size: 0.75rem;
+            line-height: 1.2;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="#">Course Structure</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="btn btn-outline-light me-2" href="/teacher/dashboard.html">
+                            <i class="bi bi-speedometer2"></i> Dashboard
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="btn btn-outline-light me-2" href="/teacher/subjects.html">
+                            <i class="bi bi-book"></i> Subjects
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="btn btn-outline-light me-2" href="/teacher/assessments.html">
+                            <i class="bi bi-check-square"></i> Assessments
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="btn btn-outline-light" href="/teacher/resources.html">
+                            <i class="bi bi-files"></i> Resources
+                        </a>
+                    </li>
+                </ul>
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <button class="btn btn-outline-light" id="logoutBtn">
+                            <i class="bi bi-box-arrow-right"></i> Logout
+                        </button>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-md-9">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h4>Course Structure</h4>
+                        <button class="btn btn-primary" onclick="showAddUnitModal()">
+                            <i class="bi bi-plus-circle"></i> Add Unit
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div id="unitsContainer">
+                            <!-- Units will be loaded here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-header">
+                        <h4>Subject Details</h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <select class="form-select" id="subjectSelect" onchange="loadUnits()">
+                                <option value="">Select subject...</option>
+                            </select>
+                        </div>
+                        <div id="subjectDetails" class="d-none">
+                            <h5 class="mb-3" id="subjectName"></h5>
+                            <p class="text-muted mb-2" id="subjectDescription"></p>
+                            <div class="mt-3">
+                                <strong>Core Subject:</strong>
+                                <span id="coreSubjectName" class="d-block mb-2"></span>
+                                <strong>Year Level:</strong>
+                                <span id="yearLevel" class="d-block mb-2"></span>
+                            </div>
+                            <hr>
+                            <div class="mt-3">
+                                <strong>Statistics:</strong>
+                                <ul class="list-unstyled mt-2">
+                                    <li><i class="bi bi-book"></i> Units: <span id="unitCount">0</span></li>
+                                    <li><i class="bi bi-collection"></i> Parts: <span id="partCount">0</span></li>
+                                    <li><i class="bi bi-list-task"></i> Sections: <span id="sectionCount">0</span></li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Unit Modal -->
+    <div class="modal fade" id="unitModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="unitModalTitle">Add Unit</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="unitForm">
+                        <input type="hidden" id="unitId">
+                        <div class="mb-3">
+                            <label for="unitName" class="form-label">Unit Name</label>
+                            <input type="text" class="form-control" id="unitName" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="unitDescription" class="form-label">Description</label>
+                            <textarea class="form-control" id="unitDescription" rows="3"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label for="unitOrder" class="form-label">Order</label>
+                            <input type="number" class="form-control" id="unitOrder" required>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="saveUnit()">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Part Modal -->
+    <div class="modal fade" id="partModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="partModalTitle">Add Part</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="partForm">
+                        <input type="hidden" id="partId">
+                        <input type="hidden" id="partUnitId">
+                        <div class="mb-3">
+                            <label for="partName" class="form-label">Part Name</label>
+                            <input type="text" class="form-control" id="partName" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="partDescription" class="form-label">Description</label>
+                            <textarea class="form-control" id="partDescription" rows="3"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label for="partOrder" class="form-label">Order</label>
+                            <input type="number" class="form-control" id="partOrder" required>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="savePart()">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Section Modal -->
+    <div class="modal fade" id="sectionModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="sectionModalTitle">Add Section</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="sectionForm">
+                        <input type="hidden" id="sectionId">
+                        <input type="hidden" id="sectionPartId">
+                        <div class="mb-3">
+                            <label for="sectionName" class="form-label">Section Name</label>
+                            <select class="form-select" id="sectionName" required>
+                                <option value="">Select section type...</option>
+                                <option value="Language Focus">Language Focus</option>
+                                <option value="Time for a Joke">Time for a Joke</option>
+                                <option value="Let's Practice">Let's Practice</option>
+                                <option value="Let's Talk">Let's Talk</option>
+                                <option value="custom">Custom Section...</option>
+                            </select>
+                        </div>
+                        <div class="mb-3" id="customSectionNameDiv" style="display: none;">
+                            <label for="customSectionName" class="form-label">Custom Section Name</label>
+                            <input type="text" class="form-control" id="customSectionName">
+                        </div>
+                        <div class="mb-3">
+                            <label for="sectionDescription" class="form-label">Description</label>
+                            <textarea class="form-control" id="sectionDescription" rows="3"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label for="sectionOrder" class="form-label">Order</label>
+                            <input type="number" class="form-control" id="sectionOrder" required>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="saveSection()">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const token = localStorage.getItem('token');
+        if (!token) {
+            window.location.href = '/login';
+        }
+
+        let unitModal, partModal, sectionModal;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            unitModal = new bootstrap.Modal(document.getElementById('unitModal'));
+            partModal = new bootstrap.Modal(document.getElementById('partModal'));
+            sectionModal = new bootstrap.Modal(document.getElementById('sectionModal'));
+            loadSubjects();
+
+            // Handle custom section name
+            document.getElementById('sectionName').addEventListener('change', function() {
+                const customDiv = document.getElementById('customSectionNameDiv');
+                customDiv.style.display = this.value === 'custom' ? 'block' : 'none';
+            });
+        });
+
+        async function loadSubjects() {
+            try {
+                const response = await fetch('/api/subjects', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to load subjects');
+                }
+                
+                const subjects = await response.json();
+                const select = document.getElementById('subjectSelect');
+                select.innerHTML = '<option value="">Select subject...</option>';
+                
+                subjects.forEach(subject => {
+                    const option = document.createElement('option');
+                    option.value = subject.id;
+                    option.textContent = subject.name;
+                    select.appendChild(option);
+                });
+
+                // Get subject ID from URL
+                const urlParams = new URLSearchParams(window.location.search);
+                const subjectId = urlParams.get('subjectId');
+                
+                if (subjectId) {
+                    // Set the selected subject in the dropdown
+                    select.value = subjectId;
+                    
+                    // Load the units for this subject
+                    loadUnits();
+                }
+            } catch (error) {
+                console.error('Error loading subjects:', error);
+                alert('Failed to load subjects. Please try again.');
+            }
+        }
+
+        async function loadSubjectDetails(subjectId) {
+            if (!subjectId) {
+                document.getElementById('subjectDetails').classList.add('d-none');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/subjects/${subjectId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to load subject details');
+                }
+                
+                const subject = await response.json();
+                
+                const subjectDetails = document.getElementById('subjectDetails');
+                subjectDetails.classList.remove('d-none');
+                
+                document.getElementById('subjectName').textContent = subject.name;
+                document.getElementById('subjectDescription').textContent = subject.description || 'No description available';
+                document.getElementById('coreSubjectName').textContent = subject.coreSubject?.name || 'N/A';
+                document.getElementById('yearLevel').textContent = subject.yearLevel || 'N/A';
+                
+                // Update statistics
+                const units = subject.units || [];
+                const parts = units.reduce((count, unit) => count + (unit.parts?.length || 0), 0);
+                const sections = units.reduce((count, unit) => 
+                    count + (unit.parts?.reduce((pCount, part) => pCount + (part.sections?.length || 0), 0) || 0), 0);
+                
+                document.getElementById('unitCount').textContent = units.length;
+                document.getElementById('partCount').textContent = parts;
+                document.getElementById('sectionCount').textContent = sections;
+            } catch (error) {
+                console.error('Error loading subject details:', error);
+                document.getElementById('subjectDetails').classList.add('d-none');
+            }
+        }
+
+        async function loadUnits() {
+            const subjectId = document.getElementById('subjectSelect').value;
+            const unitsContainer = document.getElementById('unitsContainer');
+            const subjectDetails = document.getElementById('subjectDetails');
+
+            // Clear previous content and show loading state
+            unitsContainer.innerHTML = '<div class="text-center"><div class="spinner-border text-primary" role="status"></div><p class="mt-2">Loading course structure...</p></div>';
+            
+            if (!subjectId) {
+                unitsContainer.innerHTML = '<div class="alert alert-info">Please select a subject to view its course structure.</div>';
+                subjectDetails.classList.add('d-none');
+                return;
+            }
+
+            try {
+                console.log('Loading course structure for subject:', subjectId);
+                
+                // Load both subject details and units in parallel
+                const [subjectResponse, unitsResponse] = await Promise.all([
+                    fetch(`/api/subjects/${subjectId}`, {
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    }),
+                    fetch(`/api/subjects/${subjectId}/units`, {
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    })
+                ]);
+
+                if (!subjectResponse.ok) {
+                    if (subjectResponse.status === 404) {
+                        throw new Error('Subject not found. Please go back to the Subjects page and select a valid subject.');
+                    } else {
+                        throw new Error('Failed to load subject details. Please try again.');
+                    }
+                }
+
+                const subject = await subjectResponse.json();
+                const units = await unitsResponse.json();
+
+                // Update subject details
+                subjectDetails.classList.remove('d-none');
+                document.getElementById('subjectName').textContent = subject.name;
+                document.getElementById('subjectDescription').textContent = subject.description || 'No description available';
+                document.getElementById('coreSubjectName').textContent = subject.coreSubject?.name || 'N/A';
+                document.getElementById('yearLevel').textContent = subject.yearLevel || 'N/A';
+
+                // Update statistics
+                document.getElementById('unitCount').textContent = units.length;
+                const parts = units.reduce((count, unit) => count + (unit.parts?.length || 0), 0);
+                const sections = units.reduce((count, unit) => 
+                    count + (unit.parts?.reduce((pCount, part) => pCount + (part.sections?.length || 0), 0) || 0), 0);
+                document.getElementById('partCount').textContent = parts;
+                document.getElementById('sectionCount').textContent = sections;
+
+                // Display units
+                if (units.length === 0) {
+                    unitsContainer.innerHTML = `
+                        <div class="alert alert-info">
+                            <h5>No units found</h5>
+                            <p>This subject doesn't have any units yet. Click the "Add Unit" button above to create your first unit.</p>
+                            <a href="/teacher/subjects.html" class="btn btn-outline-primary mt-2">
+                                <i class="bi bi-arrow-left"></i> Back to Subjects
+                            </a>
+                        </div>
+                    `;
+                } else {
+                    displayUnits(units);
+                }
+            } catch (error) {
+                console.error('Error loading course structure:', error);
+                unitsContainer.innerHTML = `
+                    <div class="alert alert-danger">
+                        <h5>Error Loading Course Structure</h5>
+                        <p>${error.message}</p>
+                        <div class="mt-3">
+                            <a href="/teacher/subjects.html" class="btn btn-primary">
+                                <i class="bi bi-arrow-left"></i> Back to Subjects
+                            </a>
+                            <button class="btn btn-outline-primary ms-2" onclick="loadUnits()">
+                                <i class="bi bi-arrow-clockwise"></i> Try Again
+                            </button>
+                        </div>
+                    </div>
+                `;
+                subjectDetails.classList.add('d-none');
+            }
+        }
+
+        function displayUnits(units) {
+            const container = document.getElementById('unitsContainer');
+            container.innerHTML = '';
+
+            units.forEach(unit => {
+                const unitCard = document.createElement('div');
+                unitCard.className = 'unit-card';
+                unitCard.innerHTML = `
+                    <div class="unit-header">
+                        <h5 class="mb-0">
+                            <i class="bi bi-grip-vertical drag-handle"></i>
+                            ${unit.name}
+                        </h5>
+                        <div>
+                            <button class="btn btn-sm btn-primary" onclick="showAddPartModal('${unit.id}')">
+                                <i class="bi bi-plus-circle"></i> Add Part
+                            </button>
+                            <button class="btn btn-sm btn-outline-primary" onclick="editUnit('${unit.id}')">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="deleteUnit('${unit.id}')">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                    ${unit.description ? `
+                        <div class="content-card">
+                            <pre class="description-preview" onclick="toggleDescription(this)">${unit.description}</pre>
+                            <span class="expand-button" onclick="toggleDescription(this.previousElementSibling)">Show more</span>
+                        </div>
+                    ` : ''}
+                    <div class="parts-container">
+                        ${unit.parts ? unit.parts.map(part => `
+                            <div class="part-card">
+                                <div class="part-header">
+                                    <h6 class="mb-0">
+                                        <i class="bi bi-grip-vertical drag-handle"></i>
+                                        ${part.name}
+                                    </h6>
+                                    <div>
+                                        <button class="btn btn-sm btn-primary" onclick="showAddSectionModal('${part.id}')">
+                                            <i class="bi bi-plus-circle"></i> Add Section
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-primary" onclick="editPart('${part.id}')">
+                                            <i class="bi bi-pencil"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-danger" onclick="deletePart('${part.id}')">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                ${part.description ? `
+                                    <div class="content-card">
+                                        <pre class="description-preview" onclick="toggleDescription(this)">${part.description}</pre>
+                                        <span class="expand-button" onclick="toggleDescription(this.previousElementSibling)">Show more</span>
+                                    </div>
+                                ` : ''}
+                                <div class="sections-container">
+                                    ${part.sections ? part.sections.map(section => `
+                                        <div class="section-card">
+                                            <div class="section-header">
+                                                <span>
+                                                    <i class="bi bi-grip-vertical drag-handle"></i>
+                                                    ${section.name} <small class="text-muted">(Order: ${section.order})</small>
+                                                </span>
+                                                <div>
+                                                    <button class="btn btn-sm btn-outline-primary" onclick="editSection('${section.id}')">
+                                                        <i class="bi bi-pencil"></i>
+                                                    </button>
+                                                    <button class="btn btn-sm btn-outline-danger" onclick="deleteSection('${section.id}')">
+                                                        <i class="bi bi-trash"></i>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            ${section.description ? `
+                                                <div class="content-card">
+                                                    <pre class="description-preview" onclick="toggleDescription(this)">${section.description}</pre>
+                                                    <span class="expand-button" onclick="toggleDescription(this.previousElementSibling)">Show more</span>
+                                                </div>
+                                            ` : ''}
+                                        </div>
+                                    `).join('') : ''}
+                                </div>
+                            </div>
+                        `).join('') : ''}
+                    </div>
+                `;
+                container.appendChild(unitCard);
+            });
+        }
+
+        function toggleDescription(element) {
+            element.classList.toggle('expanded');
+            const button = element.nextElementSibling;
+            if (button) {
+                button.textContent = element.classList.contains('expanded') ? 'Show less' : 'Show more';
+            }
+        }
+
+        // Unit functions
+        function showAddUnitModal() {
+            document.getElementById('unitId').value = '';
+            document.getElementById('unitForm').reset();
+            document.getElementById('unitModalTitle').textContent = 'Add Unit';
+            document.getElementById('unitOrder').value = '1';
+            unitModal.show();
+        }
+
+        async function saveUnit() {
+            const unitId = document.getElementById('unitId').value;
+            const subjectId = document.getElementById('subjectSelect').value;
+            
+            if (!subjectId) {
+                alert('Please select a subject first');
+                return;
+            }
+
+            const data = {
+                name: document.getElementById('unitName').value,
+                description: document.getElementById('unitDescription').value,
+                order: parseInt(document.getElementById('unitOrder').value) || 1,
+            };
+
+            try {
+                const url = unitId ? 
+                    `/api/units/${unitId}` : 
+                    `/api/subjects/${subjectId}/units`;
+                
+                const response = await fetch(url, {
+                    method: unitId ? 'PUT' : 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Failed to save unit');
+                }
+
+                unitModal.hide();
+                loadUnits();
+            } catch (error) {
+                console.error('Error saving unit:', error);
+                alert(error.message || 'Failed to save unit');
+            }
+        }
+
+        // Part functions
+        function showAddPartModal(unitId) {
+            document.getElementById('partId').value = '';
+            document.getElementById('partUnitId').value = unitId;
+            document.getElementById('partForm').reset();
+            document.getElementById('partModalTitle').textContent = 'Add Part';
+            partModal.show();
+        }
+
+        async function savePart() {
+            const partId = document.getElementById('partId').value;
+            const data = {
+                name: document.getElementById('partName').value,
+                description: document.getElementById('partDescription').value,
+                order: parseInt(document.getElementById('partOrder').value),
+                unitId: document.getElementById('partUnitId').value
+            };
+
+            try {
+                const url = partId ? 
+                    `/api/parts/${partId}` : 
+                    `/api/units/${data.unitId}/parts`;
+                
+                const response = await fetch(url, {
+                    method: partId ? 'PUT' : 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                if (response.ok) {
+                    partModal.hide();
+                    loadUnits();
+                } else {
+                    const error = await response.json();
+                    alert(error.error || 'Failed to save part');
+                }
+            } catch (error) {
+                console.error('Error saving part:', error);
+                alert('Failed to save part');
+            }
+        }
+
+        // Section functions
+        function showAddSectionModal(partId) {
+            document.getElementById('sectionId').value = '';
+            document.getElementById('sectionPartId').value = partId;
+            document.getElementById('sectionForm').reset();
+            document.getElementById('sectionModalTitle').textContent = 'Add Section';
+            document.getElementById('customSectionNameDiv').style.display = 'none';
+            sectionModal.show();
+        }
+
+        async function saveSection() {
+            const sectionId = document.getElementById('sectionId').value;
+            const sectionNameSelect = document.getElementById('sectionName');
+            const sectionName = sectionNameSelect.value === 'custom' ? 
+                document.getElementById('customSectionName').value : 
+                sectionNameSelect.value;
+
+            const data = {
+                name: sectionName,
+                description: document.getElementById('sectionDescription').value,
+                order: parseInt(document.getElementById('sectionOrder').value),
+                partId: document.getElementById('sectionPartId').value
+            };
+
+            try {
+                const url = sectionId ? 
+                    `/api/sections/${sectionId}` : 
+                    `/api/parts/${data.partId}/sections`;
+                
+                const response = await fetch(url, {
+                    method: sectionId ? 'PUT' : 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                if (response.ok) {
+                    sectionModal.hide();
+                    loadUnits();
+                } else {
+                    const error = await response.json();
+                    alert(error.error || 'Failed to save section');
+                }
+            } catch (error) {
+                console.error('Error saving section:', error);
+                alert('Failed to save section');
+            }
+        }
+
+        // Delete functions
+        async function deleteUnit(unitId) {
+            if (!confirm('Are you sure you want to delete this unit?')) return;
+            try {
+                const response = await fetch(`/api/units/${unitId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                if (response.ok) {
+                    loadUnits();
+                } else {
+                    alert('Failed to delete unit');
+                }
+            } catch (error) {
+                console.error('Error deleting unit:', error);
+                alert('Failed to delete unit');
+            }
+        }
+
+        // Edit functions
+        async function editUnit(unitId) {
+            try {
+                const response = await fetch(`/api/units/${unitId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                const unit = await response.json();
+                
+                document.getElementById('unitId').value = unit.id;
+                document.getElementById('unitName').value = unit.name;
+                document.getElementById('unitDescription').value = unit.description || '';
+                document.getElementById('unitOrder').value = unit.order;
+                document.getElementById('unitModalTitle').textContent = 'Edit Unit';
+                
+                unitModal.show();
+            } catch (error) {
+                console.error('Error loading unit:', error);
+                alert('Failed to load unit');
+            }
+        }
+
+        async function deletePart(partId) {
+            if (!confirm('Are you sure you want to delete this part?')) return;
+            try {
+                const response = await fetch(`/api/parts/${partId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                if (response.ok) {
+                    loadUnits();
+                } else {
+                    alert('Failed to delete part');
+                }
+            } catch (error) {
+                console.error('Error deleting part:', error);
+                alert('Failed to delete part');
+            }
+        }
+
+        async function editPart(partId) {
+            try {
+                const response = await fetch(`/api/parts/${partId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                const part = await response.json();
+                
+                document.getElementById('partId').value = part.id;
+                document.getElementById('partUnitId').value = part.unitId;
+                document.getElementById('partName').value = part.name;
+                document.getElementById('partDescription').value = part.description || '';
+                document.getElementById('partOrder').value = part.order;
+                document.getElementById('partModalTitle').textContent = 'Edit Part';
+                
+                partModal.show();
+            } catch (error) {
+                console.error('Error loading part:', error);
+                alert('Failed to load part');
+            }
+        }
+
+        async function editSection(sectionId) {
+            try {
+                const response = await fetch(`/api/sections/${sectionId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                const section = await response.json();
+                
+                document.getElementById('sectionId').value = section.id;
+                document.getElementById('sectionPartId').value = section.partId;
+                
+                const sectionNameSelect = document.getElementById('sectionName');
+                const customSectionNameDiv = document.getElementById('customSectionNameDiv');
+                const customSectionName = document.getElementById('customSectionName');
+                
+                // Check if the section name matches any predefined options
+                const predefinedOptions = ['Language Focus', 'Time for a Joke', "Let's Practice", "Let's Talk"];
+                if (predefinedOptions.includes(section.name)) {
+                    sectionNameSelect.value = section.name;
+                    customSectionNameDiv.style.display = 'none';
+                } else {
+                    sectionNameSelect.value = 'custom';
+                    customSectionNameDiv.style.display = 'block';
+                    customSectionName.value = section.name;
+                }
+                
+                document.getElementById('sectionDescription').value = section.description || '';
+                document.getElementById('sectionOrder').value = section.order;
+                document.getElementById('sectionModalTitle').textContent = 'Edit Section';
+                
+                sectionModal.show();
+            } catch (error) {
+                console.error('Error loading section:', error);
+                alert('Failed to load section');
+            }
+        }
+
+        async function deleteSection(sectionId) {
+            if (!confirm('Are you sure you want to delete this section?')) return;
+            try {
+                const response = await fetch(`/api/sections/${sectionId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                if (response.ok) {
+                    loadUnits();
+                } else {
+                    alert('Failed to delete section');
+                }
+            } catch (error) {
+                console.error('Error deleting section:', error);
+                alert('Failed to delete section');
+            }
+        }
+
+        // Handle logout
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            localStorage.removeItem('token');
+            window.location.href = '/login';
+        });
+    </script>
+</body>
+</html> 

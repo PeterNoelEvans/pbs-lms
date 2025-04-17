@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teacher Resources</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .resource-card {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            background-color: white;
+        }
+        .resource-type-badge {
+            background-color: #e9ecef;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.875rem;
+        }
+        .subject-section {
+            margin-bottom: 30px;
+        }
+        .add-resource-btn {
+            margin-bottom: 20px;
+        }
+        .unit-section {
+            border-left: 3px solid #007bff;
+            padding-left: 15px;
+            margin-bottom: 25px;
+        }
+        .unit-section h3 {
+            color: #007bff;
+            font-size: 1.5rem;
+            margin-bottom: 15px;
+        }
+        .part-section {
+            border-left: 2px solid #6c757d;
+            padding-left: 15px;
+            margin-bottom: 20px;
+        }
+        .part-section h4 {
+            color: #495057;
+            font-size: 1.25rem;
+            margin-bottom: 10px;
+        }
+        .resources-container {
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="/teacher/dashboard.html">Teacher Portal</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/teacher/dashboard.html">Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/teacher/resources.html">Resources</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/teacher/subjects.html">Subjects</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/teacher/assessments.html">Assessments</a>
+                    </li>
+                </ul>
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <button class="btn btn-outline-light" onclick="logout()">Logout</button>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <h1>Resources Management</h1>
+        <p class="text-muted">Manage and organize your teaching resources by subject and topic.</p>
+
+        <div class="row mt-4">
+            <div class="col-md-3">
+                <!-- Subjects sidebar -->
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Subjects</h5>
+                    </div>
+                    <div class="list-group list-group-flush" id="subjectsList">
+                        <!-- Subjects will be loaded here -->
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-9">
+                <!-- Resources content -->
+                <div id="resourcesContent">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h2 id="currentSubjectTitle">Select a Subject</h2>
+                        <button class="btn btn-primary" onclick="showAddResourceModal()" style="display: none;" id="addResourceBtn">
+                            Add New Resource
+                        </button>
+                    </div>
+                    <div id="topicsList">
+                        <!-- Topics and their resources will be loaded here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Resource Modal -->
+    <div class="modal fade" id="addResourceModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Add New Resource</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="resourceForm">
+                        <div class="mb-3">
+                            <label for="topicSelect" class="form-label">Topic</label>
+                            <select class="form-control" id="topicSelect" required>
+                                <!-- Topics will be loaded here -->
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="resourceTitle" class="form-label">Title</label>
+                            <input type="text" class="form-control" id="resourceTitle" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="resourceDescription" class="form-label">Description</label>
+                            <textarea class="form-control" id="resourceDescription" rows="3"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label for="resourceType" class="form-label">Resource Type</label>
+                            <select class="form-control" id="resourceType" required>
+                                <option value="document">Document (PDF, Word, Text)</option>
+                                <option value="video">Video</option>
+                                <option value="audio">Audio</option>
+                                <option value="image">Image</option>
+                                <option value="link">External Link</option>
+                            </select>
+                        </div>
+                        <div id="urlInput" class="mb-3" style="display: none;">
+                            <label for="resourceUrl" class="form-label">URL</label>
+                            <input type="url" class="form-control" id="resourceUrl">
+                        </div>
+                        <div id="fileInput" class="mb-3">
+                            <label for="resourceFile" class="form-label">File</label>
+                            <input type="file" class="form-control" id="resourceFile">
+                            <small class="form-text text-muted">
+                                Supported formats: PDF, Word, Text, MP3, WAV, MP4, WebM, JPG, PNG, GIF
+                            </small>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="submitResource()">Add Resource</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let currentSubjectId = null;
+        const token = localStorage.getItem('token');
+        const addResourceModal = new bootstrap.Modal(document.getElementById('addResourceModal'));
+
+        // Check authentication
+        if (!token) {
+            window.location.href = '/login';
+        }
+
+        // Load subjects when page loads
+        document.addEventListener('DOMContentLoaded', loadSubjects);
+
+        async function loadSubjects() {
+            try {
+                const response = await fetch('/api/subjects', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                const subjects = await response.json();
+                
+                const subjectsList = document.getElementById('subjectsList');
+                subjectsList.innerHTML = subjects.map(subject => `
+                    <button class="list-group-item list-group-item-action" 
+                            onclick="loadSubjectResources('${subject.id}', \`${subject.name}\`)">
+                        ${subject.name}
+                    </button>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading subjects:', error);
+            }
+        }
+
+        async function loadSubjectResources(subjectId, subjectName) {
+            currentSubjectId = subjectId;
+            document.getElementById('currentSubjectTitle').textContent = subjectName;
+            document.getElementById('addResourceBtn').style.display = 'block';
+
+            try {
+                // Load subject structure
+                const structureResponse = await fetch(`/api/subjects/${subjectId}/structure`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                const structure = await structureResponse.json();
+
+                // Load resources
+                const resourcesResponse = await fetch(`/api/subjects/${subjectId}/resources`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                const resources = await resourcesResponse.json();
+
+                const topicsList = document.getElementById('topicsList');
+                topicsList.innerHTML = '';
+
+                // Update topic select in modal
+                const topicSelect = document.getElementById('topicSelect');
+                topicSelect.innerHTML = '<option value="">Select a location...</option>';
+
+                // Process each unit and its parts
+                if (structure.units && structure.units.length > 0) {
+                    structure.units.forEach(unit => {
+                        const unitSection = document.createElement('div');
+                        unitSection.className = 'unit-section mb-4';
+                        unitSection.innerHTML = `
+                            <h3>${unit.name}</h3>
+                            <div class="resources-container mb-3">
+                                ${resources
+                                    .filter(r => r.unitId === unit.id && !r.partId && !r.sectionId)
+                                    .map(createResourceCard)
+                                    .join('')}
+                            </div>
+                        `;
+
+                        // Add unit to topic select
+                        topicSelect.innerHTML += `
+                            <option value="unit:${unit.id}">📚 ${unit.name}</option>
+                        `;
+
+                        // Process parts within each unit
+                        if (unit.parts && unit.parts.length > 0) {
+                            unit.parts.forEach(part => {
+                                const partSection = document.createElement('div');
+                                partSection.className = 'part-section ms-4 mb-3';
+                                partSection.innerHTML = `
+                                    <h4>${part.name}</h4>
+                                    <div class="resources-container">
+                                        ${resources
+                                            .filter(r => r.partId === part.id && !r.sectionId)
+                                            .map(createResourceCard)
+                                            .join('')}
+                                    </div>
+                                `;
+
+                                // Add part to topic select
+                                topicSelect.innerHTML += `
+                                    <option value="part:${part.id}">📖 ${unit.name} - ${part.name}</option>
+                                `;
+
+                                // Process sections within each part
+                                if (part.sections && part.sections.length > 0) {
+                                    part.sections.forEach(section => {
+                                        const sectionDiv = document.createElement('div');
+                                        sectionDiv.className = 'section-content ms-4 mb-2';
+                                        sectionDiv.innerHTML = `
+                                            <h5>${section.name}</h5>
+                                            <div class="resources-container">
+                                                ${resources
+                                                    .filter(r => r.sectionId === section.id)
+                                                    .map(createResourceCard)
+                                                    .join('')}
+                                            </div>
+                                        `;
+                                        partSection.appendChild(sectionDiv);
+
+                                        // Add section to topic select
+                                        topicSelect.innerHTML += `
+                                            <option value="section:${section.id}">📝 ${unit.name} - ${part.name} - ${section.name}</option>
+                                        `;
+                                    });
+                                }
+
+                                unitSection.appendChild(partSection);
+                            });
+                        }
+
+                        topicsList.appendChild(unitSection);
+                    });
+                } else {
+                    topicsList.innerHTML = `
+                        <div class="alert alert-info">
+                            <h5>No Units Found</h5>
+                            <p>This subject doesn't have any units yet. Please add units and parts in the Course Structure page first.</p>
+                            <a href="/teacher/course-structure?subjectId=${subjectId}" class="btn btn-primary">
+                                Go to Course Structure
+                            </a>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error loading subject resources:', error);
+                topicsList.innerHTML = `
+                    <div class="alert alert-danger">
+                        <h5>Error Loading Resources</h5>
+                        <p>There was a problem loading the resources. Please try again.</p>
+                        <button onclick="loadSubjectResources('${subjectId}', '${subjectName}')" class="btn btn-outline-danger">
+                            Try Again
+                        </button>
+                    </div>
+                `;
+            }
+        }
+
+        function createResourceCard(resource) {
+            return `
+                <div class="resource-card">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h4>${resource.title}</h4>
+                            <p class="text-muted mb-2">${resource.description || 'No description'}</p>
+                            <span class="resource-type-badge">${resource.type}</span>
+                        </div>
+                        <button class="btn btn-danger btn-sm" onclick="deleteResource('${resource.id}')">
+                            Delete
+                        </button>
+                    </div>
+                    ${resource.url ? `
+                        <div class="mt-2">
+                            <a href="${resource.url}" target="_blank" class="btn btn-sm btn-primary">Open Link</a>
+                        </div>
+                    ` : ''}
+                    ${resource.filePath ? `
+                        <div class="mt-2">
+                            ${resource.type === 'image' ? `
+                                <img src="${resource.filePath}" class="img-fluid mb-2" style="max-height: 200px;">
+                            ` : ''}
+                            ${resource.type === 'audio' ? `
+                                <audio controls class="w-100">
+                                    <source src="${resource.filePath}" type="audio/mpeg">
+                                    Your browser does not support the audio element.
+                                </audio>
+                            ` : ''}
+                            ${resource.type === 'video' ? `
+                                <video controls class="w-100" style="max-height: 300px;">
+                                    <source src="${resource.filePath}" type="video/mp4">
+                                    Your browser does not support the video element.
+                                </video>
+                            ` : ''}
+                            <a href="${resource.filePath}" target="_blank" class="btn btn-sm btn-primary">
+                                ${resource.type === 'document' ? 'View Document' : 'Download File'}
+                            </a>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+
+        // Handle resource type change in modal
+        document.getElementById('resourceType').addEventListener('change', function(e) {
+            const urlInput = document.getElementById('urlInput');
+            const fileInput = document.getElementById('fileInput');
+            
+            if (e.target.value === 'link') {
+                urlInput.style.display = 'block';
+                fileInput.style.display = 'none';
+            } else {
+                urlInput.style.display = 'none';
+                fileInput.style.display = 'block';
+                
+                // Update file input accept attribute based on type
+                const acceptMap = {
+                    'document': '.pdf,.doc,.docx,.txt',
+                    'video': '.mp4,.webm',
+                    'audio': '.mp3,.wav',
+                    'image': '.jpg,.jpeg,.png,.gif'
+                };
+                document.getElementById('resourceFile').accept = acceptMap[e.target.value] || '';
+            }
+        });
+
+        function showAddResourceModal() {
+            addResourceModal.show();
+        }
+
+        async function submitResource() {
+            try {
+                const formData = new FormData();
+                const topicSelect = document.getElementById('topicSelect');
+                const [type, id] = topicSelect.value.split(':');
+                
+                formData.append('title', document.getElementById('resourceTitle').value);
+                formData.append('description', document.getElementById('resourceDescription').value);
+                formData.append('type', document.getElementById('resourceType').value);
+                formData.append('subjectId', currentSubjectId);
+
+                // Add the appropriate ID based on the selection
+                if (type === 'unit') formData.append('unitId', id);
+                if (type === 'part') formData.append('partId', id);
+                if (type === 'section') formData.append('sectionId', id);
+
+                // Handle file or URL based on resource type
+                if (document.getElementById('resourceType').value === 'link') {
+                    formData.append('url', document.getElementById('resourceUrl').value);
+                } else {
+                    const fileInput = document.getElementById('resourceFile');
+                    if (fileInput.files.length > 0) {
+                        formData.append('file', fileInput.files[0]);
+                    }
+                }
+
+                const response = await fetch('/api/resources', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to create resource');
+                }
+
+                // Reset form and reload resources
+                document.getElementById('resourceForm').reset();
+                addResourceModal.hide();
+                await loadSubjectResources(currentSubjectId, document.getElementById('currentSubjectTitle').textContent);
+            } catch (error) {
+                console.error('Error submitting resource:', error);
+                alert('Failed to create resource. Please try again.');
+            }
+        }
+
+        async function deleteResource(resourceId) {
+            if (!confirm('Are you sure you want to delete this resource?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/resources/${resourceId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (response.ok) {
+                    // Reload the current subject's resources
+                    if (currentSubjectId) {
+                        const subjectName = document.getElementById('currentSubjectTitle').textContent;
+                        loadSubjectResources(currentSubjectId, subjectName);
+                    }
+                } else {
+                    const error = await response.json();
+                    alert(error.message || 'Failed to delete resource');
+                }
+            } catch (error) {
+                console.error('Error deleting resource:', error);
+                alert('Failed to delete resource');
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('token');
+            window.location.href = '/login';
+        }
+    </script>
+</body>
+</html> 

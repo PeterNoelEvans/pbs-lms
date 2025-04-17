@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Assessments - Teacher Resource Platform</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css">
+    <style>
+        .question-card {
+            margin-bottom: 1rem;
+            border: 1px solid #dee2e6;
+            border-radius: 0.25rem;
+            padding: 1rem;
+        }
+        .audio-preview {
+            max-width: 100%;
+            margin-top: 0.5rem;
+        }
+        .choice-input {
+            margin-bottom: 0.5rem;
+        }
+        .remove-question {
+            float: right;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="#">Assessments</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="btn btn-outline-light me-2" href="/teacher/dashboard">
+                            <i class="bi bi-speedometer2"></i> Dashboard
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="btn btn-outline-light me-2" href="/teacher/subjects">
+                            <i class="bi bi-book"></i> Subjects
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="btn btn-outline-light me-2" href="/teacher/course-structure">
+                            <i class="bi bi-diagram-3"></i> Course Structure
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="btn btn-outline-light" href="/teacher/resources">
+                            <i class="bi bi-files"></i> Resources
+                        </a>
+                    </li>
+                </ul>
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <button class="btn btn-outline-light" id="logoutBtn">
+                            <i class="bi bi-box-arrow-right"></i> Logout
+                        </button>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h4>Create New Assessment</h4>
+                    </div>
+                    <div class="card-body">
+                        <div id="structurePath"></div>
+                        <form id="assessmentForm">
+                            <div class="mb-3">
+                                <label for="subjectSelect" class="form-label">Subject</label>
+                                <select class="form-select" id="subjectSelect" required>
+                                    <option value="">Select subject...</option>
+                                </select>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="unitSelect" class="form-label">Unit</label>
+                                <select class="form-select" id="unitSelect" required disabled>
+                                    <option value="">Select unit...</option>
+                                </select>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="partSelect" class="form-label">Part</label>
+                                <select class="form-select" id="partSelect" required disabled>
+                                    <option value="">Select part...</option>
+                                </select>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="sectionSelect" class="form-label">Section</label>
+                                <select class="form-select" id="sectionSelect" required disabled>
+                                    <option value="">Select section...</option>
+                                </select>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="assessmentType" class="form-label">Assessment Type</label>
+                                <select class="form-select" id="assessmentType" required onchange="updateQuestionOptions()">
+                                    <option value="quiz">Multiple Choice Quiz</option>
+                                    <option value="listening">Listening Comprehension</option>
+                                    <option value="speaking">Speaking Assessment</option>
+                                    <option value="mixed">Mixed Assessment</option>
+                                </select>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="title" class="form-label">Title</label>
+                                <input type="text" class="form-control" id="title" required>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="description" class="form-label">Instructions</label>
+                                <textarea class="form-control" id="description" rows="3" placeholder="Provide clear instructions for students..."></textarea>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="dueDate" class="form-label">Due Date</label>
+                                <input type="datetime-local" class="form-control" id="dueDate">
+                            </div>
+
+                            <div id="questionsSection">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <h5>Questions</h5>
+                                    <div class="btn-group">
+                                        <button type="button" class="btn btn-outline-primary" onclick="addQuestion('multiple-choice')">
+                                            <i class="bi bi-list-check"></i> Add Multiple Choice
+                                        </button>
+                                        <button type="button" class="btn btn-outline-primary" onclick="addQuestion('listening')">
+                                            <i class="bi bi-headphones"></i> Add Listening
+                                        </button>
+                                        <button type="button" class="btn btn-outline-primary" onclick="addQuestion('speaking')">
+                                            <i class="bi bi-mic"></i> Add Speaking
+                                        </button>
+                                    </div>
+                                </div>
+                                <div id="questionsList" class="mb-4"></div>
+                            </div>
+
+                            <div class="mt-4">
+                                <button type="submit" class="btn btn-primary">Create Assessment</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h4>Existing Assessments</h4>
+                    </div>
+                    <div class="card-body">
+                        <div id="existingAssessments">
+                            <!-- Assessments will be loaded here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const token = localStorage.getItem('token');
+        if (!token) {
+            window.location.href = '/login';
+        }
+
+        // Load subjects when page loads
+        document.addEventListener('DOMContentLoaded', loadSubjects);
+
+        // Handle subject selection
+        document.getElementById('subjectSelect').addEventListener('change', function() {
+            const subjectId = this.value;
+            if (subjectId) {
+                loadUnits(subjectId);
+                document.getElementById('unitSelect').disabled = false;
+            } else {
+                document.getElementById('unitSelect').disabled = true;
+                document.getElementById('partSelect').disabled = true;
+                document.getElementById('sectionSelect').disabled = true;
+            }
+        });
+
+        // Handle unit selection
+        document.getElementById('unitSelect').addEventListener('change', function() {
+            const unitId = this.value;
+            if (unitId) {
+                loadParts(unitId);
+                document.getElementById('partSelect').disabled = false;
+            } else {
+                document.getElementById('partSelect').disabled = true;
+                document.getElementById('sectionSelect').disabled = true;
+            }
+        });
+
+        // Handle part selection
+        document.getElementById('partSelect').addEventListener('change', function() {
+            const partId = this.value;
+            if (partId) {
+                loadSections(partId);
+                document.getElementById('sectionSelect').disabled = false;
+            } else {
+                document.getElementById('sectionSelect').disabled = true;
+            }
+        });
+
+        async function loadSubjects() {
+            try {
+                const response = await fetch('/api/subjects', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                const subjects = await response.json();
+                const select = document.getElementById('subjectSelect');
+                
+                subjects.forEach(subject => {
+                    const option = document.createElement('option');
+                    option.value = subject.id;
+                    option.textContent = subject.coreSubject.name;
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading subjects:', error);
+            }
+        }
+
+        async function loadUnits(subjectId) {
+            try {
+                const response = await fetch(`/api/subjects/${subjectId}/units`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                const units = await response.json();
+                const select = document.getElementById('unitSelect');
+                select.innerHTML = '<option value="">Select unit...</option>';
+                
+                units.forEach(unit => {
+                    const option = document.createElement('option');
+                    option.value = unit.id;
+                    option.textContent = unit.name;
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading units:', error);
+            }
+        }
+
+        async function loadParts(unitId) {
+            try {
+                const response = await fetch(`/api/units/${unitId}/parts`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                const parts = await response.json();
+                const select = document.getElementById('partSelect');
+                select.innerHTML = '<option value="">Select part...</option>';
+                
+                parts.forEach(part => {
+                    const option = document.createElement('option');
+                    option.value = part.id;
+                    option.textContent = `${part.name} (Order: ${part.order})`;
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading parts:', error);
+            }
+        }
+
+        async function loadSections(partId) {
+            try {
+                const response = await fetch(`/api/parts/${partId}/sections`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                const sections = await response.json();
+                const select = document.getElementById('sectionSelect');
+                select.innerHTML = '<option value="">Select section...</option>';
+                
+                sections.forEach(section => {
+                    const option = document.createElement('option');
+                    option.value = section.id;
+                    option.textContent = `${section.name} (Order: ${section.order})`;
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading sections:', error);
+            }
+        }
+
+        function updateQuestionOptions() {
+            const type = document.getElementById('assessmentType').value;
+            const buttonsContainer = document.querySelector('#questionsSection .btn-group');
+            
+            switch(type) {
+                case 'quiz':
+                    buttonsContainer.innerHTML = `
+                        <button type="button" class="btn btn-outline-primary" onclick="addQuestion('multiple-choice')">
+                            <i class="bi bi-list-check"></i> Add Multiple Choice
+                        </button>`;
+                    break;
+                case 'listening':
+                    buttonsContainer.innerHTML = `
+                        <button type="button" class="btn btn-outline-primary" onclick="addQuestion('listening')">
+                            <i class="bi bi-headphones"></i> Add Listening
+                        </button>`;
+                    break;
+                case 'speaking':
+                    buttonsContainer.innerHTML = `
+                        <button type="button" class="btn btn-outline-primary" onclick="addQuestion('speaking')">
+                            <i class="bi bi-mic"></i> Add Speaking
+                        </button>`;
+                    break;
+                case 'mixed':
+                    buttonsContainer.innerHTML = `
+                        <button type="button" class="btn btn-outline-primary" onclick="addQuestion('multiple-choice')">
+                            <i class="bi bi-list-check"></i> Add Multiple Choice
+                        </button>
+                        <button type="button" class="btn btn-outline-primary" onclick="addQuestion('listening')">
+                            <i class="bi bi-headphones"></i> Add Listening
+                        </button>
+                        <button type="button" class="btn btn-outline-primary" onclick="addQuestion('speaking')">
+                            <i class="bi bi-mic"></i> Add Speaking
+                        </button>`;
+                    break;
+            }
+        }
+
+        function addQuestion(type) {
+            const questionsList = document.getElementById('questionsList');
+            const questionId = 'question_' + Date.now();
+            
+            let questionHtml = `
+                <div class="card mb-3" id="${questionId}">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0">${type.charAt(0).toUpperCase() + type.slice(1)} Question</h6>
+                        <button type="button" class="btn btn-outline-danger btn-sm" onclick="removeQuestion('${questionId}')">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                    <div class="card-body">`;
+
+            switch(type) {
+                case 'multiple-choice':
+                    questionHtml += `
+                        <div class="mb-3">
+                            <label class="form-label">Question Text</label>
+                            <textarea class="form-control" rows="2" required></textarea>
+                        </div>
+                        <div class="choices-container">
+                            <label class="form-label">Choices</label>
+                            <div class="mb-2">
+                                <div class="input-group">
+                                    <div class="input-group-text">
+                                        <input type="radio" name="correct_${questionId}" required>
+                                    </div>
+                                    <input type="text" class="form-control" placeholder="Choice 1" required>
+                                    <button type="button" class="btn btn-outline-danger" onclick="removeChoice(this)">
+                                        <i class="bi bi-dash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-outline-primary btn-sm" onclick="addChoice('${questionId}')">
+                                <i class="bi bi-plus"></i> Add Choice
+                            </button>
+                        </div>`;
+                    break;
+
+                case 'listening':
+                    questionHtml += `
+                        <div class="mb-3">
+                            <label class="form-label">Audio File</label>
+                            <input type="file" class="form-control" accept="audio/*" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Question Text</label>
+                            <textarea class="form-control" rows="2" placeholder="What did you hear?" required></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Expected Answer</label>
+                            <textarea class="form-control" rows="2" placeholder="Correct answer or key points to listen for" required></textarea>
+                        </div>`;
+                    break;
+
+                case 'speaking':
+                    questionHtml += `
+                        <div class="mb-3">
+                            <label class="form-label">Speaking Prompt</label>
+                            <textarea class="form-control" rows="2" placeholder="What should the student talk about?" required></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Time Limit (seconds)</label>
+                            <input type="number" class="form-control" min="10" max="300" value="60" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Evaluation Criteria</label>
+                            <textarea class="form-control" rows="3" placeholder="How will you evaluate the response? (pronunciation, fluency, content, etc.)" required></textarea>
+                        </div>`;
+                    break;
+            }
+
+            questionHtml += `
+                    </div>
+                </div>`;
+            
+            questionsList.insertAdjacentHTML('beforeend', questionHtml);
+        }
+
+        function removeQuestion(questionId) {
+            document.getElementById(questionId).remove();
+        }
+
+        function addChoice(questionId) {
+            const choicesContainer = document.querySelector(`#${questionId} .choices-container`);
+            const choiceCount = choicesContainer.querySelectorAll('.input-group').length + 1;
+            
+            const choiceHtml = `
+                <div class="mb-2">
+                    <div class="input-group">
+                        <div class="input-group-text">
+                            <input type="radio" name="correct_${questionId}" required>
+                        </div>
+                        <input type="text" class="form-control" placeholder="Choice ${choiceCount}" required>
+                        <button type="button" class="btn btn-outline-danger" onclick="removeChoice(this)">
+                            <i class="bi bi-dash"></i>
+                        </button>
+                    </div>
+                </div>`;
+            
+            choicesContainer.insertBefore(
+                new DOMParser().parseFromString(choiceHtml, 'text/html').body.firstChild,
+                choicesContainer.lastElementChild
+            );
+        }
+
+        function removeChoice(button) {
+            const choiceContainer = button.closest('.choices-container');
+            if (choiceContainer.querySelectorAll('.input-group').length > 1) {
+                button.closest('.mb-2').remove();
+            }
+        }
+
+        async function handleAudioUpload(input) {
+            const file = input.files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch('/api/assessments/upload-audio', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: formData
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    const audioPreview = input.nextElementSibling;
+                    const audioUrl = input.nextElementSibling.nextElementSibling;
+                    
+                    audioPreview.src = data.filePath;
+                    audioPreview.style.display = 'block';
+                    audioUrl.value = data.filePath;
+                } else {
+                    alert('Failed to upload audio file');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Failed to upload audio file');
+            }
+        }
+
+        document.getElementById('assessmentForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData();
+            formData.append('title', document.getElementById('title').value);
+            formData.append('type', document.getElementById('assessmentType').value);
+            formData.append('description', document.getElementById('description').value);
+            formData.append('dueDate', document.getElementById('dueDate').value);
+            formData.append('sectionId', document.getElementById('sectionSelect').value);
+            
+            const questions = [];
+            document.querySelectorAll('#questionsList .card').forEach(questionCard => {
+                const type = questionCard.querySelector('.card-header h6').textContent.toLowerCase().replace(' question', '');
+                const question = {
+                    type: type,
+                    text: questionCard.querySelector('textarea').value
+                };
+                
+                switch(type) {
+                    case 'multiple-choice':
+                        const choices = [];
+                        let correctIndex = -1;
+                        questionCard.querySelectorAll('.input-group').forEach((group, index) => {
+                            choices.push(group.querySelector('input[type="text"]').value);
+                            if (group.querySelector('input[type="radio"]').checked) {
+                                correctIndex = index;
+                            }
+                        });
+                        question.choices = choices;
+                        question.correctIndex = correctIndex;
+                        break;
+                        
+                    case 'listening':
+                        const audioFile = questionCard.querySelector('input[type="file"]').files[0];
+                        if (audioFile) {
+                            formData.append('audio_' + questions.length, audioFile);
+                            question.audioFileName = 'audio_' + questions.length;
+                        }
+                        question.expectedAnswer = questionCard.querySelectorAll('textarea')[1].value;
+                        break;
+                        
+                    case 'speaking':
+                        question.timeLimit = parseInt(questionCard.querySelector('input[type="number"]').value);
+                        question.evaluationCriteria = questionCard.querySelectorAll('textarea')[1].value;
+                        break;
+                }
+                
+                questions.push(question);
+            });
+            
+            formData.append('questions', JSON.stringify(questions));
+            
+            try {
+                const response = await fetch('/api/sections/' + document.getElementById('sectionSelect').value + '/assessments', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: formData
+                });
+                
+                if (response.ok) {
+                    alert('Assessment created successfully!');
+                    location.reload();
+                } else {
+                    const error = await response.json();
+                    alert('Error creating assessment: ' + error.message);
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Failed to create assessment. Please try again.');
+            }
+        });
+
+        // Show/hide fields based on assessment type
+        document.getElementById('assessmentType').addEventListener('change', function() {
+            const isQuiz = this.value === 'quiz';
+            document.getElementById('descriptionField').style.display = isQuiz ? 'none' : 'block';
+            document.getElementById('dueDateField').style.display = isQuiz ? 'none' : 'block';
+            document.getElementById('questionsSection').style.display = isQuiz ? 'block' : 'none';
+        });
+
+        // Handle logout
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            localStorage.removeItem('token');
+            window.location.href = '/login';
+        });
+
+        // Add a function to display the selected course structure path
+        function updateStructurePath() {
+            const subjectSelect = document.getElementById('subjectSelect');
+            const unitSelect = document.getElementById('unitSelect');
+            const partSelect = document.getElementById('partSelect');
+            const sectionSelect = document.getElementById('sectionSelect');
+            
+            const path = [];
+            
+            if (subjectSelect.selectedOptions[0]?.text) {
+                path.push(subjectSelect.selectedOptions[0].text);
+            }
+            if (unitSelect.selectedOptions[0]?.text) {
+                path.push(unitSelect.selectedOptions[0].text);
+            }
+            if (partSelect.selectedOptions[0]?.text) {
+                path.push(partSelect.selectedOptions[0].text);
+            }
+            if (sectionSelect.selectedOptions[0]?.text) {
+                path.push(sectionSelect.selectedOptions[0].text);
+            }
+            
+            const pathDisplay = document.getElementById('structurePath');
+            if (path.length > 0) {
+                pathDisplay.innerHTML = `
+                    <div class="alert alert-info">
+                        <i class="bi bi-diagram-3"></i>
+                        Current Path: ${path.join(' > ')}
+                    </div>`;
+            } else {
+                pathDisplay.innerHTML = '';
+            }
+        }
+
+        // Add event listeners for path updates
+        document.getElementById('subjectSelect').addEventListener('change', updateStructurePath);
+        document.getElementById('unitSelect').addEventListener('change', updateStructurePath);
+        document.getElementById('partSelect').addEventListener('change', updateStructurePath);
+        document.getElementById('sectionSelect').addEventListener('change', updateStructurePath);
+    </script>
+</body>
+</html>

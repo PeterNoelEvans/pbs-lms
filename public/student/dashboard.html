@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Dashboard - Teacher Resource Platform</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css">
+    <style>
+        .sidebar {
+            min-height: 100vh;
+            background-color: #2c3e50;
+            padding: 20px;
+        }
+        .sidebar .nav-link {
+            color: #ecf0f1;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .sidebar .nav-link:hover {
+            color: #3498db;
+            background-color: rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+        }
+        .sidebar .nav-link.active {
+            background-color: #34495e;
+            border-radius: 5px;
+        }
+        .main-content {
+            padding: 20px;
+            background-color: #f8f9fa;
+        }
+        .welcome-section {
+            background: linear-gradient(135deg, #3498db, #2c3e50);
+            padding: 30px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+            color: white;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .welcome-section h1 {
+            margin-bottom: 10px;
+            font-size: 2.2rem;
+        }
+        .stats-card {
+            background-color: white;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            transition: transform 0.2s;
+        }
+        .stats-card:hover {
+            transform: translateY(-5px);
+        }
+        .stats-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin: 15px 0;
+            color: #2c3e50;
+        }
+        .progress {
+            height: 8px;
+            border-radius: 4px;
+        }
+        .quick-action-btn {
+            padding: 12px 20px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .quick-action-btn:hover {
+            transform: translateY(-2px);
+        }
+        .card {
+            border: none;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            transition: transform 0.2s;
+        }
+        .card:hover {
+            transform: translateY(-3px);
+        }
+        .section-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: #2c3e50;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <div class="col-md-3 col-lg-2 sidebar">
+                <h3 class="text-white mb-4">Student Portal</h3>
+                <nav class="nav flex-column">
+                    <a class="nav-link active" href="/student/dashboard">
+                        <i class="bi bi-house-door"></i> Dashboard
+                    </a>
+                    <a class="nav-link" href="/student/subjects">
+                        <i class="bi bi-book"></i> My Subjects
+                    </a>
+                    <a class="nav-link" href="/student/progress">
+                        <i class="bi bi-graph-up"></i> My Progress
+                    </a>
+                    <a class="nav-link" href="/student/resources">
+                        <i class="bi bi-files"></i> Resources
+                    </a>
+                    <button class="btn btn-danger mt-4 w-100 d-flex align-items-center gap-2" id="logoutBtn">
+                        <i class="bi bi-box-arrow-right"></i> Logout
+                    </button>
+                </nav>
+            </div>
+
+            <!-- Main Content -->
+            <div class="col-md-9 col-lg-10 main-content">
+                <div class="welcome-section">
+                    <h1>Welcome, <span id="studentName">Student</span>!</h1>
+                    <p class="mb-0">Your selected courses: <span id="classInfo">Loading...</span></p>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="stats-card">
+                            <div class="d-flex align-items-center">
+                                <i class="bi bi-book text-primary" style="font-size: 2rem;"></i>
+                                <div class="ms-3">
+                                    <h4>Subjects</h4>
+                                    <p class="stats-number mb-0">0</p>
+                                    <small class="text-muted">Active subjects</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="stats-card">
+                            <div class="d-flex align-items-center">
+                                <i class="bi bi-check2-circle text-success" style="font-size: 2rem;"></i>
+                                <div class="ms-3">
+                                    <h4>Quizzes</h4>
+                                    <p class="stats-number mb-0">0</p>
+                                    <small class="text-muted">Completed quizzes</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="stats-card">
+                            <div class="d-flex align-items-center">
+                                <i class="bi bi-file-earmark-text text-info" style="font-size: 2rem;"></i>
+                                <div class="ms-3">
+                                    <h4>Resources</h4>
+                                    <p class="stats-number mb-0">0</p>
+                                    <small class="text-muted">Available resources</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mt-4">
+                    <div class="col-12">
+                        <div class="stats-card">
+                            <h4 class="section-title">Quick Actions</h4>
+                            <div class="d-flex gap-3 mt-3">
+                                <button class="btn btn-primary quick-action-btn flex-grow-1">
+                                    <i class="bi bi-play-circle"></i> Start Quiz
+                                </button>
+                                <button class="btn btn-success quick-action-btn flex-grow-1">
+                                    <i class="bi bi-collection"></i> View Resources
+                                </button>
+                                <button class="btn btn-info quick-action-btn flex-grow-1 text-white">
+                                    <i class="bi bi-graph-up"></i> Check Progress
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mt-4">
+                    <div class="col-12">
+                        <div class="stats-card">
+                            <h4 class="section-title">Core Subject Areas</h4>
+                            <div id="coreSubjects" class="mt-3">
+                                <p class="text-muted">Loading core subject areas...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mt-4">
+                    <div class="col-12">
+                        <div class="stats-card">
+                            <h4 class="section-title">My Enrolled Subjects</h4>
+                            <div id="enrolledSubjects" class="mt-3">
+                                <p class="text-muted">Loading enrolled subjects...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mt-4">
+                    <div class="col-12">
+                        <div class="stats-card">
+                            <h4 class="section-title">Available Subjects for Enrollment</h4>
+                            <div id="availableSubjects" class="mt-3">
+                                <p class="text-muted">Loading available subjects...</p>
+                            </div>
+                            <div class="mt-4">
+                                <button class="btn btn-primary quick-action-btn" onclick="window.location.href='/student/course-selection'">
+                                    <i class="bi bi-plus-circle"></i> Select Subjects
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Check if user is logged in
+        const token = localStorage.getItem('token');
+        if (!token) {
+            window.location.href = '/login';
+        }
+
+        // Load user info and subjects
+        async function loadDashboard() {
+            try {
+                // Load user info
+                const userResponse = await fetch('/api/user/info', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (!userResponse.ok) {
+                    throw new Error('Failed to load user info');
+                }
+
+                const userData = await userResponse.json();
+                
+                // Update user name and class info
+                document.getElementById('studentName').textContent = userData.user.name;
+                document.getElementById('classInfo').textContent = 
+                    `${userData.user.yearLevel <= 6 ? 'P' : 'M'}${userData.user.yearLevel <= 6 ? userData.user.yearLevel : userData.user.yearLevel - 6}${userData.user.class ? ` - Class ${userData.user.class}` : ''}`;
+
+                // Update subjects count
+                const subjectsCount = userData.user.subjects ? userData.user.subjects.length : 0;
+                document.querySelector('.stats-number').textContent = subjectsCount;
+
+                // Load core subjects that have available subjects for the student's year level
+                const availableSubjectsResponse = await fetch('/api/subjects/available', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (!availableSubjectsResponse.ok) {
+                    throw new Error('Failed to load available subjects');
+                }
+
+                const availableData = await availableSubjectsResponse.json();
+                
+                // Get unique core subjects from enrolled subjects
+                const enrolledCoreSubjects = (userData.user.subjects || [])
+                    .map(s => s.coreSubject)
+                    .filter(Boolean);
+                
+                const coreSubjectsDiv = document.getElementById('coreSubjects');
+                if (enrolledCoreSubjects.length > 0) {
+                    coreSubjectsDiv.innerHTML = enrolledCoreSubjects.map(subject => `
+                        <div class="col-md-6 col-lg-4 mb-3">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <div class="d-flex align-items-center">
+                                        <i class="bi bi-book-half text-primary me-3" style="font-size: 1.5rem;"></i>
+                                        <div>
+                                            <h5 class="card-title mb-1">${subject.name}</h5>
+                                            <p class="card-text text-muted mb-0">${subject.description || 'Core subject area for your year level'}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    coreSubjectsDiv.innerHTML = `
+                        <div class="text-center py-4">
+                            <i class="bi bi-info-circle text-muted" style="font-size: 2rem;"></i>
+                            <p class="text-muted mt-2">No core subject areas available for your year level yet.</p>
+                        </div>
+                    `;
+                }
+
+                // Update enrolled subjects with grid layout
+                const enrolledSubjectsDiv = document.getElementById('enrolledSubjects');
+                if (userData.user.subjects && userData.user.subjects.length > 0) {
+                    enrolledSubjectsDiv.innerHTML = `
+                        <div class="row">
+                            ${userData.user.subjects.map(subject => `
+                                <div class="col-md-6 col-lg-4 mb-3">
+                                    <div class="card h-100">
+                                        <div class="card-body">
+                                            <div class="d-flex align-items-center">
+                                                <i class="bi bi-journal-text text-success me-3" style="font-size: 1.5rem;"></i>
+                                                <div>
+                                                    <h5 class="card-title mb-1">${subject.name}</h5>
+                                                    <p class="card-text text-muted mb-0">${subject.description || 'No description available'}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                } else {
+                    enrolledSubjectsDiv.innerHTML = `
+                        <div class="text-center py-4">
+                            <i class="bi bi-mortarboard text-muted" style="font-size: 2rem;"></i>
+                            <p class="text-muted mt-2">You haven't enrolled in any subjects yet. Click "Select Subjects" to get started.</p>
+                        </div>
+                    `;
+                }
+
+                // Update available subjects message
+                const availableSubjectsDiv = document.getElementById('availableSubjects');
+                if (availableData.subjects && availableData.subjects.length > 0) {
+                    availableSubjectsDiv.innerHTML = `
+                        <div class="row">
+                            ${availableData.subjects.map(subject => `
+                                <div class="col-md-6 col-lg-4 mb-3">
+                                    <div class="card h-100">
+                                        <div class="card-body">
+                                            <div class="d-flex align-items-center">
+                                                <i class="bi bi-journal-plus text-info me-3" style="font-size: 1.5rem;"></i>
+                                                <div>
+                                                    <h5 class="card-title mb-1">${subject.name}</h5>
+                                                    <p class="card-text text-muted mb-0">
+                                                        ${subject.description || 'No description available'}<br>
+                                                        <small class="text-primary">Core Subject Area: ${subject.coreSubject}</small>
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                } else {
+                    availableSubjectsDiv.innerHTML = `
+                        <div class="text-center py-4">
+                            <i class="bi bi-journal-check text-muted" style="font-size: 2rem;"></i>
+                            <p class="text-muted mt-2">You're enrolled in all available subjects for your year level.</p>
+                        </div>
+                    `;
+                }
+
+                // Update Quick Actions
+                const startQuizBtn = document.querySelector('.quick-action-btn:nth-child(1)');
+                const viewResourcesBtn = document.querySelector('.quick-action-btn:nth-child(2)');
+                const checkProgressBtn = document.querySelector('.quick-action-btn:nth-child(3)');
+
+                // Disable Start Quiz if no quizzes available
+                startQuizBtn.disabled = true;
+                startQuizBtn.title = 'No quizzes available yet';
+
+                // Link View Resources to resources page
+                viewResourcesBtn.onclick = () => window.location.href = '/student/resources';
+
+                // Link Check Progress to progress page
+                checkProgressBtn.onclick = () => window.location.href = '/student/progress';
+
+            } catch (error) {
+                console.error('Error loading dashboard:', error);
+                // Show error message to user
+                const alert = document.createElement('div');
+                alert.className = 'alert alert-danger';
+                alert.innerHTML = `
+                    <div class="d-flex align-items-center">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        Failed to load dashboard information. Please try refreshing the page.
+                    </div>
+                `;
+                document.querySelector('.main-content').prepend(alert);
+            }
+        }
+
+        // Initialize the dashboard
+        document.addEventListener('DOMContentLoaded', loadDashboard);
+
+        // Logout functionality
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            localStorage.removeItem('token');
+            window.location.href = '/login';
+        });
+    </script>
+</body>
+</html> 

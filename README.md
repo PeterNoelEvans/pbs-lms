@@ -125,6 +125,20 @@ If you have any issues:
 - Log out when you're done
 - Use the dashboard to manage your portfolio visibility
 
+## Password Reset Instructions
+If you forget your password, follow these steps to reset it:
+
+1. Go to the login page
+2. Click on "Forgot Password" link
+3. Enter your email address
+4. Check your email for the reset link (during development, the reset token will be shown in the console)
+5. Click the reset link or go to `/reset-password.html?token=YOUR_TOKEN`
+6. Enter your new password and confirm it
+7. After successful reset, you'll be redirected to the login page
+8. Log in with your new password
+
+Note: Reset links expire after 1 hour for security reasons. If your link expires, simply request a new one.
+
 ### Features
 
 #### Portfolio Management

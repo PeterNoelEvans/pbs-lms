@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Auth Test</title>
+</head>
+<body>
+    <h1>Authentication Test</h1>
+    <div id="result"></div>
+
+    <script>
+        async function checkRole() {
+            const token = localStorage.getItem('token');
+            const resultDiv = document.getElementById('result');
+            
+            if (!token) {
+                resultDiv.innerHTML = 'No token found. Please log in.';
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/debug/user-role', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                const data = await response.json();
+                resultDiv.innerHTML = `
+                    <h2>User Information:</h2>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                    <p>Token from localStorage: ${token}</p>
+                    <p>Stored Role in localStorage: ${localStorage.getItem('userRole')}</p>
+                `;
+            } catch (error) {
+                resultDiv.innerHTML = `Error: ${error.message}`;
+            }
+        }
+
+        // Run the check when the page loads
+        checkRole();
+    </script>
+</body>
+</html> 

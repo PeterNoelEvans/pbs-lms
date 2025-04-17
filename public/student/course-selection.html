@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Course Selection - Teacher Resource Platform</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .course-card {
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border: 1px solid #dee2e6;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .course-card:hover {
+            background-color: #f8f9fa;
+        }
+        .course-card.selected {
+            background-color: #e7f5ff;
+            border-color: #339af0;
+        }
+        .course-checkbox {
+            margin-right: 1rem;
+        }
+        .course-info {
+            flex-grow: 1;
+        }
+        .course-description {
+            color: #6c757d;
+            font-size: 0.9rem;
+        }
+        .teacher-info {
+            font-size: 0.8rem;
+            color: #495057;
+            margin-top: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <h1>Select Your Courses</h1>
+        <p class="lead">Choose the subjects you are currently taking</p>
+
+        <div id="subjectList" class="mt-4">
+            <p class="text-muted">Loading available subjects...</p>
+        </div>
+
+        <button class="btn btn-success mt-3" onclick="saveSelection()">Save Selection</button>
+    </div>
+
+    <script>
+        // Check if user is logged in
+        const token = localStorage.getItem('token');
+        if (!token) {
+            window.location.href = '/login';
+        }
+
+        // Load available subjects
+        async function loadSubjects() {
+            try {
+                const response = await fetch('/api/subjects/available', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to load subjects');
+                }
+
+                const data = await response.json();
+                console.log('Available subjects:', data);
+
+                const subjectList = document.getElementById('subjectList');
+                if (data.subjects && data.subjects.length > 0) {
+                    subjectList.innerHTML = data.subjects.map(subject => `
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" value="${subject.id}" id="subject-${subject.id}">
+                                    <label class="form-check-label" for="subject-${subject.id}">
+                                        <h5 class="card-title">${subject.name}</h5>
+                                        <p class="card-text text-muted">${subject.description || 'No description available'}</p>
+                                        <small>Core Subject: ${subject.coreSubject.name}</small>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('');
+                } else {
+                    subjectList.innerHTML = '<div class="alert alert-info">No subjects available for enrollment</div>';
+                }
+            } catch (error) {
+                console.error('Error loading subjects:', error);
+                document.getElementById('subjectList').innerHTML = `
+                    <div class="alert alert-danger">
+                        Failed to load subjects. Please try refreshing the page.
+                    </div>
+                `;
+            }
+        }
+
+        // Save subject selection
+        async function saveSelection() {
+            try {
+                const selectedSubjects = Array.from(document.querySelectorAll('input[type="checkbox"]:checked'))
+                    .map(checkbox => checkbox.value);
+
+                console.log('Selected subjects:', selectedSubjects);
+
+                const response = await fetch('/api/student/courses', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ courseIds: selectedSubjects })
+                });
+
+                const data = await response.json();
+                console.log('Save response:', data);
+
+                if (!response.ok) {
+                    throw new Error(data.message || 'Failed to save course selection');
+                }
+
+                if (data.success) {
+                    window.location.href = '/student/dashboard';
+                } else {
+                    throw new Error(data.message || 'Failed to save course selection');
+                }
+            } catch (error) {
+                console.error('Error saving selection:', error);
+                alert('Failed to save your course selection. Please try again.');
+            }
+        }
+
+        // Initialize the page
+        loadSubjects();
+    </script>
+</body>
+</html> 

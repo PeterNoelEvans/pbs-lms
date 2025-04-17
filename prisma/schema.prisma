@@ -1,0 +1,263 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model User {
+  id                String              @id @default(uuid())
+  name              String
+  email             String              @unique
+  password          String
+  role              String              // ADMIN, TEACHER, STUDENT
+  nickname          String?
+  yearLevel         Int?
+  class             String?
+  active            Boolean             @default(true)
+  lastLogin         DateTime?
+  resetToken        String?
+  resetTokenExpiry  DateTime?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  studentProgress   StudentProgress[]
+  studentCourses    StudentCourse[]
+  subjectTeacher    SubjectTeacher[]
+  // Existing relationships
+  createdResources Resource[] @relation("resourceCreator")
+  assessments   Assessment[]
+  resourcesUsed ResourceUsage[]
+  children      User[]    @relation("ParentChild")
+  parentId      String?   
+  parent        User?     @relation("ParentChild", fields: [parentId], references: [id])
+}
+
+model CoreSubject {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  subjects    Subject[]
+}
+
+model Subject {
+  id            String    @id @default(uuid())
+  name          String    // The book name (e.g. "Let's Find Out", "Project")
+  description   String?
+  yearLevel     Int
+  coreSubject   CoreSubject @relation(fields: [coreSubjectId], references: [id])
+  coreSubjectId String
+  teachers      SubjectTeacher[]
+  // Terminology configuration
+  unitTerm      String    @default("Unit")      // e.g. "Unit", "Chapter", "Module"
+  partTerm      String    @default("Part")      // e.g. "Lesson", "Topic", "Session"
+  sectionTerm   String    @default("Section")   // e.g. "Activity", "Exercise", "Task"
+  // Archive status fields
+  isArchived    Boolean   @default(false)
+  archivedAt    DateTime?
+  archiveReason String?
+  transferredAt DateTime?
+  // Existing fields
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  topics        Topic[]
+  units         Unit[]
+  weeklySchedules WeeklySchedule[]
+  studentProgress StudentProgress[]
+  studentCourses StudentCourse[]
+
+  @@unique([name, coreSubjectId, yearLevel])
+}
+
+model Topic {
+  id          String    @id @default(uuid())
+  name        String
+  description String?
+  order       Int
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  subject     Subject   @relation(fields: [subjectId], references: [id])
+  subjectId   String
+  resources   Resource[]
+  assessments Assessment[] @relation("TopicAssessments")
+  studentProgress StudentProgress[]
+}
+
+model Resource {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  type        String   // 'document', 'video', 'audio', 'link', 'poster'
+  url         String?  // For external links, videos, and audio
+  content     String?  // For HTML content
+  filePath    String?  // For uploaded files
+  thumbnail   String?  // For video thumbnails or poster previews
+  duration    Int?     // For video/audio duration in seconds
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  topic       Topic    @relation(fields: [topicId], references: [id])
+  topicId     String
+  createdBy   User     @relation("resourceCreator", fields: [userId], references: [id])
+  userId      String
+  usageCount  Int      @default(0)
+  usedBy      ResourceUsage[]
+  metadata    Json?    // For additional metadata like video quality, file size, etc.
+  sections    Section[]
+  weeklySchedules WeeklySchedule[]
+}
+
+model ResourceUsage {
+  id         String   @id @default(uuid())
+  resource   Resource @relation(fields: [resourceId], references: [id])
+  resourceId String
+  user       User     @relation(fields: [userId], references: [id])
+  userId     String
+  usedAt     DateTime @default(now())
+  @@unique([resourceId, userId])
+}
+
+model Unit {
+  id          String    @id @default(uuid())
+  name        String
+  description String?
+  order       Int
+  subject     Subject   @relation(fields: [subjectId], references: [id])
+  subjectId   String
+  parts       Part[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Part {
+  id          String    @id @default(uuid())
+  name        String
+  description String?
+  order       Int
+  unit        Unit      @relation(fields: [unitId], references: [id])
+  unitId      String
+  sections    Section[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Section {
+  id          String       @id @default(uuid())
+  name        String
+  description String?
+  order       Int
+  part        Part         @relation(fields: [partId], references: [id])
+  partId      String
+  assessments Assessment[]
+  resources   Resource[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model Assessment {
+  id          String    @id @default(uuid())
+  title       String
+  type        String    // 'quiz' or 'assignment'
+  questions   Json?     // For quizzes
+  description String?   // For assignments
+  dueDate     DateTime? // For assignments
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  section     Section   @relation(fields: [sectionId], references: [id])
+  sectionId   String
+  createdBy   User      @relation(fields: [userId], references: [id])
+  userId      String
+  mediaFiles  MediaFile[] // For audio questions and other media
+  topic       Topic?    @relation("TopicAssessments", fields: [topicId], references: [id])
+  topicId     String?
+  weeklySchedule WeeklySchedule? @relation(fields: [weeklyScheduleId], references: [id])
+  weeklyScheduleId String?
+}
+
+model MediaFile {
+  id            String     @id @default(uuid())
+  type          String     // 'audio', 'video', 'image'
+  url           String?    // For external media
+  filePath      String?    // For uploaded files
+  duration      Int?       // For audio/video duration in seconds
+  assessment    Assessment @relation(fields: [assessmentId], references: [id])
+  assessmentId  String
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+}
+
+model StudentProgress {
+  id          String   @id @default(uuid())
+  student     User     @relation(fields: [studentId], references: [id])
+  studentId   String
+  subject     Subject  @relation(fields: [subjectId], references: [id])
+  subjectId   String
+  topic       Topic    @relation(fields: [topicId], references: [id])
+  topicId     String
+  status      String   // 'NOT_STARTED', 'IN_PROGRESS', 'COMPLETED'
+  score       Float?
+  lastUpdated DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([studentId, subjectId, topicId])
+}
+
+model WeeklySchedule {
+  id          String      @id @default(uuid())
+  weekNumber  Int
+  startDate   DateTime
+  endDate     DateTime
+  objectives  String
+  subject     Subject     @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  subjectId   String
+  resources   Resource[]
+  assessments Assessment[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+model StudentCourse {
+    id        String   @id @default(cuid())
+    student   User     @relation(fields: [studentId], references: [id])
+    studentId String
+    subject   Subject  @relation(fields: [subjectId], references: [id])
+    subjectId String
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@unique([studentId, subjectId])
+}
+
+model TeacherTransferLog {
+  id            String    @id @default(uuid())
+  fromTeacherId String
+  toTeacherId   String
+  subjectIds    String    // Store as comma-separated values
+  transferredAt DateTime
+  reason        String?
+  createdAt     DateTime  @default(now())
+}
+
+// New model for managing teacher assignments
+model SubjectTeacher {
+    id            String    @id @default(uuid())
+    subject       Subject   @relation(fields: [subjectId], references: [id])
+    subjectId     String
+    teacher       User      @relation(fields: [teacherId], references: [id])
+    teacherId     String
+    isActive      Boolean   @default(true)
+    role          String    @default("EDITOR")  // EDITOR, VIEWER, OWNER
+    assignedAt    DateTime  @default(now())
+    removedAt     DateTime?
+    removeReason  String?
+    createdAt     DateTime  @default(now())
+    updatedAt     DateTime  @updatedAt
+
+    @@unique([subjectId, teacherId])
+} 
