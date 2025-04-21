@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Learning Interface - Learning Resource Hub</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css">
+    <style>
+        body {
+            font-family: 'Noto Sans Thai', Arial, sans-serif;
+            background-color: #f8f9fa;
+            height: 100vh;
+            overflow: hidden;
+        }
+        .split-view {
+            height: calc(100vh - 56px);
+            display: flex;
+            overflow: hidden;
+        }
+        .resources-panel, .assessment-panel {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+        }
+        .resources-panel {
+            background-color: #ffffff;
+            border-right: 1px solid #dee2e6;
+        }
+        .assessment-panel {
+            background-color: #f8f9fa;
+        }
+        .resource-card {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            margin-bottom: 15px;
+            transition: transform 0.2s;
+        }
+        .resource-card:hover {
+            transform: translateY(-2px);
+        }
+        .resource-card .card-body {
+            padding: 15px;
+        }
+        .resource-type-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+        }
+        .question-card {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            margin-bottom: 15px;
+            padding: 20px;
+        }
+        .panel-header {
+            position: sticky;
+            top: 0;
+            background: inherit;
+            padding: 15px 0;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #dee2e6;
+            z-index: 1000;
+        }
+        .resource-preview {
+            max-width: 100%;
+            margin: 10px 0;
+        }
+        .audio-player, .video-player {
+            width: 100%;
+            margin: 10px 0;
+        }
+        .toggle-panel {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+            display: none;
+        }
+        @media (max-width: 768px) {
+            .split-view {
+                flex-direction: column;
+            }
+            .resources-panel, .assessment-panel {
+                flex: none;
+                height: 50%;
+            }
+            .toggle-panel {
+                display: block;
+            }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/student/dashboard">Learning Hub</a>
+            <div class="d-flex align-items-center">
+                <span class="me-3" id="topicName">Loading topic...</span>
+                <button class="btn btn-outline-danger btn-sm" onclick="window.location.href='/student/subject-dashboard?id=' + getSubjectId()">
+                    <i class="bi bi-x-circle"></i> Exit
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="split-view">
+        <div class="resources-panel" id="resourcesPanel">
+            <div class="panel-header">
+                <h4>Learning Resources</h4>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-primary active" onclick="filterResources('all')">All</button>
+                    <button class="btn btn-outline-primary" onclick="filterResources('document')">Documents</button>
+                    <button class="btn btn-outline-primary" onclick="filterResources('video')">Videos</button>
+                    <button class="btn btn-outline-primary" onclick="filterResources('audio')">Audio</button>
+                </div>
+            </div>
+            <div id="resourcesList">
+                <!-- Resources will be loaded here -->
+            </div>
+        </div>
+
+        <div class="assessment-panel" id="assessmentPanel">
+            <div class="panel-header">
+                <h4>Assessment Activities</h4>
+                <div class="progress" style="height: 5px;">
+                    <div class="progress-bar" id="progressBar" role="progressbar" style="width: 0%"></div>
+                </div>
+            </div>
+            <div id="questionsList">
+                <!-- Questions will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <button class="btn btn-primary rounded-circle toggle-panel" onclick="togglePanels()">
+        <i class="bi bi-arrow-left-right"></i>
+    </button>
+
+    <script>
+        const token = localStorage.getItem('token');
+        if (!token) {
+            window.location.href = '/login';
+        }
+
+        let currentResources = [];
+        let currentQuestions = [];
+        let activeFilter = 'all';
+
+        function getTopicId() {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get('topicId');
+        }
+
+        function getSubjectId() {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get('subjectId');
+        }
+
+        async function loadContent() {
+            const topicId = getTopicId();
+            if (!topicId) {
+                alert('Topic ID not provided');
+                return;
+            }
+
+            try {
+                // Load topic details
+                const topicResponse = await fetch(`/api/topics/${topicId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const topicData = await topicResponse.json();
+                document.getElementById('topicName').textContent = topicData.name;
+
+                // Load resources
+                const resourcesResponse = await fetch(`/api/topics/${topicId}/resources`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                currentResources = await resourcesResponse.json();
+                displayResources(currentResources);
+
+                // Load questions
+                const questionsResponse = await fetch(`/api/topics/${topicId}/questions`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                currentQuestions = await questionsResponse.json();
+                displayQuestions(currentQuestions);
+
+            } catch (error) {
+                console.error('Error loading content:', error);
+                alert('Failed to load content. Please try refreshing the page.');
+            }
+        }
+
+        function displayResources(resources) {
+            const container = document.getElementById('resourcesList');
+            container.innerHTML = resources
+                .filter(resource => activeFilter === 'all' || resource.type === activeFilter)
+                .map(resource => `
+                    <div class="resource-card">
+                        <div class="card-body">
+                            <span class="badge bg-primary resource-type-badge">${resource.type}</span>
+                            <h5 class="card-title">${resource.title}</h5>
+                            <p class="card-text">${resource.description || ''}</p>
+                            ${renderResourcePreview(resource)}
+                        </div>
+                    </div>
+                `).join('');
+        }
+
+        function renderResourcePreview(resource) {
+            switch (resource.type) {
+                case 'video':
+                    return `
+                        <video class="video-player" controls>
+                            <source src="${resource.url}" type="video/mp4">
+                            Your browser does not support the video tag.
+                        </video>
+                    `;
+                case 'audio':
+                    return `
+                        <audio class="audio-player" controls>
+                            <source src="${resource.url}" type="audio/mpeg">
+                            Your browser does not support the audio tag.
+                        </audio>
+                    `;
+                case 'document':
+                    return `
+                        <a href="${resource.url}" class="btn btn-outline-primary mt-2" target="_blank">
+                            <i class="bi bi-file-text"></i> Open Document
+                        </a>
+                    `;
+                default:
+                    return `
+                        <a href="${resource.url}" class="btn btn-outline-primary mt-2" target="_blank">
+                            <i class="bi bi-link-45deg"></i> Open Resource
+                        </a>
+                    `;
+            }
+        }
+
+        function displayQuestions(questions) {
+            const container = document.getElementById('questionsList');
+            container.innerHTML = questions.map((question, index) => `
+                <div class="question-card">
+                    <h5>Question ${index + 1}</h5>
+                    <p>${question.text}</p>
+                    ${renderQuestionInput(question, index)}
+                </div>
+            `).join('');
+            updateProgress();
+        }
+
+        function renderQuestionInput(question, index) {
+            switch (question.type) {
+                case 'multiple_choice':
+                    return `
+                        <div class="options">
+                            ${question.options.map((option, optIndex) => `
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" 
+                                        name="question${index}" id="q${index}opt${optIndex}"
+                                        onchange="saveAnswer(${index}, '${option}')">
+                                    <label class="form-check-label" for="q${index}opt${optIndex}">
+                                        ${option}
+                                    </label>
+                                </div>
+                            `).join('')}
+                        </div>
+                    `;
+                case 'text':
+                    return `
+                        <div class="form-group">
+                            <textarea class="form-control" rows="3" 
+                                onchange="saveAnswer(${index}, this.value)"
+                                placeholder="Type your answer here..."></textarea>
+                        </div>
+                    `;
+                default:
+                    return '';
+            }
+        }
+
+        function filterResources(type) {
+            activeFilter = type;
+            document.querySelectorAll('.btn-group .btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            displayResources(currentResources);
+        }
+
+        function saveAnswer(questionIndex, answer) {
+            currentQuestions[questionIndex].userAnswer = answer;
+            updateProgress();
+        }
+
+        function updateProgress() {
+            const answered = currentQuestions.filter(q => q.userAnswer).length;
+            const total = currentQuestions.length;
+            const progress = (answered / total) * 100;
+            document.getElementById('progressBar').style.width = `${progress}%`;
+        }
+
+        function togglePanels() {
+            const resourcesPanel = document.getElementById('resourcesPanel');
+            const assessmentPanel = document.getElementById('assessmentPanel');
+            
+            if (resourcesPanel.style.display === 'none') {
+                resourcesPanel.style.display = 'block';
+                assessmentPanel.style.display = 'none';
+            } else {
+                resourcesPanel.style.display = 'none';
+                assessmentPanel.style.display = 'block';
+            }
+        }
+
+        // Initialize the interface
+        document.addEventListener('DOMContentLoaded', loadContent);
+    </script>
+</body>
+</html> 

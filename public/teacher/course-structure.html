@@ -25,23 +25,35 @@
             border: none;
             background-color: #e3f2fd;
             border-radius: 0.25rem;
-            padding: 0.5rem;
+            padding: 0.25rem;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
             height: fit-content;
         }
-        .sections-container {
-            display: grid;
-            grid-template-columns: repeat(1, 1fr);
-            gap: 0.25rem;
-            margin-top: 0.5rem;
+        .sections-list {
+            list-style-position: outside;
+            margin: 0;
+            padding: 0 0 0 1rem;
+            counter-reset: section;
+        }
+        .sections-list li {
+            margin: 0;
+            padding: 0;
+            list-style-type: none;
+            position: relative;
+        }
+        .sections-list li::before {
+            counter-increment: section;
+            content: counter(section) ". ";
+            position: absolute;
+            left: -1rem;
+            color: #666;
         }
         .section-card {
             margin: 0;
-            border: none;
+            border: 1px solid rgba(0,0,0,0.08);
             background-color: #fff;
             border-radius: 0.25rem;
-            border: 1px solid rgba(0,0,0,0.08);
-            padding: 0.25rem;
+            padding: 0.1rem 0.25rem;
         }
         .add-button {
             margin-bottom: 1rem;
@@ -53,13 +65,16 @@
             font-size: 0.8rem;
         }
         .card-text {
-            margin-bottom: 1rem;
+            margin-bottom: 0.5rem;
             white-space: pre-wrap;
             font-family: inherit;
+            line-height: 1.5;
         }
         textarea.form-control {
             white-space: pre-wrap;
             min-height: 150px;
+            font-family: inherit;
+            line-height: 1.5;
         }
         .content-card {
             border: 1px solid rgba(0,0,0,0.08);
@@ -69,52 +84,80 @@
             margin: 0.25rem 0;
             white-space: pre-wrap;
             font-family: inherit;
-            line-height: 1.3;
-            font-size: 0.8rem;
+            line-height: 1.5;
+            font-size: 0.9rem;
         }
         .description-preview {
-            max-height: 2.6em;
+            background-color: #fff;
+            border: 1px solid rgba(0,0,0,0.08);
+            border-radius: 0.25rem;
+            padding: 0.1rem 0.25rem;
+            margin: 0;
+            font-size: 0.95rem;
+            line-height: 1.2;
+            white-space: pre-line;
+            word-wrap: break-word;
+            display: block;
+        }
+        .description-preview.collapsed {
+            max-height: 7.5em;
             overflow: hidden;
             position: relative;
-            cursor: pointer;
-            font-size: 0.8rem;
-            margin: 0;
-            white-space: normal;
-            word-wrap: break-word;
         }
-        .description-preview.expanded {
-            max-height: none;
-        }
-        .description-preview:not(.expanded)::after {
+        .description-preview.collapsed::after {
             content: '';
             position: absolute;
             bottom: 0;
             left: 0;
             width: 100%;
-            height: 1.5em;
+            height: 2.5em;
             background: linear-gradient(transparent, white);
+            pointer-events: none;
+        }
+        .description-preview ol {
+            margin: 0;
+            padding-left: 1.5rem;
+            list-style-position: outside;
+        }
+        .description-preview ol li {
+            margin: 0;
+            padding: 0;
+        }
+        .description-preview ol ol {
+            list-style-type: lower-alpha;
+            margin: 0;
+            padding-left: 1.25rem;
         }
         .expand-button {
             color: #0d6efd;
             cursor: pointer;
-            font-size: 0.75em;
-            margin-top: 0.25em;
+            font-size: 0.8rem;
+            padding: 0.25rem 0.5rem;
+            margin-top: 0.5rem;
             display: inline-block;
+            background: white;
+            border: 1px solid rgba(13,110,253,0.2);
+            border-radius: 0.25rem;
+            position: absolute;
+            bottom: 0.5rem;
+            right: 0.5rem;
         }
         .expand-button:hover {
-            text-decoration: underline;
+            background-color: #f8f9fa;
+            text-decoration: none;
+            border-color: rgba(13,110,253,0.3);
         }
         .unit-header {
             padding: 0.5rem;
             border-radius: 0.25rem;
-            margin-bottom: 0.5rem;
+            margin: 0;
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
         .part-header {
-            padding: 0.25rem 0;
-            margin-bottom: 0.25rem;
+            padding: 0;
+            margin: 0;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -135,28 +178,30 @@
             flex-shrink: 0;
         }
         .section-header {
-            padding: 0.25rem 0;
-            margin-bottom: 0.25rem;
+            padding: 0;
+            margin: 0;
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
         .section-header span {
-            font-size: 0.8rem;
-            font-weight: 500;
-            white-space: normal;
+            font-size: 0.95rem;
             line-height: 1.2;
-            margin-right: 0.5rem;
+            padding: 0;
+            margin: 0;
             flex: 1;
+            color: #333;
         }
         .section-header .btn-group {
             display: flex;
             gap: 0.25rem;
-            flex-shrink: 0;
+            margin-left: 0.5rem;
         }
         .section-content {
-            font-size: 0.9rem;
-            line-height: 1.5;
+            font-size: 0.95rem;
+            line-height: 1.2;
+            margin: 0;
+            padding: 0;
         }
         @media (max-width: 1400px) {
             .parts-container {
@@ -591,103 +636,66 @@
             }
         }
 
+        function formatDescription(text) {
+            if (!text) return '';
+            
+            // Split into lines and process each line
+            const lines = text.split('\n');
+            const formattedLines = [];
+            let currentCount = 0;
+            
+            lines.forEach(line => {
+                line = line.trim();
+                if (!line) {
+                    formattedLines.push('');
+                    return;
+                }
+                
+                // Check if line already starts with a number
+                const hasNumber = /^\d+\./.test(line);
+                
+                // Check if line looks like a subtitle (no number, ends with colon or all caps)
+                const isSubtitle = !hasNumber && (/:\s*$/.test(line) || /^[A-Z\s&]+$/.test(line));
+                
+                if (isSubtitle) {
+                    // Add subtitle without numbering
+                    formattedLines.push(line);
+                    currentCount = 0;  // Reset counter after subtitle
+                } else if (hasNumber) {
+                    // Keep existing numbered line as is
+                    formattedLines.push(line);
+                } else {
+                    // Add number to line
+                    currentCount++;
+                    formattedLines.push(`${currentCount}. ${line}`);
+                }
+            });
+            
+            return formattedLines.join('\n');
+        }
+
         function displayUnits(units) {
-            const container = document.getElementById('unitsContainer');
-            container.innerHTML = '';
+            const unitsContainer = document.getElementById('unitsContainer');
+            unitsContainer.innerHTML = '';
 
             units.forEach(unit => {
                 const unitCard = document.createElement('div');
                 unitCard.className = 'unit-card';
-                unitCard.innerHTML = `
-                    <div class="unit-header">
-                        <h5 class="mb-0">
-                            <i class="bi bi-grip-vertical drag-handle"></i>
-                            ${unit.name}
-                        </h5>
-                        <div>
-                            <button class="btn btn-sm btn-primary" onclick="showAddPartModal('${unit.id}')">
-                                <i class="bi bi-plus-circle"></i> Add Part
-                            </button>
-                            <button class="btn btn-sm btn-outline-primary" onclick="editUnit('${unit.id}')">
-                                <i class="bi bi-pencil"></i>
-                            </button>
-                            <button class="btn btn-sm btn-outline-danger" onclick="deleteUnit('${unit.id}')">
-                                <i class="bi bi-trash"></i>
-                            </button>
-                        </div>
-                    </div>
-                    ${unit.description ? `
-                        <div class="content-card">
-                            <pre class="description-preview" onclick="toggleDescription(this)">${unit.description}</pre>
-                            <span class="expand-button" onclick="toggleDescription(this.previousElementSibling)">Show more</span>
-                        </div>
-                    ` : ''}
-                    <div class="parts-container">
-                        ${unit.parts ? unit.parts.map(part => `
-                            <div class="part-card">
-                                <div class="part-header">
-                                    <h6 class="mb-0">
-                                        <i class="bi bi-grip-vertical drag-handle"></i>
-                                        ${part.name}
-                                    </h6>
-                                    <div>
-                                        <button class="btn btn-sm btn-primary" onclick="showAddSectionModal('${part.id}')">
-                                            <i class="bi bi-plus-circle"></i> Add Section
-                                        </button>
-                                        <button class="btn btn-sm btn-outline-primary" onclick="editPart('${part.id}')">
-                                            <i class="bi bi-pencil"></i>
-                                        </button>
-                                        <button class="btn btn-sm btn-outline-danger" onclick="deletePart('${part.id}')">
-                                            <i class="bi bi-trash"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                                ${part.description ? `
-                                    <div class="content-card">
-                                        <pre class="description-preview" onclick="toggleDescription(this)">${part.description}</pre>
-                                        <span class="expand-button" onclick="toggleDescription(this.previousElementSibling)">Show more</span>
-                                    </div>
-                                ` : ''}
-                                <div class="sections-container">
-                                    ${part.sections ? part.sections.map(section => `
-                                        <div class="section-card">
-                                            <div class="section-header">
-                                                <span>
-                                                    <i class="bi bi-grip-vertical drag-handle"></i>
-                                                    ${section.name} <small class="text-muted">(Order: ${section.order})</small>
-                                                </span>
-                                                <div>
-                                                    <button class="btn btn-sm btn-outline-primary" onclick="editSection('${section.id}')">
-                                                        <i class="bi bi-pencil"></i>
-                                                    </button>
-                                                    <button class="btn btn-sm btn-outline-danger" onclick="deleteSection('${section.id}')">
-                                                        <i class="bi bi-trash"></i>
-                                                    </button>
-                                                </div>
-                                            </div>
-                                            ${section.description ? `
-                                                <div class="content-card">
-                                                    <pre class="description-preview" onclick="toggleDescription(this)">${section.description}</pre>
-                                                    <span class="expand-button" onclick="toggleDescription(this.previousElementSibling)">Show more</span>
-                                                </div>
-                                            ` : ''}
-                                        </div>
-                                    `).join('') : ''}
-                                </div>
-                            </div>
-                        `).join('') : ''}
-                    </div>
-                `;
-                container.appendChild(unitCard);
+                unitCard.innerHTML = `<div class="unit-header"><h5 class="mb-0"><i class="bi bi-grip-vertical drag-handle"></i>${unit.name}</h5><div class="btn-group"><button class="btn btn-sm btn-outline-primary" onclick="editUnit('${unit.id}')"><i class="bi bi-pencil"></i></button><button class="btn btn-sm btn-outline-danger" onclick="deleteUnit('${unit.id}')"><i class="bi bi-trash"></i></button></div></div>${unit.description ? `<div class="description-preview collapsed" onclick="toggleDescription(this)">${formatDescription(unit.description)}<span class="expand-button">Show more</span></div>` : ''}<div class="parts-container" id="parts-${unit.id}">${unit.parts.map(part => `<div class="part-card"><div class="part-header"><h6><i class="bi bi-grip-vertical drag-handle"></i>${part.name}</h6><div class="btn-group"><button class="btn btn-sm btn-outline-primary" onclick="editPart('${part.id}')"><i class="bi bi-pencil"></i></button><button class="btn btn-sm btn-outline-danger" onclick="deletePart('${part.id}')"><i class="bi bi-trash"></i></button></div></div>${part.description ? `<div class="description-preview collapsed" onclick="toggleDescription(this)">${formatDescription(part.description)}<span class="expand-button">Show more</span></div>` : ''}<ol class="sections-list">${part.sections.map(section => `<li><div class="section-card"><div class="section-header"><span>${section.name.replace(/^\d+\.\s*/, '')}</span><div class="btn-group"><button class="btn btn-sm btn-outline-primary" onclick="editSection('${section.id}')"><i class="bi bi-pencil"></i></button><button class="btn btn-sm btn-outline-danger" onclick="deleteSection('${section.id}')"><i class="bi bi-trash"></i></button></div></div>${section.description ? `<div class="description-preview collapsed" onclick="toggleDescription(this)">${formatDescription(section.description)}<span class="expand-button">Show more</span></div>` : ''}</div></li>`).join('')}</ol><button class="btn btn-sm btn-outline-primary mt-2" onclick="showAddSectionModal('${part.id}')"><i class="bi bi-plus"></i> Add Section</button></div>`).join('')}</div><button class="btn btn-sm btn-outline-primary mt-2" onclick="showAddPartModal('${unit.id}')"><i class="bi bi-plus"></i> Add Part</button>`;
+                unitsContainer.appendChild(unitCard);
             });
         }
 
         function toggleDescription(element) {
-            element.classList.toggle('expanded');
-            const button = element.nextElementSibling;
-            if (button) {
-                button.textContent = element.classList.contains('expanded') ? 'Show less' : 'Show more';
+            element.classList.toggle('collapsed');
+            const button = element.querySelector('.expand-button');
+            if (element.classList.contains('collapsed')) {
+                button.textContent = 'Show more';
+            } else {
+                button.textContent = 'Show less';
             }
+            // Prevent the click from propagating when clicking the button
+            button.onclick = (e) => e.stopPropagation();
         }
 
         // Unit functions
@@ -798,22 +806,34 @@
 
         async function saveSection() {
             const sectionId = document.getElementById('sectionId').value;
+            const partId = document.getElementById('sectionPartId').value;
             const sectionNameSelect = document.getElementById('sectionName');
-            const sectionName = sectionNameSelect.value === 'custom' ? 
-                document.getElementById('customSectionName').value : 
-                sectionNameSelect.value;
+            const customSectionName = document.getElementById('customSectionName');
+            const description = document.getElementById('sectionDescription').value;
+            const order = parseInt(document.getElementById('sectionOrder').value);
 
-            const data = {
-                name: sectionName,
-                description: document.getElementById('sectionDescription').value,
-                order: parseInt(document.getElementById('sectionOrder').value),
-                partId: document.getElementById('sectionPartId').value
+            // Get the section name based on selection
+            let name;
+            if (sectionNameSelect.value === 'custom') {
+                name = customSectionName.value.trim();
+                if (!name) {
+                    alert('Please enter a custom section name');
+                    return;
+                }
+            } else {
+                name = sectionNameSelect.value;
+            }
+
+            const sectionData = {
+                name,
+                description,
+                order
             };
 
             try {
                 const url = sectionId ? 
                     `/api/sections/${sectionId}` : 
-                    `/api/parts/${data.partId}/sections`;
+                    `/api/parts/${partId}/sections`;
                 
                 const response = await fetch(url, {
                     method: sectionId ? 'PUT' : 'POST',
@@ -821,7 +841,7 @@
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${token}`
                     },
-                    body: JSON.stringify(data)
+                    body: JSON.stringify(sectionData)
                 });
 
                 if (response.ok) {
@@ -829,7 +849,7 @@
                     loadUnits();
                 } else {
                     const error = await response.json();
-                    alert(error.error || 'Failed to save section');
+                    alert(error.message || 'Failed to save section');
                 }
             } catch (error) {
                 console.error('Error saving section:', error);
@@ -926,12 +946,28 @@
 
         async function editSection(sectionId) {
             try {
-                const response = await fetch(`/api/sections/${sectionId}`, {
+                // Clean up the section ID by removing any potential dots
+                const cleanSectionId = sectionId.replace(/^\d+\./, '');
+                console.log('Fetching section with ID:', cleanSectionId);
+                
+                const response = await fetch(`/api/sections/${cleanSectionId}`, {
                     headers: {
                         'Authorization': `Bearer ${token}`
                     }
                 });
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('Server response:', response.status, errorText);
+                    throw new Error(`Failed to load section: ${response.status}`);
+                }
+                
                 const section = await response.json();
+                console.log('Loaded section:', section);
+                
+                if (!section || !section.id) {
+                    throw new Error('Invalid section data received');
+                }
                 
                 document.getElementById('sectionId').value = section.id;
                 document.getElementById('sectionPartId').value = section.partId;
@@ -952,13 +988,13 @@
                 }
                 
                 document.getElementById('sectionDescription').value = section.description || '';
-                document.getElementById('sectionOrder').value = section.order;
+                document.getElementById('sectionOrder').value = section.order || 1;
                 document.getElementById('sectionModalTitle').textContent = 'Edit Section';
                 
                 sectionModal.show();
             } catch (error) {
                 console.error('Error loading section:', error);
-                alert('Failed to load section');
+                alert(error.message || 'Failed to load section');
             }
         }
 

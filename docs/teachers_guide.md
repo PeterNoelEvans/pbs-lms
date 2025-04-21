@@ -96,7 +96,67 @@ The hierarchy we have in the database:
 
 5. Section: The smallest teaching unit, contained within Parts
 
+## Course Structure Formatting Guide
 
+### Text Formatting in Units and Parts
+
+When creating or editing units and parts in the course structure, you can use special formatting to organize your content effectively:
+
+#### 1. Automatic Numbering
+- Lines without special formatting will be automatically numbered
+- Example:
+  ```
+  This line will be numbered as 1
+  This line will be numbered as 2
+  This line will be numbered as 3
+  ```
+
+#### 2. Subtitles and Headers
+You can create subtitles in two ways:
+1. **Using Colons**: Any line ending with a colon will be treated as a subtitle
+   ```
+   Access to Information:
+   This will be numbered as 1
+   This will be numbered as 2
+   ```
+
+2. **Using ALL CAPS**: Lines in all capital letters will be treated as subtitles
+   ```
+   LITERATURE & CULTURE
+   This will be numbered as 1
+   This will be numbered as 2
+   ```
+
+#### 3. Manual Numbering
+- If you prefer to use your own numbers, start the line with a number and period
+- The system will preserve your manual numbering
+- Example:
+  ```
+  1. My first point
+  2. My second point
+  3. My third point
+  ```
+
+#### 4. Resetting Numbers
+- Numbers automatically reset after each subtitle
+- This allows you to create separate numbered lists under different sections
+- Example:
+  ```
+  Access to Information:
+  1. First point about information
+  2. Second point about information
+
+  GRAMMAR:
+  1. First point about grammar
+  2. Second point about grammar
+  ```
+
+#### Tips for Formatting
+1. Use subtitles to organize related content
+2. Keep formatting consistent within each unit
+3. Use manual numbering when you need specific number sequences
+4. Use ALL CAPS subtitles for major sections
+5. Use colon-ended subtitles for subsections
 
 ## Creating and Sharing Resources
 

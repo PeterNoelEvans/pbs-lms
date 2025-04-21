@@ -30,6 +30,9 @@ app.use(express.static(path.join(__dirname, 'public'), {
     extensions: ['html', 'htm']
 }));
 
+// Serve uploaded files
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 // Initialize Prisma Client
 const prisma = new PrismaClient();
 
@@ -472,6 +475,11 @@ app.get('/api/subjects/:subjectId', auth, async (req, res) => {
                     include: {
                         teacher: true
                     }
+                },
+                topics: {
+                    orderBy: {
+                        order: 'asc'
+                    }
                 }
             }
         });
@@ -640,6 +648,7 @@ app.get('/api/subjects/:subjectId/resources', auth, async (req, res) => {
     try {
         const { subjectId } = req.params;
         
+        // Get the subject structure with units
         const subject = await prisma.subject.findUnique({
             where: { id: subjectId },
             include: {
@@ -647,11 +656,16 @@ app.get('/api/subjects/:subjectId/resources', auth, async (req, res) => {
                     include: {
                         parts: {
                             include: {
-                                sections: {
-                                    include: {
-                                        resources: true
-                                    }
-                                }
+                                sections: true
+                            }
+                        }
+                    }
+                },
+                topics: {
+                    include: {
+                        resources: {
+                            include: {
+                                createdBy: true
                             }
                         }
                     }
@@ -663,23 +677,30 @@ app.get('/api/subjects/:subjectId/resources', auth, async (req, res) => {
             return res.status(404).json({ error: 'Subject not found' });
         }
 
-        // Flatten the resources array
-        const resources = [];
+        // Create a map of unit names to their structure
+        const unitMap = {};
         subject.units.forEach(unit => {
-            unit.parts.forEach(part => {
-                part.sections.forEach(section => {
-                    section.resources.forEach(resource => {
-                        resources.push({
-                            ...resource,
-                            unitId: unit.id,
-                            partId: part.id,
-                            sectionId: section.id
-                        });
-                    });
-                });
-            });
+            unitMap[unit.name] = {
+                unitId: unit.id,
+                parts: unit.parts
+            };
         });
 
+        // Map resources to their units
+        const resources = [];
+        subject.topics.forEach(topic => {
+            const unitInfo = unitMap[topic.name];
+            if (unitInfo) {
+                topic.resources.forEach(resource => {
+                    resources.push({
+                        ...resource,
+                        unitId: unitInfo.unitId
+                    });
+                });
+            }
+        });
+
+        console.log('Found resources:', resources); // Debug log
         res.json(resources);
     } catch (error) {
         console.error('Error fetching resources:', error);
@@ -692,17 +713,54 @@ app.post('/api/resources', auth, upload.single('file'), async (req, res) => {
     try {
         const { title, description, type, url, subjectId, unitId, partId, sectionId } = req.body;
         
+        // First, get the unit name
+        const unit = await prisma.unit.findUnique({
+            where: { id: unitId }
+        });
+
+        if (!unit) {
+            return res.status(404).json({ error: 'Unit not found' });
+        }
+
+        // Create or find topic based on the unit name
+        let topic = await prisma.topic.findFirst({
+            where: {
+                name: unit.name,
+                subjectId: subjectId
+            }
+        });
+
+        if (!topic) {
+            topic = await prisma.topic.create({
+                data: {
+                    name: unit.name,
+                    description: unit.description,
+                    order: unit.order,
+                    subject: {
+                        connect: { id: subjectId }
+                    }
+                }
+            });
+        }
+
+        // Handle file path for uploaded resources
+        let filePath = null;
+        if (req.file) {
+            filePath = `/uploads/resources/${req.file.filename}`;
+        } else if (type === 'link' && url) {
+            filePath = url;
+        }
+        
         const resource = await prisma.resource.create({
             data: {
                 title,
                 description,
                 type,
-                url: type === 'link' ? url : req.file ? `/uploads/resources/${req.file.filename}` : null,
-                subject: { connect: { id: subjectId } },
-                unit: unitId ? { connect: { id: unitId } } : undefined,
-                part: partId ? { connect: { id: partId } } : undefined,
-                section: sectionId ? { connect: { id: sectionId } } : undefined,
-                uploadedBy: { connect: { id: req.user.userId } }
+                url: filePath,
+                topic: {
+                    connect: { id: topic.id }
+                },
+                createdBy: { connect: { id: req.user.userId } }
             }
         });
 
@@ -1007,7 +1065,7 @@ app.get('/api/debug/m1subjects', auth, async (req, res) => {
         });
 
         console.log('Found M1 subjects:', m1Subjects);
-        
+
         res.json({
             success: true,
             totalM1Subjects: m1Subjects.length,
@@ -1178,6 +1236,275 @@ app.post('/api/units/:unitId/parts', auth, async (req, res) => {
     } catch (error) {
         console.error('Error creating part:', error);
         res.status(500).json({ error: 'Failed to create part' });
+    }
+});
+
+// Get a single unit
+app.get('/api/units/:unitId', auth, async (req, res) => {
+    try {
+        const { unitId } = req.params;
+        
+        const unit = await prisma.unit.findUnique({
+            where: { id: unitId },
+            include: {
+                parts: {
+                    include: {
+                        sections: true
+                    }
+                }
+            }
+        });
+
+        if (!unit) {
+            return res.status(404).json({ error: 'Unit not found' });
+        }
+
+        res.json(unit);
+    } catch (error) {
+        console.error('Error fetching unit:', error);
+        res.status(500).json({ error: 'Failed to fetch unit' });
+    }
+});
+
+// Create a section for a part
+app.post('/api/parts/:partId/sections', auth, async (req, res) => {
+    try {
+        const { partId } = req.params;
+        const { name, description, order } = req.body;
+
+        // Validate input
+        if (!name || !order) {
+            return res.status(400).json({ error: 'Name and order are required' });
+        }
+
+        // Check if part exists
+        const part = await prisma.part.findUnique({
+            where: { id: partId }
+        });
+
+        if (!part) {
+            return res.status(404).json({ error: 'Part not found' });
+        }
+
+        // Create the section
+        const section = await prisma.section.create({
+            data: {
+                name,
+                description,
+                order,
+                part: {
+                    connect: { id: partId }
+                }
+            }
+        });
+
+        res.json(section);
+    } catch (error) {
+        console.error('Error creating section:', error);
+        res.status(500).json({ error: 'Failed to create section' });
+    }
+});
+
+// Get total resources count for student's enrolled subjects
+app.get('/api/student/resources/count', auth, async (req, res) => {
+    try {
+        // Get student's enrolled subjects
+        const user = await prisma.user.findUnique({
+            where: { id: req.user.userId },
+            include: {
+                studentCourses: {
+                    include: {
+                        subject: true
+                    }
+                }
+            }
+        });
+
+        if (!user || !user.studentCourses) {
+            return res.json({ count: 0 });
+        }
+
+        // Get all topics for enrolled subjects
+        const subjectIds = user.studentCourses.map(course => course.subject.id);
+        const topics = await prisma.topic.findMany({
+            where: {
+                subjectId: {
+                    in: subjectIds
+                }
+            },
+            include: {
+                resources: true
+            }
+        });
+
+        // Count total resources
+        const totalResources = topics.reduce((total, topic) => total + topic.resources.length, 0);
+
+        res.json({ count: totalResources });
+    } catch (error) {
+        console.error('Error getting resource count:', error);
+        res.status(500).json({ error: 'Failed to get resource count' });
+    }
+});
+
+// Create a topic for a subject
+app.post('/api/subjects/:subjectId/topics', auth, async (req, res) => {
+    try {
+        const { subjectId } = req.params;
+        const { name, description } = req.body;
+
+        // Get the current highest order number
+        const highestOrder = await prisma.topic.findFirst({
+            where: { subjectId },
+            orderBy: { order: 'desc' },
+            select: { order: true }
+        });
+
+        const newOrder = (highestOrder?.order || 0) + 1;
+
+        const topic = await prisma.topic.create({
+            data: {
+                name,
+                description,
+                order: newOrder,
+                subject: {
+                    connect: { id: subjectId }
+                }
+            }
+        });
+
+        res.json(topic);
+    } catch (error) {
+        console.error('Error creating topic:', error);
+        res.status(500).json({ error: 'Failed to create topic' });
+    }
+});
+
+// Get a single topic by ID
+app.get('/api/topics/:topicId', auth, async (req, res) => {
+    try {
+        const { topicId } = req.params;
+        
+        const topic = await prisma.topic.findUnique({
+            where: { id: topicId },
+            include: {
+                resources: {
+                    include: {
+                        createdBy: true
+                    }
+                },
+                subject: {
+                    include: {
+                        coreSubject: true
+                    }
+                }
+            }
+        });
+
+        if (!topic) {
+            return res.status(404).json({ error: 'Topic not found' });
+        }
+
+        res.json(topic);
+    } catch (error) {
+        console.error('Error fetching topic:', error);
+        res.status(500).json({ error: 'Failed to fetch topic' });
+    }
+});
+
+// Delete a topic
+app.delete('/api/topics/:topicId', auth, async (req, res) => {
+    try {
+        const { topicId } = req.params;
+        
+        await prisma.topic.delete({
+            where: { id: topicId }
+        });
+
+        res.json({ success: true, message: 'Topic deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting topic:', error);
+        res.status(500).json({ error: 'Failed to delete topic' });
+    }
+});
+
+// Delete all topics for a subject
+app.delete('/api/subjects/:subjectId/topics', auth, async (req, res) => {
+    try {
+        const { subjectId } = req.params;
+        
+        await prisma.topic.deleteMany({
+            where: { subjectId }
+        });
+
+        res.json({ success: true, message: 'All topics deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting topics:', error);
+        res.status(500).json({ error: 'Failed to delete topics' });
+    }
+});
+
+// Get resources for a topic
+app.get('/api/topics/:topicId/resources', auth, async (req, res) => {
+    try {
+        const { topicId } = req.params;
+        
+        const topic = await prisma.topic.findUnique({
+            where: { id: topicId },
+            include: {
+                resources: {
+                    include: {
+                        createdBy: true
+                    }
+                }
+            }
+        });
+
+        if (!topic) {
+            return res.status(404).json({ error: 'Topic not found' });
+        }
+
+        res.json(topic.resources);
+    } catch (error) {
+        console.error('Error fetching topic resources:', error);
+        res.status(500).json({ error: 'Failed to fetch topic resources' });
+    }
+});
+
+// Get questions for a topic
+app.get('/api/topics/:topicId/questions', auth, async (req, res) => {
+    try {
+        const { topicId } = req.params;
+        
+        const topic = await prisma.topic.findUnique({
+            where: { id: topicId },
+            include: {
+                assessments: {
+                    include: {
+                        mediaFiles: true
+                    }
+                }
+            }
+        });
+
+        if (!topic) {
+            return res.status(404).json({ error: 'Topic not found' });
+        }
+
+        // Transform assessments into questions format
+        const questions = topic.assessments
+            .filter(assessment => assessment.type === 'quiz')
+            .map(assessment => ({
+                id: assessment.id,
+                title: assessment.title,
+                questions: assessment.questions,
+                mediaFiles: assessment.mediaFiles
+            }));
+
+        res.json(questions);
+    } catch (error) {
+        console.error('Error fetching topic questions:', error);
+        res.status(500).json({ error: 'Failed to fetch topic questions' });
     }
 });
 

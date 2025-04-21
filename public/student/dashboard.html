@@ -103,9 +103,6 @@
                     <a class="nav-link active" href="/student/dashboard">
                         <i class="bi bi-house-door"></i> Dashboard
                     </a>
-                    <a class="nav-link" href="/student/subjects">
-                        <i class="bi bi-book"></i> My Subjects
-                    </a>
                     <a class="nav-link" href="/student/progress">
                         <i class="bi bi-graph-up"></i> My Progress
                     </a>
@@ -159,25 +156,6 @@
                                     <p class="stats-number mb-0">0</p>
                                     <small class="text-muted">Available resources</small>
                                 </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="row mt-4">
-                    <div class="col-12">
-                        <div class="stats-card">
-                            <h4 class="section-title">Quick Actions</h4>
-                            <div class="d-flex gap-3 mt-3">
-                                <button class="btn btn-primary quick-action-btn flex-grow-1">
-                                    <i class="bi bi-play-circle"></i> Start Quiz
-                                </button>
-                                <button class="btn btn-success quick-action-btn flex-grow-1">
-                                    <i class="bi bi-collection"></i> View Resources
-                                </button>
-                                <button class="btn btn-info quick-action-btn flex-grow-1 text-white">
-                                    <i class="bi bi-graph-up"></i> Check Progress
-                                </button>
                             </div>
                         </div>
                     </div>
@@ -255,7 +233,18 @@
 
                 // Update subjects count
                 const subjectsCount = userData.user.subjects ? userData.user.subjects.length : 0;
-                document.querySelector('.stats-number').textContent = subjectsCount;
+                document.querySelectorAll('.stats-number')[0].textContent = subjectsCount;
+
+                // Get and update resource count
+                const resourceResponse = await fetch('/api/student/resources/count', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                if (resourceResponse.ok) {
+                    const resourceData = await resourceResponse.json();
+                    document.querySelectorAll('.stats-number')[2].textContent = resourceData.count;
+                }
 
                 // Load core subjects that have available subjects for the student's year level
                 const availableSubjectsResponse = await fetch('/api/subjects/available', {
@@ -315,6 +304,9 @@
                                                 <div>
                                                     <h5 class="card-title mb-1">${subject.name}</h5>
                                                     <p class="card-text text-muted mb-0">${subject.description || 'No description available'}</p>
+                                                    <a href="/student/subject-dashboard?id=${subject.id}" class="btn btn-primary mt-3">
+                                                        <i class="bi bi-arrow-right-circle"></i> Go to Subject
+                                                    </a>
                                                 </div>
                                             </div>
                                         </div>
@@ -365,21 +357,6 @@
                         </div>
                     `;
                 }
-
-                // Update Quick Actions
-                const startQuizBtn = document.querySelector('.quick-action-btn:nth-child(1)');
-                const viewResourcesBtn = document.querySelector('.quick-action-btn:nth-child(2)');
-                const checkProgressBtn = document.querySelector('.quick-action-btn:nth-child(3)');
-
-                // Disable Start Quiz if no quizzes available
-                startQuizBtn.disabled = true;
-                startQuizBtn.title = 'No quizzes available yet';
-
-                // Link View Resources to resources page
-                viewResourcesBtn.onclick = () => window.location.href = '/student/resources';
-
-                // Link Check Progress to progress page
-                checkProgressBtn.onclick = () => window.location.href = '/student/progress';
 
             } catch (error) {
                 console.error('Error loading dashboard:', error);

@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Subject Dashboard - Learning Resource Hub</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css">
+    <style>
+        body {
+            font-family: 'Noto Sans Thai', Arial, sans-serif;
+            background-color: #f8f9fa;
+        }
+        .subject-header {
+            padding: 30px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+            color: white;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        /* We'll dynamically set the background gradient based on subject type */
+        .subject-header.math {
+            background: linear-gradient(135deg, #FF512F, #DD2476);
+        }
+        .subject-header.english {
+            background: linear-gradient(135deg, #0061ff, #60efff);
+        }
+        .subject-header.science {
+            background: linear-gradient(135deg, #134E5E, #71B280);
+        }
+        .subject-header h1 {
+            margin-bottom: 10px;
+            font-size: 2.2rem;
+        }
+        .stats-card {
+            background-color: white;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        }
+        .quick-action-btn {
+            padding: 12px 20px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        .section-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: #2c3e50;
+        }
+        .topic-card {
+            background: white;
+            border-radius: 12px;
+            border: 1px solid rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+        }
+        .topic-card:hover {
+            transform: translateY(-5px);
+        }
+        .progress {
+            height: 8px;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-light bg-white shadow-sm">
+        <div class="container">
+            <a class="navbar-brand" href="/student/dashboard">Learning Hub</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/student/dashboard">Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/student/progress">Progress</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/student/resources">Resources</a>
+                    </li>
+                </ul>
+                <button class="btn btn-outline-danger ms-auto" onclick="logout()">Logout</button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div id="subjectContent">
+            <!-- Subject content will be loaded here -->
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const token = localStorage.getItem('token');
+        if (!token) {
+            window.location.href = '/login';
+        }
+
+        function logout() {
+            localStorage.removeItem('token');
+            window.location.href = '/login';
+        }
+
+        function getSubjectStyle(coreSubjectName) {
+            const name = coreSubjectName.toLowerCase();
+            if (name.includes('math')) return 'math';
+            if (name.includes('english')) return 'english';
+            if (name.includes('science')) return 'science';
+            return 'english'; // default style
+        }
+
+        async function loadSubjectDashboard() {
+            try {
+                const urlParams = new URLSearchParams(window.location.search);
+                const subjectId = urlParams.get('id');
+                
+                if (!subjectId) {
+                    throw new Error('Subject ID not provided');
+                }
+
+                const response = await fetch(`/api/subjects/${subjectId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to load subject');
+                }
+
+                const subject = await response.json();
+                const subjectStyle = getSubjectStyle(subject.coreSubject.name);
+                
+                const container = document.getElementById('subjectContent');
+                container.innerHTML = `
+                    <div class="subject-header ${subjectStyle}">
+                        <h1>${subject.name}</h1>
+                        <p class="mb-0">${subject.description || 'No description available'}</p>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="stats-card">
+                                <h4 class="section-title">Quick Actions</h4>
+                                <div class="d-flex gap-3 mt-3">
+                                    <button class="btn btn-primary quick-action-btn" onclick="window.location.href='/student/resources?subjectId=${subject.id}'">
+                                        <i class="bi bi-book"></i> View Resources
+                                    </button>
+                                    <button class="btn btn-success quick-action-btn" onclick="window.location.href='/student/quizzes?subjectId=${subject.id}'">
+                                        <i class="bi bi-check2-circle"></i> Take Quiz
+                                    </button>
+                                    <button class="btn btn-info quick-action-btn text-white" onclick="window.location.href='/student/progress?subjectId=${subject.id}'">
+                                        <i class="bi bi-graph-up"></i> View Progress
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row mt-4">
+                        <div class="col-12">
+                            <div class="stats-card">
+                                <h4 class="section-title">Topics</h4>
+                                <div class="row" id="topicsContainer">
+                                    ${subject.topics && subject.topics.length > 0 
+                                        ? subject.topics.map(topic => `
+                                            <div class="col-md-6 col-lg-4 mb-3">
+                                                <div class="topic-card">
+                                                    <div class="card-body">
+                                                        <h5 class="card-title">${topic.name}</h5>
+                                                        <p class="card-text text-muted">${topic.description || 'No description available'}</p>
+                                                        <div class="progress mb-3">
+                                                            <div class="progress-bar" role="progressbar" 
+                                                                style="width: ${topic.progress || 0}%" 
+                                                                aria-valuenow="${topic.progress || 0}" 
+                                                                aria-valuemin="0" 
+                                                                aria-valuemax="100">
+                                                            </div>
+                                                        </div>
+                                                        <a href="/student/learning-interface?topicId=${topic.id}&subjectId=${subject.id}" 
+                                                           class="btn btn-outline-primary btn-sm">
+                                                            Start Learning
+                                                        </a>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        `).join('')
+                                        : '<p class="text-muted">No topics available yet.</p>'
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+            } catch (error) {
+                console.error('Error loading subject dashboard:', error);
+                document.getElementById('subjectContent').innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        Failed to load subject information. Please try refreshing the page.
+                    </div>
+                `;
+            }
+        }
+
+        // Load the subject dashboard when the page loads
+        document.addEventListener('DOMContentLoaded', loadSubjectDashboard);
+    </script>
+</body>
+</html> 
