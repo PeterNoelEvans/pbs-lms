@@ -719,7 +719,7 @@
             const data = {
                 name: document.getElementById('unitName').value,
                 description: document.getElementById('unitDescription').value,
-                order: parseInt(document.getElementById('unitOrder').value) || 1,
+                order: parseInt(document.getElementById('unitOrder').value)
             };
 
             try {
@@ -760,17 +760,17 @@
 
         async function savePart() {
             const partId = document.getElementById('partId').value;
+            const unitId = document.getElementById('partUnitId').value;
             const data = {
                 name: document.getElementById('partName').value,
                 description: document.getElementById('partDescription').value,
-                order: parseInt(document.getElementById('partOrder').value),
-                unitId: document.getElementById('partUnitId').value
+                order: parseInt(document.getElementById('partOrder').value)
             };
 
             try {
                 const url = partId ? 
                     `/api/parts/${partId}` : 
-                    `/api/units/${data.unitId}/parts`;
+                    `/api/units/${unitId}/parts`;
                 
                 const response = await fetch(url, {
                     method: partId ? 'PUT' : 'POST',
@@ -923,12 +923,25 @@
 
         async function editPart(partId) {
             try {
+                console.log('Fetching part with ID:', partId);
                 const response = await fetch(`/api/parts/${partId}`, {
                     headers: {
                         'Authorization': `Bearer ${token}`
                     }
                 });
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('Server response:', response.status, errorText);
+                    throw new Error(`Failed to load part: ${response.status}`);
+                }
+                
                 const part = await response.json();
+                console.log('Loaded part:', part);
+                
+                if (!part || !part.id) {
+                    throw new Error('Invalid part data received');
+                }
                 
                 document.getElementById('partId').value = part.id;
                 document.getElementById('partUnitId').value = part.unitId;
@@ -940,7 +953,7 @@
                 partModal.show();
             } catch (error) {
                 console.error('Error loading part:', error);
-                alert('Failed to load part');
+                alert(error.message || 'Failed to load part');
             }
         }
 

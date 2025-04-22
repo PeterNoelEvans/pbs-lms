@@ -181,6 +181,7 @@ You can create subtitles in two ways:
 - **Assessments**:
   - Quizzes (multiple choice questions)
   - Assignments (with descriptions and due dates)
+  - For detailed instructions on creating assignments with media submissions, see [Assignments Guide](assignments.md)
 
 ### 4. Resource Usage Tracking
 - Each resource has a usage counter showing how many times it's been used

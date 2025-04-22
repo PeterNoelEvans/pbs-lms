@@ -33,6 +33,15 @@ app.use(express.static(path.join(__dirname, 'public'), {
 // Serve uploaded files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
+// Serve documentation files
+app.use('/docs', express.static(path.join(__dirname, 'docs'), {
+    setHeaders: (res, path) => {
+        if (path.endsWith('.md')) {
+            res.setHeader('Content-Type', 'text/markdown');
+        }
+    }
+}));
+
 // Initialize Prisma Client
 const prisma = new PrismaClient();
 
@@ -566,11 +575,15 @@ app.post('/api/subjects/:subjectId/units', auth, async (req, res) => {
 app.put('/api/units/:unitId', auth, async (req, res) => {
     try {
         const { unitId } = req.params;
-        const { name, description } = req.body;
+        const { name, description, order } = req.body;
 
         const unit = await prisma.unit.update({
             where: { id: unitId },
-            data: { name, description }
+            data: { 
+                name, 
+                description,
+                order: order ? parseInt(order) : undefined
+            }
         });
 
         res.json(unit);
@@ -1266,6 +1279,67 @@ app.get('/api/units/:unitId', auth, async (req, res) => {
     }
 });
 
+// Get parts for a unit
+app.get('/api/units/:unitId/parts', auth, async (req, res) => {
+    try {
+        const { unitId } = req.params;
+        
+        const parts = await prisma.part.findMany({
+            where: { unitId },
+            orderBy: { order: 'asc' },
+            include: {
+                sections: true
+            }
+        });
+
+        res.json(parts);
+    } catch (error) {
+        console.error('Error fetching parts:', error);
+        res.status(500).json({ error: 'Failed to fetch parts' });
+    }
+});
+
+// Get a single part by ID
+app.get('/api/parts/:partId', auth, async (req, res) => {
+    try {
+        const { partId } = req.params;
+        
+        const part = await prisma.part.findUnique({
+            where: { id: partId },
+            include: {
+                sections: true,
+                unit: true
+            }
+        });
+
+        if (!part) {
+            return res.status(404).json({ error: 'Part not found' });
+        }
+
+        res.json(part);
+    } catch (error) {
+        console.error('Error fetching part:', error);
+        res.status(500).json({ error: 'Failed to fetch part' });
+    }
+});
+
+// Get sections for a part
+app.get('/api/parts/:partId/sections', auth, async (req, res) => {
+    try {
+        const { partId } = req.params;
+        
+        const sections = await prisma.section.findMany({
+            where: { partId },
+            orderBy: { order: 'asc' }
+        });
+
+        res.json(sections);
+    } catch (error) {
+        console.error('Error fetching sections:', error);
+        res.status(500).json({ error: 'Failed to fetch sections' });
+    }
+});
+
 // Create a section for a part
 app.post('/api/parts/:partId/sections', auth, async (req, res) => {
     try {
@@ -1302,6 +1376,60 @@ app.post('/api/parts/:partId/sections', auth, async (req, res) => {
     } catch (error) {
         console.error('Error creating section:', error);
         res.status(500).json({ error: 'Failed to create section' });
+    }
+});
+
+// Get a single section by ID
+app.get('/api/sections/:sectionId', auth, async (req, res) => {
+    try {
+        const { sectionId } = req.params;
+        
+        const section = await prisma.section.findUnique({
+            where: { id: sectionId },
+            include: {
+                part: {
+                    include: {
+                        unit: true
+                    }
+                }
+            }
+        });
+
+        if (!section) {
+            return res.status(404).json({ error: 'Section not found' });
+        }
+
+        res.json(section);
+    } catch (error) {
+        console.error('Error fetching section:', error);
+        res.status(500).json({ error: 'Failed to fetch section' });
+    }
+});
+
+// Get assessments for a section
+app.get('/api/sections/:sectionId/assessments', auth, async (req, res) => {
+    try {
+        const { sectionId } = req.params;
+        
+        const assessments = await prisma.assessment.findMany({
+            where: { sectionId },
+            include: {
+                mediaFiles: true,
+                submissions: {
+                    where: {
+                        studentId: req.user.userId
+                    }
+                }
+            },
+            orderBy: {
+                createdAt: 'desc'
+            }
+        });
+
+        res.json(assessments);
+    } catch (error) {
+        console.error('Error fetching section assessments:', error);
+        res.status(500).json({ error: 'Failed to fetch section assessments' });
     }
 });
 
@@ -1508,7 +1636,192 @@ app.get('/api/topics/:topicId/questions', auth, async (req, res) => {
     }
 });
 
+// Update a part
+app.put('/api/parts/:partId', auth, async (req, res) => {
+    try {
+        const { partId } = req.params;
+        const { name, description, order } = req.body;
+
+        // Validate input
+        if (!name || !order) {
+            return res.status(400).json({ error: 'Name and order are required' });
+        }
+
+        const part = await prisma.part.update({
+            where: { id: partId },
+            data: {
+                name,
+                description,
+                order
+            }
+        });
+
+        res.json(part);
+    } catch (error) {
+        console.error('Error updating part:', error);
+        res.status(500).json({ error: 'Failed to update part' });
+    }
+});
+
+// Get a single assessment by ID
+app.get('/api/assessments/:assessmentId', auth, async (req, res) => {
+    try {
+        const { assessmentId } = req.params;
+        
+        const assessment = await prisma.assessment.findUnique({
+            where: { id: assessmentId },
+            include: {
+                mediaFiles: true,
+                section: {
+                    include: {
+                        part: {
+                            include: {
+                                unit: {
+                                    include: {
+                                        subject: true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                submissions: {
+                    where: {
+                        studentId: req.user.userId
+                    },
+                    orderBy: {
+                        submittedAt: 'desc'
+                    },
+                    take: 1
+                }
+            }
+        });
+
+        if (!assessment) {
+            return res.status(404).json({ error: 'Assessment not found' });
+        }
+
+        res.json(assessment);
+    } catch (error) {
+        console.error('Error fetching assessment:', error);
+        res.status(500).json({ error: 'Failed to fetch assessment' });
+    }
+});
+
+// Get student's assessment submissions
+app.get('/api/assessments/:assessmentId/submissions', auth, async (req, res) => {
+    try {
+        const { assessmentId } = req.params;
+        
+        const submissions = await prisma.assessmentSubmission.findMany({
+            where: {
+                assessmentId,
+                studentId: req.user.userId
+            },
+            orderBy: {
+                submittedAt: 'desc'
+            }
+        });
+
+        res.json(submissions);
+    } catch (error) {
+        console.error('Error fetching assessment submissions:', error);
+        res.status(500).json({ error: 'Failed to fetch assessment submissions' });
+    }
+});
+
+// Create/Save an assessment
+app.post('/api/sections/:sectionId/assessments', auth, upload.array('mediaFiles'), async (req, res) => {
+    try {
+        const { sectionId } = req.params;
+        const { title, description, type, questions, dueDate } = req.body;
+
+        // Validate required fields
+        if (!title || !type) {
+            return res.status(400).json({ error: 'Title and type are required' });
+        }
+
+        // Check if section exists
+        const section = await prisma.section.findUnique({
+            where: { id: sectionId }
+        });
+
+        if (!section) {
+            return res.status(404).json({ error: 'Section not found' });
+        }
+
+        // Handle file uploads if any
+        const mediaFiles = req.files ? req.files.map(file => ({
+            filename: file.filename,
+            path: `/uploads/resources/${file.filename}`,
+            type: file.mimetype
+        })) : [];
+
+        // Create the assessment
+        const assessment = await prisma.assessment.create({
+            data: {
+                title,
+                description,
+                type,
+                questions: questions ? JSON.parse(questions) : [],
+                dueDate: dueDate ? new Date(dueDate) : null,
+                section: {
+                    connect: { id: sectionId }
+                },
+                createdBy: {
+                    connect: { id: req.user.userId }
+                },
+                mediaFiles: {
+                    create: mediaFiles
+                }
+            },
+            include: {
+                mediaFiles: true,
+                section: true
+            }
+        });
+
+        res.json(assessment);
+    } catch (error) {
+        console.error('Error creating assessment:', error);
+        res.status(500).json({ error: 'Failed to create assessment' });
+    }
+});
+
+// Submit an assessment
+app.post('/api/assessments/:assessmentId/submit', auth, async (req, res) => {
+    try {
+        const { assessmentId } = req.params;
+        const { answers, score } = req.body;
+
+        // Validate submission
+        if (!answers) {
+            return res.status(400).json({ error: 'Answers are required' });
+        }
+
+        // Create the submission
+        const submission = await prisma.assessmentSubmission.create({
+            data: {
+                answers,
+                score,
+                assessment: {
+                    connect: { id: assessmentId }
+                },
+                student: {
+                    connect: { id: req.user.userId }
+                }
+            }
+        });
+
+        res.json(submission);
+    } catch (error) {
+        console.error('Error submitting assessment:', error);
+        res.status(500).json({ error: 'Failed to submit assessment' });
+    }
+});
+
 // Start server
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
+

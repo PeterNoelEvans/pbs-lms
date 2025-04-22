@@ -271,7 +271,7 @@
 
                                 // Add part to topic select
                                 topicSelect.innerHTML += `
-                                    <option value="part:${part.id}">📖 ${unit.name} - ${part.name}</option>
+                                    <option value="part:${part.id}:${unit.id}">📖 ${unit.name} - ${part.name}</option>
                                 `;
 
                                 // Process sections within each part
@@ -403,17 +403,22 @@
             try {
                 const formData = new FormData();
                 const topicSelect = document.getElementById('topicSelect');
-                const [type, id] = topicSelect.value.split(':');
+                const [type, ...ids] = topicSelect.value.split(':');
                 
                 formData.append('title', document.getElementById('resourceTitle').value);
                 formData.append('description', document.getElementById('resourceDescription').value);
                 formData.append('type', document.getElementById('resourceType').value);
                 formData.append('subjectId', currentSubjectId);
 
-                // Add the appropriate ID based on the selection
-                if (type === 'unit') formData.append('unitId', id);
-                if (type === 'part') formData.append('partId', id);
-                if (type === 'section') formData.append('sectionId', id);
+                // Add the appropriate IDs based on the selection
+                if (type === 'unit') {
+                    formData.append('unitId', ids[0]);
+                } else if (type === 'part') {
+                    formData.append('partId', ids[0]);
+                    formData.append('unitId', ids[1]); // Add the unit ID for parts
+                } else if (type === 'section') {
+                    formData.append('sectionId', ids[0]);
+                }
 
                 // Handle file or URL based on resource type
                 if (document.getElementById('resourceType').value === 'link') {
