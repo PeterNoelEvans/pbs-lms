@@ -1685,15 +1685,7 @@ app.get('/api/assessments/:assessmentId', auth, async (req, res) => {
                         }
                     }
                 },
-                submissions: {
-                    where: {
-                        studentId: req.user.userId
-                    },
-                    orderBy: {
-                        submittedAt: 'desc'
-                    },
-                    take: 1
-                }
+                createdBy: true
             }
         });
 
@@ -1817,6 +1809,125 @@ app.post('/api/assessments/:assessmentId/submit', auth, async (req, res) => {
     } catch (error) {
         console.error('Error submitting assessment:', error);
         res.status(500).json({ error: 'Failed to submit assessment' });
+    }
+});
+
+// Update an assessment
+app.put('/api/assessments/:assessmentId', auth, upload.array('mediaFiles'), async (req, res) => {
+    try {
+        const { assessmentId } = req.params;
+        const { title, description, type, questions, dueDate } = req.body;
+
+        // Validate required fields
+        if (!title || !type) {
+            return res.status(400).json({ error: 'Title and type are required' });
+        }
+
+        // Check if assessment exists
+        const existingAssessment = await prisma.assessment.findUnique({
+            where: { id: assessmentId }
+        });
+
+        if (!existingAssessment) {
+            return res.status(404).json({ error: 'Assessment not found' });
+        }
+
+        // Handle file uploads if any
+        const mediaFiles = req.files ? req.files.map(file => ({
+            filename: file.filename,
+            path: `/uploads/resources/${file.filename}`,
+            type: file.mimetype
+        })) : [];
+
+        // Update the assessment
+        const assessment = await prisma.assessment.update({
+            where: { id: assessmentId },
+            data: {
+                title,
+                description,
+                type,
+                questions: questions ? JSON.parse(questions) : undefined,
+                dueDate: dueDate ? new Date(dueDate) : null,
+                mediaFiles: mediaFiles.length > 0 ? {
+                    create: mediaFiles
+                } : undefined
+            },
+            include: {
+                mediaFiles: true,
+                section: true
+            }
+        });
+
+        res.json(assessment);
+    } catch (error) {
+        console.error('Error updating assessment:', error);
+        res.status(500).json({ error: 'Failed to update assessment' });
+    }
+});
+
+// Get all assessments for a teacher
+app.get('/api/teacher/assessments', auth, async (req, res) => {
+    try {
+        const assessments = await prisma.assessment.findMany({
+            where: {
+                userId: req.user.userId
+            },
+            include: {
+                section: {
+                    include: {
+                        part: {
+                            include: {
+                                unit: {
+                                    include: {
+                                        subject: true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                mediaFiles: true
+            },
+            orderBy: {
+                createdAt: 'desc'
+            }
+        });
+
+        res.json(assessments);
+    } catch (error) {
+        console.error('Error fetching teacher assessments:', error);
+        res.status(500).json({ error: 'Failed to fetch assessments' });
+    }
+});
+
+// Delete an assessment
+app.delete('/api/assessments/:assessmentId', auth, async (req, res) => {
+    try {
+        const { assessmentId } = req.params;
+
+        // Check if assessment exists and belongs to the user
+        const assessment = await prisma.assessment.findUnique({
+            where: { id: assessmentId },
+            select: { userId: true }
+        });
+
+        if (!assessment) {
+            return res.status(404).json({ error: 'Assessment not found' });
+        }
+
+        if (assessment.userId !== req.user.userId) {
+            return res.status(403).json({ error: 'Not authorized to delete this assessment' });
+        }
+
+        // Delete the assessment
+        await prisma.assessment.delete({
+            where: { id: assessmentId }
+        });
+
+        res.json({ success: true, message: 'Assessment deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting assessment:', error);
+        res.status(500).json({ error: 'Failed to delete assessment' });
     }
 });
 

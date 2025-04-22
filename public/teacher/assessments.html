@@ -488,6 +488,132 @@
             }
         }
 
+        // Load existing assessments when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            loadSubjects();
+            loadExistingAssessments();
+        });
+
+        async function loadExistingAssessments() {
+            try {
+                const response = await fetch('/api/teacher/assessments', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to fetch assessments');
+                }
+
+                const assessments = await response.json();
+                const container = document.getElementById('existingAssessments');
+                container.innerHTML = ''; // Clear existing content
+
+                assessments.forEach(assessment => {
+                    const card = document.createElement('div');
+                    card.className = 'card mb-3';
+                    
+                    // Parse questions array safely
+                    const questionsArray = Array.isArray(assessment.questions) ? assessment.questions : [];
+                    const questionCount = questionsArray.length;
+                    
+                    card.innerHTML = `
+                        <div class="card-body">
+                            <h6 class="card-title">${assessment.title}</h6>
+                            <p class="card-text small">
+                                ${assessment.section.part.unit.subject.name} > 
+                                ${assessment.section.part.unit.name} > 
+                                ${assessment.section.part.name} > 
+                                ${assessment.section.name}
+                            </p>
+                            <p class="card-text small">
+                                Questions: ${questionCount}
+                            </p>
+                            <div class="btn-group">
+                                <button class="btn btn-sm btn-primary" onclick="editAssessment('${assessment.id}')">
+                                    <i class="bi bi-pencil"></i> Edit
+                                </button>
+                                <button class="btn btn-sm btn-danger" onclick="deleteAssessment('${assessment.id}')">
+                                    <i class="bi bi-trash"></i> Delete
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    container.appendChild(card);
+                });
+            } catch (error) {
+                console.error('Error loading assessments:', error);
+                alert('Failed to load existing assessments');
+            }
+        }
+
+        async function editAssessment(assessmentId) {
+            try {
+                const response = await fetch(`/api/assessments/${assessmentId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to fetch assessment');
+                }
+
+                const assessment = await response.json();
+
+                // Populate form fields
+                document.getElementById('title').value = assessment.title;
+                document.getElementById('description').value = assessment.description;
+                document.getElementById('assessmentType').value = assessment.type;
+                if (assessment.dueDate) {
+                    document.getElementById('dueDate').value = new Date(assessment.dueDate).toISOString().slice(0, 16);
+                }
+
+                // Set section selectors
+                await setSelectors(assessment.section);
+
+                // Clear existing questions
+                document.getElementById('questionsList').innerHTML = '';
+
+                // Add existing questions
+                assessment.questions.forEach(question => {
+                    addQuestion(question.type, question);
+                });
+
+                // Store assessment ID for update
+                document.getElementById('assessmentForm').dataset.assessmentId = assessmentId;
+
+                // Scroll to form
+                document.querySelector('.card-header').scrollIntoView({ behavior: 'smooth' });
+            } catch (error) {
+                console.error('Error loading assessment:', error);
+                alert('Failed to load assessment for editing');
+            }
+        }
+
+        async function setSelectors(section) {
+            // Set subject
+            const subjectSelect = document.getElementById('subjectSelect');
+            subjectSelect.value = section.part.unit.subject.id;
+            await loadUnits(section.part.unit.subject.id);
+
+            // Set unit
+            const unitSelect = document.getElementById('unitSelect');
+            unitSelect.value = section.part.unit.id;
+            await loadParts(section.part.unit.id);
+
+            // Set part
+            const partSelect = document.getElementById('partSelect');
+            partSelect.value = section.part.id;
+            await loadSections(section.part.id);
+
+            // Set section
+            const sectionSelect = document.getElementById('sectionSelect');
+            sectionSelect.value = section.id;
+        }
+
+        // Modify form submission to handle both create and update
         document.getElementById('assessmentForm').addEventListener('submit', async function(e) {
             e.preventDefault();
             
@@ -496,7 +622,6 @@
             formData.append('type', document.getElementById('assessmentType').value);
             formData.append('description', document.getElementById('description').value);
             formData.append('dueDate', document.getElementById('dueDate').value);
-            formData.append('sectionId', document.getElementById('sectionSelect').value);
             
             const questions = [];
             document.querySelectorAll('#questionsList .card').forEach(questionCard => {
@@ -541,8 +666,13 @@
             formData.append('questions', JSON.stringify(questions));
             
             try {
-                const response = await fetch('/api/sections/' + document.getElementById('sectionSelect').value + '/assessments', {
-                    method: 'POST',
+                const assessmentId = this.dataset.assessmentId;
+                const url = assessmentId 
+                    ? `/api/assessments/${assessmentId}`
+                    : `/api/sections/${document.getElementById('sectionSelect').value}/assessments`;
+                
+                const response = await fetch(url, {
+                    method: assessmentId ? 'PUT' : 'POST',
                     headers: {
                         'Authorization': `Bearer ${token}`
                     },
@@ -550,15 +680,20 @@
                 });
                 
                 if (response.ok) {
-                    alert('Assessment created successfully!');
-                    location.reload();
+                    alert(assessmentId ? 'Assessment updated successfully!' : 'Assessment created successfully!');
+                    // Reload assessments but don't reset form if updating
+                    await loadExistingAssessments();
+                    if (!assessmentId) {
+                        this.reset();
+                        document.getElementById('questionsList').innerHTML = '';
+                    }
                 } else {
                     const error = await response.json();
-                    alert('Error creating assessment: ' + error.message);
+                    alert(assessmentId ? 'Error updating assessment: ' : 'Error creating assessment: ' + error.message);
                 }
             } catch (error) {
                 console.error('Error:', error);
-                alert('Failed to create assessment. Please try again.');
+                alert('Failed to save assessment. Please try again.');
             }
         });
 
@@ -615,6 +750,32 @@
         document.getElementById('unitSelect').addEventListener('change', updateStructurePath);
         document.getElementById('partSelect').addEventListener('change', updateStructurePath);
         document.getElementById('sectionSelect').addEventListener('change', updateStructurePath);
+
+        // Add the deleteAssessment function
+        async function deleteAssessment(assessmentId) {
+            if (!confirm('Are you sure you want to delete this assessment? This action cannot be undone.')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/assessments/${assessmentId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to delete assessment');
+                }
+
+                await loadExistingAssessments(); // Reload the list
+                alert('Assessment deleted successfully');
+            } catch (error) {
+                console.error('Error deleting assessment:', error);
+                alert('Failed to delete assessment. Please try again.');
+            }
+        }
     </script>
 </body>
 </html>
