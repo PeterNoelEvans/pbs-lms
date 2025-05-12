@@ -30,6 +30,8 @@ This guide explains how to create and manage assignments that allow students to 
    - Log in to your teacher account
    - Navigate to "Assessments"
    - Click "Create New Assessment"
+   * There seems to be a problem with the link button on  /teacher/resources page to link assessments with the resources.
+   * 
 
 2. **Basic Information**
    - Title: Enter a clear, descriptive title

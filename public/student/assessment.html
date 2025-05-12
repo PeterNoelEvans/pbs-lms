@@ -1,0 +1,2451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Take Assessment</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.3/font/bootstrap-icons.css">
+    <style>
+        .quiz-container {
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            padding: 30px;
+            margin-bottom: 30px;
+        }
+        .matching-item, .list-group-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+            padding: 10px;
+            border-radius: 5px;
+            min-height: 60px;
+        }
+        .matching-item:hover {
+            background-color: #f8f9fa;
+        }
+        .matching-expression {
+            font-weight: 500;
+            min-width: 200px;
+            padding-right: 20px;
+        }
+        .question-title {
+            background-color: #f0f8ff;
+            padding: 10px 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+        .question-text {
+            font-size: 1.1rem;
+            margin-bottom: 20px;
+            padding: 0 10px;
+        }
+        .question-instructions {
+            font-style: italic;
+            color: #6c757d;
+            margin-bottom: 20px;
+        }
+        .nav-pills .nav-link.active {
+            background-color: #0d6efd;
+        }
+        .nav-pills .nav-link {
+            color: #212529;
+        }
+        .quiz-footer {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #dee2e6;
+        }
+        .multiple-choice-option {
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .multiple-choice-option:hover {
+            background-color: #f8f9fa;
+        }
+        .multiple-choice-option.selected {
+            background-color: #e7f3ff;
+            border-color: #0d6efd;
+        }
+        .list-group {
+            margin-bottom: 0;
+        }
+        .list-group-item {
+            margin-bottom: 15px !important;
+            height: auto;
+            min-height: 54px;
+            display: flex;
+            align-items: center;
+        }
+        .input-group {
+            margin-bottom: 15px !important;
+            height: auto;
+        }
+        .form-select {
+            height: 54px;
+        }
+        .list-group-item:last-child {
+            margin-bottom: 15px !important;
+        }
+        /* Drag and drop styles */
+        .draggable-items-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #e9ecef;
+            border-radius: 5px;
+            background-color: #f8f9fa;
+        }
+        .draggable-item {
+            padding: 6px 12px;
+            background-color: #e7f3ff;
+            border: 1px solid #b8daff;
+            border-radius: 4px;
+            cursor: grab;
+            user-select: none;
+            transition: all 0.2s;
+        }
+        .draggable-item:hover {
+            background-color: #d0e7ff;
+        }
+        .draggable-item.dragging {
+            opacity: 0.5;
+            cursor: grabbing;
+        }
+        .drop-target {
+            display: inline-block;
+            width: 120px;
+            height: 30px;
+            border: 2px dashed #ced4da;
+            border-radius: 4px;
+            margin: 0 5px;
+            vertical-align: middle;
+            background-color: #f8f9fa;
+            transition: all 0.2s;
+        }
+        .drop-target.highlight {
+            border-color: #0d6efd;
+            background-color: #e7f3ff;
+        }
+        .drop-target.filled {
+            border-style: solid;
+            border-color: #6c757d;
+            background-color: #e9ecef;
+            text-align: center;
+            line-height: 30px;
+            padding: 0 5px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .drop-target.correct {
+            border-color: #28a745;
+            background-color: #d4edda;
+        }
+        .drop-target.incorrect {
+            border-color: #dc3545;
+            background-color: #f8d7da;
+        }
+        .sentence-container {
+            line-height: 2.5;
+            margin-bottom: 15px;
+            font-size: 1.1rem;
+        }
+        /* Image matching styles */
+        .images-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .image-item {
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 10px;
+            text-align: center;
+            position: relative;
+        }
+        .image-item img {
+            max-width: 100%;
+            height: 180px;
+            object-fit: cover;
+            margin-bottom: 10px;
+            border-radius: 4px;
+        }
+        .image-drop-target {
+            min-height: 40px;
+            border: 2px dashed #ced4da;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-top: 10px;
+            transition: all 0.2s;
+            background-color: #f8f9fa;
+        }
+        .image-drop-target.highlight {
+            border-color: #0d6efd;
+            background-color: #e7f3ff;
+        }
+        .image-drop-target.filled {
+            border-style: solid;
+            border-color: #6c757d;
+            background-color: #e9ecef;
+            padding: 5px;
+        }
+        .image-drop-target.correct {
+            border-color: #28a745;
+            background-color: #d4edda;
+        }
+        .image-drop-target.incorrect {
+            border-color: #dc3545;
+            background-color: #f8d7da;
+        }
+        .recording-indicator {
+            color: #d32f2f;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .recording-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #d32f2f;
+            animation: pulse 1s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.6); opacity: 0.5; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        
+        /* Image Fill Blank Styles */
+        .card-img-top {
+            background-color: #f8f9fa;
+            padding: 1rem;
+            text-align: center;
+        }
+        
+        .card-img-top img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 4px;
+        }
+        
+        .sentence-container {
+            font-size: 1.1rem;
+            line-height: 1.6;
+            margin: 1rem 0;
+        }
+        
+        .drop-target {
+            display: inline-block;
+            min-width: 100px;
+            height: 30px;
+            border: 2px dashed #ccc;
+            border-radius: 4px;
+            margin: 0 5px;
+            vertical-align: middle;
+            background-color: #f8f9fa;
+        }
+        
+        .drop-target.dragover {
+            border-color: #007bff;
+            background-color: #e9ecef;
+        }
+        
+        .drop-target.filled {
+            border-style: solid;
+            border-color: #28a745;
+            background-color: #fff;
+        }
+        
+        .drop-target.incorrect {
+            border-color: #dc3545;
+            background-color: #fff;
+        }
+        
+        .draggable-items-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin: 1rem 0;
+            padding: 1rem;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+        
+        .draggable-item {
+            padding: 0.5rem 1rem;
+            background-color: #fff;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            cursor: move;
+            user-select: none;
+        }
+        
+        .draggable-item:hover {
+            background-color: #e9ecef;
+        }
+        
+        .draggable-item.dragging {
+            opacity: 0.5;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="/student/dashboard">Student Portal</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/student/dashboard">Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/student/resources">Resources</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/student/assessments">Assessments</a>
+                    </li>
+                </ul>
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <button class="btn btn-outline-light" onclick="logout()">Logout</button>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div id="loader" class="text-center my-4 d-none">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2">Loading assessment...</p>
+        </div>
+        <div id="assessmentContent">
+            <div id="questionContainer"></div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const token = localStorage.getItem('token');
+        const urlParams = new URLSearchParams(window.location.search);
+        const assessmentId = urlParams.get('id');
+        let assessment = null;
+        let userAnswers = {};
+        let currentQuestionIndex = 0;
+        
+        // Add global timer/attempts variables
+        let attemptCount = 0;
+        let maxAttempts = null;
+        let totalTime = 0;
+        let attemptStartTime = null;
+        let timerInterval = null;
+        
+        // Check authentication
+        if (!token) {
+            window.location.href = '/login';
+        }
+        
+        document.addEventListener('DOMContentLoaded', loadAssessment);
+        
+        async function loadAssessment() {
+            try {
+                showLoader();
+                
+                // Fetch assessment data
+                const response = await fetch(`/api/assessments/${assessmentId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error('Failed to load assessment');
+                assessment = data;
+                console.log('[DEBUG] Assessment loaded:', assessment);
+                if (assessment) {
+                    console.log('[DEBUG] Assessment.type:', assessment.type);
+                    console.log('[DEBUG] Assessment.subtype:', assessment.subtype);
+                    console.log('[DEBUG] Assessment.questions:', assessment.questions);
+                    if (assessment.questions && assessment.questions[0]) {
+                        console.log('[DEBUG] First question:', assessment.questions[0]);
+                        console.log('[DEBUG] First question.subtype:', assessment.questions[0].subtype);
+                    }
+                }
+
+                // Fetch previous submission attempts
+                const subRes = await fetch(`/api/assessments/${assessmentId}/submissions`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (subRes.ok) {
+                    const submissions = await subRes.json();
+                    if (Array.isArray(submissions) && submissions.length > 0) {
+                        // Use the latest submission's attempts value
+                        attemptCount = submissions[0].attempts || 0;
+                    } else {
+                        attemptCount = 0;
+                    }
+                } else {
+                    attemptCount = 0;
+                }
+                
+                // If assessment type is not set, detect based on properties
+                if (!assessment.type) {
+                    if (assessment.questions) {
+                        assessment.type = 'quiz';
+                    } else if (assessment.assignment) {
+                        assessment.type = 'assignment';
+                    } else if (assessment.pairs && Array.isArray(assessment.pairs)) {
+                        assessment.type = 'matching';
+                        
+                        // Convert pairs to questions format for consistency
+                        assessment.questions = [{
+                            type: 'matching',
+                            text: assessment.description || 'Match the following items',
+                            pairs: assessment.pairs,
+                            options: assessment.pairs.map(pair => pair.expression || pair.item),
+                            matches: assessment.pairs.map(pair => pair.meaning || pair.match)
+                        }];
+                    } else {
+                        assessment.type = 'unknown';
+                    }
+                }
+                
+                // Handle old structure where pairs is at the root level
+                if (assessment.type === 'matching' && assessment.pairs && !assessment.questions) {
+                    assessment.questions = [{
+                        type: 'matching',
+                        text: assessment.description || 'Match the following items',
+                        pairs: assessment.pairs,
+                        options: assessment.pairs.map(pair => pair.expression || pair.item),
+                        matches: assessment.pairs.map(pair => pair.meaning || pair.match)
+                    }];
+                }
+                
+                // If we have a single question object instead of an array
+                if (assessment.questions && !Array.isArray(assessment.questions)) {
+                    if (typeof assessment.questions === 'object') {
+                        assessment.questions = [assessment.questions];
+                    } else if (typeof assessment.questions === 'string') {
+                        try {
+                            const parsed = JSON.parse(assessment.questions);
+                            assessment.questions = Array.isArray(parsed) ? parsed : [parsed];
+                        } catch (e) {
+                            console.error('Error parsing questions:', e);
+                            assessment.questions = [];
+                        }
+                    }
+                }
+                
+                hideLoader();
+                renderAssessment();
+                
+            } catch (error) {
+                console.error('Error loading assessment:', error);
+                document.getElementById('assessmentContent').innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        Failed to load assessment. Please try again later.
+                    </div>
+                    <a href="/student/assessments" class="btn btn-primary">
+                        <i class="bi bi-arrow-left me-2"></i>Back to Assessments
+                    </a>
+                `;
+                hideLoader();
+            }
+        }
+        
+        function renderAssessment() {
+            const container = document.getElementById('assessmentContent');
+            const type = (assessment.type || '').toLowerCase();
+            let attemptsHtml = '';
+            if (assessment.maxAttempts) {
+                attemptsHtml = `<div id="attemptsInfo" class="mb-2"><strong>Attempts:</strong> <span id="attemptCount">${attemptCount}</span> / ${assessment.maxAttempts}</div>`;
+                maxAttempts = assessment.maxAttempts;
+            } else {
+                attemptsHtml = `<div id="attemptsInfo" class="mb-2"><strong>Attempts:</strong> <span id="attemptCount">${attemptCount}</span> / Unlimited</div>`;
+                maxAttempts = null;
+            }
+            // --- Writing assignments: no timer, show instructions and correct input fields ---
+            if (type === 'writing-long' || type === 'writing') {
+                container.innerHTML = `${attemptsHtml}`;
+                const mainDiv = document.createElement('div');
+                mainDiv.className = 'writing-assignment-container';
+                mainDiv.innerHTML = `
+                    <h2>${assessment.title || 'Writing Assignment'}</h2>
+                    <p class="mb-3">${assessment.description || ''}</p>
+                    ${assessment.criteria ? `
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <h5 class="mb-0">Grading Criteria</h5>
+                            </div>
+                            <div class="card-body">
+                                <p class="mb-0">${assessment.criteria}</p>
+                            </div>
+                        </div>
+                    ` : ''}
+                `;
+                const form = document.createElement('form');
+                form.className = 'writing-form';
+                let inputGroup = '';
+                if (type === 'writing-long') {
+                    inputGroup = `
+                        <div class="mb-3">
+                            <label for="writingFile" class="form-label">Upload your answer (document or image):</label>
+                            <input type="file" accept=".doc,.docx,.pdf,.txt,.md,.jpg,.jpeg,.png" class="form-control" id="writingFile" name="writingFile" required>
+                            <div class="form-text">Supported file types: Word (.doc, .docx), PDF, text files (.txt, .md), and images.</div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="writingText" class="form-label">Additional comments (optional):</label>
+                            <textarea class="form-control" id="writingText" name="writingText" rows="3"></textarea>
+                        </div>
+                    `;
+                } else if (type === 'writing') {
+                    inputGroup = `
+                        <div class="mb-3">
+                            <label for="writingText" class="form-label">Type your answer (optional):</label>
+                            <textarea class="form-control" id="writingText" name="writingText" rows="3"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label for="writingFile" class="form-label">Or upload a file (optional):</label>
+                            <input type="file" accept=".doc,.docx,.pdf,.txt,.md,.jpg,.jpeg,.png" class="form-control" id="writingFile" name="writingFile">
+                            <div class="form-text">Supported file types: Word (.doc, .docx), PDF, text files (.txt, .md), and images.</div>
+                        </div>
+                    `;
+                }
+                form.innerHTML = inputGroup + `
+                    <button type="submit" class="btn btn-primary">Submit</button>
+                `;
+                form.onsubmit = async function(e) {
+                    e.preventDefault();
+                    const formData = new FormData();
+                    if (type === 'writing-long') {
+                        const file = form.writingFile.files[0];
+                        if (!file) {
+                            alert('Please upload a file with your answer.');
+                            return;
+                        }
+                        formData.append('file', file);
+                        if (form.writingText && form.writingText.value) {
+                            formData.append('text', form.writingText.value);
+                        }
+                    } else if (type === 'writing') {
+                        if (form.writingText && form.writingText.value) {
+                            formData.append('text', form.writingText.value);
+                        }
+                        if (form.writingFile && form.writingFile.files[0]) {
+                            formData.append('file', form.writingFile.files[0]);
+                        }
+                        
+                        if (!form.writingText.value && (!form.writingFile.files || !form.writingFile.files[0])) {
+                            alert('Please either type your answer or upload a file.');
+                            return;
+                        }
+                    }
+                    // Submit to backend
+                    const res = await fetch(`/api/assessments/${assessment.id}/submit-writing`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                        body: formData
+                    });
+                    const result = await res.json();
+                    if (result.success) {
+                        alert('Submission successful!');
+                        // Once submitted, fetch submission data to update the attempts counter
+                        await fetchSubmissionData();
+                        window.location.reload();
+                    } else {
+                        alert('Submission failed: ' + (result.error || 'Unknown error'));
+                    }
+                };
+                mainDiv.appendChild(form);
+                container.appendChild(mainDiv);
+                return;
+            }
+            // ... existing code ...
+        }
+        
+        function renderQuiz(container, attemptsHtml, timerHtml) {
+            // Get questions from either questions field or the first question in questions array
+            let questions = [];
+            
+            if (assessment.questions) {
+                if (Array.isArray(assessment.questions)) {
+                    // If questions is already an array
+                    questions = assessment.questions;
+                } else if (typeof assessment.questions === 'string') {
+                    // If questions is a JSON string
+                    try {
+                        questions = JSON.parse(assessment.questions);
+                        if (!Array.isArray(questions)) {
+                            questions = [questions];
+                        }
+                    } catch (error) {
+                        console.error('Error parsing questions:', error);
+                        questions = [];
+                    }
+                } else if (typeof assessment.questions === 'object') {
+                    // If questions is a single object, wrap in array
+                    questions = [assessment.questions];
+                }
+            }
+            
+            // Add a default type if not present on questions
+            questions.forEach(question => {
+                if (!question.type) {
+                    // Try to determine type from structure
+                    if (question.options && Array.isArray(question.options)) {
+                        question.type = 'multiple-choice';
+                    } else if (question.pairs && Array.isArray(question.pairs)) {
+                        question.type = 'matching';
+                    } else {
+                        question.type = 'text'; // Default type
+                    }
+                }
+                
+                // Ensure the options field exists for matching type questions
+                if (question.type === 'matching' && !question.options && question.pairs) {
+                    question.options = question.pairs.map(pair => pair.expression);
+                    question.matches = question.pairs.map(pair => pair.meaning);
+                }
+            });
+            
+            if (!questions || questions.length === 0) {
+                container.innerHTML = `
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>
+                        This quiz has no questions yet.
+                    </div>
+                    <a href="/student/assessments" class="btn btn-primary">
+                        <i class="bi bi-arrow-left me-2"></i>Back to Assessments
+                    </a>
+                `;
+                return;
+            }
+            
+            // Create navigation pills
+            let navPills = '';
+            for (let i = 0; i < questions.length; i++) {
+                navPills += `
+                    <li class="nav-item">
+                        <button class="nav-link ${i === currentQuestionIndex ? 'active' : ''}" 
+                                onclick="navigateToQuestion(${i})">${i + 1}</button>
+                    </li>
+                `;
+            }
+            
+            // Get current question
+            const question = questions[currentQuestionIndex];
+            console.log('Rendering question:', question);
+            
+            container.innerHTML = `
+                <div class="row">
+                    <div class="col-md-8">
+                        <h1>${assessment.title}</h1>
+                        <p class="text-muted">${assessment.description || ''}</p>
+                        <div class="quiz-container">
+                            ${attemptsHtml}
+                            ${timerHtml}
+                            <div class="question-title">
+                                Question ${currentQuestionIndex + 1} of ${questions.length}
+                            </div>
+                            <div id="questionContainer"></div>
+                            <div id="submitError" class="alert alert-danger mt-3 d-none"></div>
+                            <div class="quiz-footer">
+                                <button class="btn btn-outline-primary" ${currentQuestionIndex === 0 ? 'disabled' : ''} onclick="previousQuestion()">
+                                    <i class="bi bi-chevron-left me-2"></i>Previous
+                                </button>
+                                ${currentQuestionIndex === questions.length - 1 ? 
+                                    `<button class="btn btn-success" id="submitBtn" onclick="submitAssessment()">
+                                        <i class="bi bi-check2 me-2"></i>Submit Quiz
+                                    </button>` : 
+                                    `<button class="btn btn-outline-primary" onclick="nextQuestion()">
+                                        Next<i class="bi bi-chevron-right ms-2"></i>
+                                    </button>`}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card mb-3">
+                            <div class="card-header">
+                                <h5 class="mb-0">Question Navigation</h5>
+                            </div>
+                            <div class="card-body">
+                                <ul class="nav nav-pills flex-wrap">
+                                    ${navPills}
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="mb-0">Quiz Info</h5>
+                            </div>
+                            <div class="card-body">
+                                <div><strong>Total Questions:</strong> ${questions.length}</div>
+                                <div><strong>Subject:</strong> ${assessment.subjectName || 'Not specified'}</div>
+                                <div><strong>Unit:</strong> ${assessment.unitName || 'Not specified'}</div>
+                                <div><strong>Part:</strong> ${assessment.partName || 'Not specified'}</div>
+                                <div><strong>Section:</strong> ${assessment.sectionName || 'Not specified'}</div>
+                                <div><strong>Due Date:</strong> ${assessment.dueDate ? new Date(assessment.dueDate).toLocaleDateString() : 'No due date'}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            // Now render the question into the container
+            renderQuestion(question, currentQuestionIndex);
+            startAttemptTimer();
+        }
+        
+        function renderQuestion(question, index) {
+            // Get container element
+            const questionContainer = document.getElementById('questionContainer');
+            questionContainer.innerHTML = ''; // Clear previous question
+            
+            // Create a div for the current question
+            const questionDiv = document.createElement('div');
+            questionDiv.className = 'question-container';
+            
+            // Add the question title with number
+            const titleDiv = document.createElement('div');
+            titleDiv.className = 'question-title';
+            titleDiv.innerText = `Question ${index + 1}`;
+            questionDiv.appendChild(titleDiv);
+            
+            // Add the question text
+            const textDiv = document.createElement('div');
+            textDiv.className = 'question-text';
+            textDiv.innerText = question.text;
+            questionDiv.appendChild(textDiv);
+            
+            // Add question type specific elements
+            switch(question.type) {
+                case 'multiple-choice':
+                    renderMultipleChoiceQuestion(question, questionDiv);
+                    break;
+                case 'text':
+                    renderTextQuestion(question, questionDiv);
+                    break;
+                case 'matching':
+                    renderMatchingQuestion(question, questionDiv);
+                    break;
+                case 'drag-and-drop':
+                    renderDragAndDropQuestion(question, questionDiv);
+                    break;
+                case 'image-matching':
+                    renderImageMatchingQuestion(question, questionDiv);
+                    break;
+                case 'true-false':
+                    renderTrueFalseQuestion(question, questionDiv);
+                    break;
+                case 'writing':
+                    renderWritingQuestion(question, questionDiv, index);
+                    break;
+                case 'speaking':
+                    const speakingQuestion = question;
+                    const timeLimit = speakingQuestion.timeLimit || 60;
+                    const isVideo = speakingQuestion.responseType === 'video';
+                    
+                    let html = `
+                        <div class="card mb-4">
+                            <div class="card-body">
+                                <h5 class="card-title">Speaking Question</h5>
+                                <p class="card-text">${speakingQuestion.prompt}</p>
+                                <div class="mb-3">
+                                    <label class="form-label">Evaluation Criteria:</label>
+                                    <p class="text-muted">${speakingQuestion.evaluationCriteria}</p>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Time Limit: ${timeLimit} seconds</label>
+                                    <div class="progress mb-2">
+                                        <div class="progress-bar" role="progressbar" style="width: 0%"></div>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <div class="d-flex gap-2 mb-2">
+                                        <button class="btn btn-primary" onclick="startRecording(${index}, ${isVideo})" id="recordBtn${index}">
+                                            <i class="fas fa-microphone"></i> Start Recording
+                                        </button>
+                                        <button class="btn btn-danger" onclick="stopRecording(${index})" id="stopBtn${index}" style="display: none;">
+                                            <i class="fas fa-stop"></i> Stop Recording
+                                        </button>
+                                        <button class="btn btn-secondary" onclick="uploadMedia(${index})" id="uploadBtn${index}" style="display: none;">
+                                            <i class="fas fa-upload"></i> Upload ${isVideo ? 'Video' : 'Audio'}
+                                        </button>
+                                    </div>
+                                    <div id="mediaPreview${index}" class="mt-2"></div>
+                                    <div id="recordingStatus${index}" class="text-muted mt-2"></div>
+                                </div>
+                            </div>
+                        </div>`;
+                    return html;
+                default:
+                    textDiv.innerText = 'Unsupported question type: ' + question.type;
+            }
+            
+            // Add the question to the container
+            questionContainer.appendChild(questionDiv);
+        }
+        
+        function renderTextQuestion(question, questionDiv) {
+            // Create input group
+            const inputGroup = document.createElement('div');
+            inputGroup.className = 'input-group';
+            
+            // Create text input
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'form-control';
+            input.placeholder = 'Enter your answer here...';
+            
+            // Set value if already answered
+            if (userAnswers[currentQuestionIndex] && userAnswers[currentQuestionIndex].text) {
+                input.value = userAnswers[currentQuestionIndex].text;
+            }
+            
+            // Add input event handler
+            input.addEventListener('input', function() {
+                updateTextAnswer(this.value);
+            });
+            
+            inputGroup.appendChild(input);
+            questionDiv.appendChild(inputGroup);
+        }
+        
+        function updateTextAnswer(text) {
+            // Initialize if not exists
+            if (!userAnswers[currentQuestionIndex]) {
+                userAnswers[currentQuestionIndex] = {};
+            }
+            
+            // Save the text answer
+            userAnswers[currentQuestionIndex].text = text;
+            console.log('Updated answer:', userAnswers);
+        }
+        
+        function renderMatchingQuestion(question, questionDiv) {
+            // Add instructions
+            const instructionsDiv = document.createElement('div');
+            instructionsDiv.className = 'question-instructions';
+            instructionsDiv.textContent = 'Match each item on the left with its corresponding answer on the right.';
+            questionDiv.appendChild(instructionsDiv);
+            
+            // Create matching container
+            const matchingContainer = document.createElement('div');
+            matchingContainer.className = 'matching-container';
+            
+            // Prepare pairs with unique IDs
+            const pairs = question.pairs.map((pair, idx) => ({
+                ...pair,
+                id: pair.id || `option-${idx}`,
+                matchId: pair.matchId || `match-${idx}`
+            }));
+            const options = pairs.map(p => ({ id: p.id, text: p.expression }));
+            const matches = pairs.map(p => ({ id: p.matchId, text: p.meaning }));
+            
+            // Shuffle matches for the dropdown
+            const shuffledMatches = [...matches].sort(() => Math.random() - 0.5);
+            
+            // Create each matching item
+            options.forEach((option, optionIndex) => {
+                const matchingItem = document.createElement('div');
+                matchingItem.className = 'matching-item';
+                
+                // Left side - expression
+                const expressionDiv = document.createElement('div');
+                expressionDiv.className = 'matching-expression';
+                expressionDiv.textContent = option.text;
+                matchingItem.appendChild(expressionDiv);
+                
+                // Right side - dropdown
+                const selectDiv = document.createElement('div');
+                selectDiv.className = 'matching-select';
+                
+                const select = document.createElement('select');
+                select.className = 'form-select';
+                select.dataset.optionId = option.id;
+                
+                // Add default empty option
+                const defaultOption = document.createElement('option');
+                defaultOption.value = '';
+                defaultOption.textContent = '-- Select a match --';
+                select.appendChild(defaultOption);
+                
+                // Add all possible matches
+                shuffledMatches.forEach(match => {
+                    const matchOption = document.createElement('option');
+                    matchOption.value = match.id;
+                    matchOption.textContent = match.text;
+                    select.appendChild(matchOption);
+                });
+                
+                // Set selected value if already answered
+                if (userAnswers[currentQuestionIndex] &&
+                    userAnswers[currentIndex].matching[option.id] !== undefined) {
+                    select.value = userAnswers[currentQuestionIndex].matching[option.id];
+                }
+                
+                // Add change handler
+                select.addEventListener('change', function() {
+                    updateMatchingAnswer(option.id, this.value !== '' ? this.value : null);
+                });
+                
+                selectDiv.appendChild(select);
+                matchingItem.appendChild(selectDiv);
+                
+                matchingContainer.appendChild(matchingItem);
+            });
+            
+            questionDiv.appendChild(matchingContainer);
+        }
+        
+        function updateMatchingAnswer(optionId, matchId) {
+            // Initialize if not exists
+            if (!userAnswers[currentQuestionIndex]) {
+                userAnswers[currentQuestionIndex] = {};
+            }
+            if (!userAnswers[currentQuestionIndex].matching) {
+                userAnswers[currentQuestionIndex].matching = {};
+            }
+            // Save the matching value by ID
+            userAnswers[currentQuestionIndex].matching[optionId] = matchId;
+            console.log('Updated matching answer:', userAnswers);
+        }
+        
+        function renderAssignment(container) {
+            container.innerHTML = `
+                <h1>${assessment.title}</h1>
+                <p class="text-muted">${assessment.description || ''}</p>
+                
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Assignment Details</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            ${assessment.description || 'No description provided.'}
+                        </div>
+                        
+                        ${assessment.dueDate ? `
+                            <div class="alert alert-info">
+                                <i class="bi bi-calendar-event me-2"></i>
+                                Due Date: ${new Date(assessment.dueDate).toLocaleDateString()}
+                            </div>
+                        ` : ''}
+                        
+                        <div class="form-group mt-4">
+                            <label for="assignmentResponse" class="form-label">Your Response:</label>
+                            <textarea class="form-control" id="assignmentResponse" rows="6" 
+                                      placeholder="Type your response here..."></textarea>
+                        </div>
+                        <div class="form-group mt-3">
+                            <label for="assignmentFile" class="form-label">Attach File (optional):</label>
+                            <input type="file" class="form-control" id="assignmentFile">
+                        </div>
+                        <div class="form-group mt-3">
+                            <label for="assignmentImage" class="form-label">Upload a Photo of Your Work (optional):</label>
+                            <input type="file" class="form-control" id="assignmentImage" accept="image/*">
+                            <div id="assignmentImagePreview" class="mt-2"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="d-flex justify-content-between">
+                    <a href="/student/assessments" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-left me-2"></i>Back to Assessments
+                    </a>
+                    <button class="btn btn-success" onclick="submitAssignment()">
+                        <i class="bi bi-check2 me-2"></i>Submit Assignment
+                    </button>
+                </div>
+            `;
+            // Add image preview handler
+            const imageInput = document.getElementById('assignmentImage');
+            const previewDiv = document.getElementById('assignmentImagePreview');
+            imageInput.addEventListener('change', function() {
+                previewDiv.innerHTML = '';
+                if (this.files && this.files[0]) {
+                    const img = document.createElement('img');
+                    img.src = URL.createObjectURL(this.files[0]);
+                    img.style.maxWidth = '200px';
+                    img.style.maxHeight = '200px';
+                    img.className = 'img-thumbnail';
+                    previewDiv.appendChild(img);
+                }
+            });
+        }
+        
+        function renderSpeakingAssessment(container) {
+            container.innerHTML = `
+                <h1>${assessment.title}</h1>
+                <p class="text-muted">${assessment.description || ''}</p>
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Speaking Assessment</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label for="audioUpload" class="form-label">Upload your audio response (mp3, wav):</label>
+                            <input type="file" class="form-control" id="audioUpload" accept="audio/*">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Or record directly:</label><br>
+                            <button class="btn btn-outline-primary mb-2" id="startRecordingBtn">Start Recording</button>
+                            <button class="btn btn-outline-secondary mb-2" id="stopRecordingBtn" disabled>Stop Recording</button>
+                            <audio id="audioPreview" controls style="display:none;"></audio>
+                        </div>
+                        <div id="recordingStatus" class="text-info mb-2"></div>
+                    </div>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <a href="/student/assessments" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-left me-2"></i>Back to Assessments
+                    </a>
+                    <button class="btn btn-success" id="submitSpeakingBtn">
+                        <i class="bi bi-check2 me-2"></i>Submit Speaking Assessment
+                    </button>
+                </div>
+            `;
+            // Add event listeners for recording and upload
+            setupSpeakingAssessmentHandlers();
+        }
+        
+        function setupSpeakingAssessmentHandlers() {
+            let mediaRecorder;
+            let audioChunks = [];
+            let audioBlob = null;
+            const startBtn = document.getElementById('startRecordingBtn');
+            const stopBtn = document.getElementById('stopRecordingBtn');
+            const audioPreview = document.getElementById('audioPreview');
+            const audioUpload = document.getElementById('audioUpload');
+            const statusDiv = document.getElementById('recordingStatus');
+            const submitBtn = document.getElementById('submitSpeakingBtn');
+
+            startBtn.onclick = async function() {
+                audioChunks = [];
+                audioBlob = null;
+                audioPreview.style.display = 'none';
+                statusDiv.innerHTML = '<span class="recording-indicator"><span class="recording-dot"></span>Recording...</span>';
+                startBtn.disabled = true;
+                stopBtn.disabled = false;
+                if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                    try {
+                        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                        mediaRecorder = new MediaRecorder(stream);
+                        mediaRecorder.ondataavailable = function(e) {
+                            audioChunks.push(e.data);
+                        };
+                        mediaRecorder.onstop = function() {
+                            audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                            audioPreview.src = URL.createObjectURL(audioBlob);
+                            audioPreview.style.display = 'block';
+                            statusDiv.innerHTML = '<span style="color: #388e3c; font-weight: bold;">Recording stopped.</span>';
+                        };
+                        mediaRecorder.start();
+                    } catch (err) {
+                        statusDiv.textContent = 'Microphone access denied or not available.';
+                        startBtn.disabled = false;
+                        stopBtn.disabled = true;
+                    }
+                } else {
+                    statusDiv.textContent = 'Audio recording not supported in this browser.';
+                }
+            };
+
+            stopBtn.onclick = function() {
+                if (mediaRecorder && mediaRecorder.state === 'recording') {
+                    mediaRecorder.stop();
+                    startBtn.disabled = false;
+                    stopBtn.disabled = true;
+                }
+            };
+
+            audioUpload.onchange = function() {
+                audioBlob = audioUpload.files[0] || null;
+                if (audioBlob) {
+                    audioPreview.src = URL.createObjectURL(audioBlob);
+                    audioPreview.style.display = 'block';
+                    statusDiv.textContent = 'Audio file selected.';
+                }
+            };
+
+            submitBtn.onclick = async function() {
+                if (!audioBlob) {
+                    statusDiv.textContent = 'Please record or upload an audio file before submitting.';
+                    return;
+                }
+                statusDiv.textContent = 'Submitting...';
+                const formData = new FormData();
+                formData.append('audio', audioBlob, audioBlob.name || 'recording.webm');
+                formData.append('assessmentId', assessmentId);
+                try {
+                    const response = await fetch(`/api/assessments/${assessmentId}/submit-speaking`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${token}` },
+                        body: formData
+                    });
+                    if (!response.ok) throw new Error('Failed to submit speaking assessment');
+                    const result = await response.json();
+                    document.getElementById('assessmentContent').innerHTML = `
+                        <div class="alert alert-success">
+                            <i class="bi bi-check-circle me-2"></i>
+                            Speaking assessment submitted successfully!
+                        </div>
+                        <a href="/student/assessments" class="btn btn-primary">
+                            <i class="bi bi-arrow-left me-2"></i>Back to Assessments
+                        </a>
+                    `;
+                } catch (error) {
+                    statusDiv.textContent = error.message || 'Failed to submit. Please try again.';
+                }
+            };
+        }
+        
+        function navigateToQuestion(index) {
+            // Save current answers first
+            saveCurrentAnswers();
+            
+            // Update current question index
+            currentQuestionIndex = index;
+            
+            // Re-render the assessment
+            renderAssessment();
+        }
+        
+        function previousQuestion() {
+            if (currentQuestionIndex > 0) {
+                navigateToQuestion(currentQuestionIndex - 1);
+            }
+        }
+        
+        function nextQuestion() {
+            if (assessment.questions && currentQuestionIndex < assessment.questions.length - 1) {
+                navigateToQuestion(currentQuestionIndex + 1);
+            }
+        }
+        
+        function saveCurrentAnswers() {
+            // All answers are already saved in the userAnswers object
+            // when the user interacts with the elements through event handlers
+            console.log('Saved answers:', userAnswers);
+        }
+        
+        function saveMatchingAnswer(questionIndex, pairIndex, meaningIndex) {
+            if (!userAnswers[questionIndex]) {
+                userAnswers[questionIndex] = {};
+            }
+            userAnswers[questionIndex][pairIndex] = meaningIndex === "" ? null : parseInt(meaningIndex);
+            console.log('Saved matching answer:', userAnswers);
+        }
+        
+        function saveMultipleChoiceAnswer(questionIndex, optionIndex) {
+            userAnswers[questionIndex] = optionIndex;
+            console.log('Saved multiple choice answer:', userAnswers);
+            renderQuiz(document.getElementById('assessmentContent'));
+        }
+        
+        function saveListeningAnswer(questionIndex, answer) {
+            userAnswers[questionIndex] = answer;
+            console.log('Saved listening answer:', userAnswers);
+        }
+        
+        async function submitAssessment(scoreOverride) {
+            try {
+                showLoader();
+                // Format answers based on the question types
+                const answers = {};
+                if (assessment.questions) {
+                    assessment.questions.forEach((question, index) => {
+                        if (userAnswers[index]) {
+                            if (question.type === 'drag-and-drop') {
+                                // Detect subtype
+                                let subtype = question.subtype || assessment.subtype;
+                                if (subtype === 'sequence' && Array.isArray(userAnswers[index])) {
+                                    answers[index] = userAnswers[index];
+                                } else if (subtype === 'fill-in-blank' && userAnswers[index].dragAndDrop) {
+                                    answers[index] = { dragAndDrop: userAnswers[index].dragAndDrop };
+                                } else {
+                                    answers[index] = userAnswers[index];
+                                }
+                            } else {
+                                switch (question.type) {
+                                    case 'multiple-choice':
+                                        answers[index] = userAnswers[index].selectedOption;
+                                        break;
+                                    case 'text':
+                                        answers[index] = userAnswers[index].text;
+                                        break;
+                                    case 'matching':
+                                        answers[index] = userAnswers[index].matching;
+                                        break;
+                                    case 'true-false':
+                                        answers[index] = userAnswers[index].tf;
+                                        break;
+                                    case 'writing':
+                                        answers[index] = userAnswers[index].text;
+                                        break;
+                                    default:
+                                        answers[index] = userAnswers[index];
+                                }
+                            }
+                        } else {
+                            answers[index] = null;
+                        }
+                    });
+                }
+                // Stop timer and get time taken for this attempt
+                const timeTaken = stopAttemptTimer();
+                // Submit answers to API
+                const response = await fetch(`/api/assessments/${assessmentId}/submit`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        assessmentId: assessmentId,
+                        answers: answers,
+                        timeTaken
+                    })
+                });
+                if (!response.ok) {
+                    throw new Error('Failed to submit assessment');
+                }
+                const result = await response.json();
+                console.log('Assessment submitted:', result);
+                // Format time taken as mm:ss
+                let timeTakenStr = '';
+                if (result.timeTaken !== undefined) {
+                    const minutes = String(Math.floor(result.timeTaken / 60)).padStart(2, '0');
+                    const seconds = String(result.timeTaken % 60).padStart(2, '0');
+                    timeTakenStr = `<p class="mt-2">Time taken: <strong>${minutes}:${seconds}</strong></p>`;
+                }
+                document.getElementById('assessmentContent').innerHTML = `
+                    <div class="alert alert-success">
+                        <i class="bi bi-check-circle me-2"></i>
+                        Assessment submitted successfully!
+                        ${result.score !== undefined ? `<p class=\"mt-2\">Your score: <strong>${result.score}%</strong></p>` : ''}
+                        ${timeTakenStr}
+                    </div>
+                    <a href="/student/assessments" class="btn btn-primary">
+                        <i class="bi bi-arrow-left me-2"></i>Back to Assessments
+                    </a>
+                `;
+                // Send timeTaken and handle attempts
+                // --- Fetch latest attempts and update UI ---
+                try {
+                    const subRes = await fetch(`/api/assessments/${assessmentId}/submissions`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (subRes.ok) {
+                        const submissions = await subRes.json();
+                        if (Array.isArray(submissions) && submissions.length > 0) {
+                            attemptCount = submissions[0].attempts || submissions.length;
+                            const attemptElem = document.getElementById('attemptCount');
+                            if (attemptElem) attemptElem.textContent = attemptCount;
+                        }
+                    }
+                } catch (e) { console.error('Failed to update attempt count:', e); }
+                attemptCount++;
+                document.getElementById('attemptCount').textContent = attemptCount;
+                if (maxAttempts && attemptCount > maxAttempts) {
+                    document.getElementById('submitBtn').disabled = true;
+                    document.getElementById('submitError').classList.remove('d-none');
+                    document.getElementById('submitError').textContent = 'You have reached the maximum number of attempts.';
+                    return;
+                }
+                // Restart timer for next attempt if allowed
+                if (!maxAttempts || attemptCount < maxAttempts) {
+                    startAttemptTimer();
+                }
+            } catch (error) {
+                console.error('Error submitting assessment:', error);
+                // Create submit error element if it doesn't exist
+                let errorElement = document.getElementById('submitError');
+                if (!errorElement) {
+                    errorElement = document.createElement('div');
+                    errorElement.id = 'submitError';
+                    errorElement.className = 'alert alert-danger mt-3';
+                    document.querySelector('.quiz-footer').prepend(errorElement);
+                }
+                errorElement.textContent = error.message || 'Failed to submit assessment. Please try again.';
+                errorElement.classList.remove('d-none');
+                // Reset submit button
+                const submitButton = document.querySelector('button[onclick="submitAssessment()"]');
+                if (submitButton) {
+                    submitButton.disabled = false;
+                    submitButton.innerHTML = '<i class="bi bi-check2 me-2"></i>Submit Quiz';
+                }
+            } finally {
+                hideLoader();
+            }
+        }
+        
+        async function submitAssignment() {
+            try {
+                const imageInput = document.getElementById('assignmentImage');
+                const fileInput = document.getElementById('assignmentFile');
+                const textValue = document.getElementById('assignmentResponse').value;
+                const imageFile = imageInput && imageInput.files && imageInput.files[0] ? imageInput.files[0] : null;
+                const file = fileInput && fileInput.files && fileInput.files[0] ? fileInput.files[0] : null;
+                let response;
+                if (imageFile || file) {
+                    // Use FormData for file/image upload
+                    const formData = new FormData();
+                    formData.append('answers', JSON.stringify({ text: textValue }));
+                    if (imageFile) formData.append('image', imageFile);
+                    if (file) formData.append('file', file);
+                    response = await fetch(`/api/assessments/${assessmentId}/submit`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: formData
+                    });
+                } else {
+                    // Fallback to JSON if no file/image
+                    response = await fetch(`/api/assessments/${assessmentId}/submit`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            answers: { text: textValue },
+                            score: null
+                        })
+                    });
+                }
+                if (!response.ok) {
+                    throw new Error('Failed to submit assignment');
+                }
+                const result = await response.json();
+                console.log('Assignment submitted:', result);
+                document.getElementById('assessmentContent').innerHTML = `
+                    <div class="card mb-4">
+                        <div class="card-header bg-success text-white">
+                            <h3 class="mb-0">Assignment Submitted Successfully!</h3>
+                        </div>
+                        <div class="card-body">
+                            <p>Your assignment has been submitted. Your teacher will review it soon.</p>
+                            <div class="d-flex justify-content-between mt-4">
+                                <a href="/student/assessments" class="btn btn-primary">
+                                    <i class="bi bi-arrow-left me-2"></i>Back to Assessments
+                                </a>
+                                <a href="/student/dashboard" class="btn btn-outline-primary">
+                                    Go to Dashboard<i class="bi bi-arrow-right ms-2"></i>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } catch (error) {
+                console.error('Error submitting assignment:', error);
+                alert('Failed to submit assignment. Please try again.');
+            }
+        }
+        
+        function shuffleArray(array) {
+            // Create a copy to avoid modifying the original
+            const shuffled = [...array];
+            for (let i = shuffled.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+            }
+            return shuffled;
+        }
+        
+        function logout() {
+            localStorage.removeItem('token');
+            window.location.href = '/login';
+        }
+        
+        function renderMultipleChoiceQuestion(question, questionDiv) {
+            // Support both 'options' and 'choices' keys
+            const choices = question.options || question.choices || [];
+            // Create container for options
+            const optionsContainer = document.createElement('div');
+            optionsContainer.className = 'options-container';
+            // Add each option
+            choices.forEach((option, optionIndex) => {
+                const optionDiv = document.createElement('div');
+                optionDiv.className = 'multiple-choice-option';
+                optionDiv.textContent = option;
+                optionDiv.dataset.optionIndex = optionIndex;
+                // Check if this option is already selected
+                if (userAnswers[currentQuestionIndex] && 
+                    userAnswers[currentQuestionIndex].selectedOption === optionIndex) {
+                    optionDiv.classList.add('selected');
+                }
+                // Add click handler
+                optionDiv.addEventListener('click', function() {
+                    // Remove selected class from all options
+                    optionsContainer.querySelectorAll('.multiple-choice-option').forEach(el => {
+                        el.classList.remove('selected');
+                    });
+                    // Add selected class to this option
+                    this.classList.add('selected');
+                    // Save the answer
+                    updateMultipleChoiceAnswer(optionIndex);
+                });
+                optionsContainer.appendChild(optionDiv);
+            });
+            questionDiv.appendChild(optionsContainer);
+        }
+        
+        function updateMultipleChoiceAnswer(optionIndex) {
+            // Initialize if not exists
+            if (!userAnswers[currentQuestionIndex]) {
+                userAnswers[currentQuestionIndex] = {};
+            }
+            
+            // Save the selected option
+            userAnswers[currentQuestionIndex].selectedOption = optionIndex;
+            console.log('Updated answer:', userAnswers);
+        }
+        
+        function renderDragAndDropQuestion(question, questionDiv) {
+            // Support subtype: fill-in-blank, image-fill-blank, long-paragraph-fill-in-blank
+            if (
+                question.subtype === 'fill-in-blank' || question.subtype === 'image-fill-blank' || question.subtype === 'long-paragraph-fill-in-blank' ||
+                (assessment.subtype === 'fill-in-blank') || (assessment.subtype === 'image-fill-blank') || (assessment.subtype === 'long-paragraph-fill-in-blank')
+            ) {
+                // Add instructions
+                const instructionsDiv = document.createElement('div');
+                instructionsDiv.className = 'question-instructions';
+                instructionsDiv.textContent = question.instructions || 'Drag the correct word from the word bank into each blank.';
+                questionDiv.appendChild(instructionsDiv);
+
+                // Word bank
+                const wordBank = document.createElement('div');
+                wordBank.className = 'draggable-items-container';
+                // Use question.words for the word bank
+                const words = question.words || question.wordBank || question.options || [];
+                const shuffledWords = [...words].sort(() => Math.random() - 0.5);
+                shuffledWords.forEach(word => {
+                    const draggableItem = document.createElement('div');
+                    draggableItem.className = 'draggable-item';
+                    draggableItem.textContent = word;
+                    draggableItem.setAttribute('draggable', 'true');
+                    draggableItem.dataset.value = word;
+                    draggableItem.addEventListener('dragstart', handleDragStart);
+                    draggableItem.addEventListener('dragend', handleDragEnd);
+                    wordBank.appendChild(draggableItem);
+                });
+                questionDiv.appendChild(wordBank);
+
+                // Sentences with blanks
+                const sentencesContainer = document.createElement('div');
+                sentencesContainer.className = 'sentences-container';
+                (question.sentences || []).forEach((sentence, idx) => {
+                    // Create a card for each sentence
+                    const sentenceCard = document.createElement('div');
+                    sentenceCard.className = 'card mb-4';
+                    
+                    // If this is image-fill-blank, add the image
+                    if (question.subtype === 'image-fill-blank' || assessment.subtype === 'image-fill-blank') {
+                        const imageDiv = document.createElement('div');
+                        imageDiv.className = 'card-img-top';
+                        const img = document.createElement('img');
+                        img.src = sentence.image;
+                        img.alt = `Image for sentence ${idx + 1}`;
+                        img.className = 'img-fluid';
+                        img.style.maxHeight = '200px';
+                        img.style.objectFit = 'contain';
+                        imageDiv.appendChild(img);
+                        sentenceCard.appendChild(imageDiv);
+                    }
+
+                    const cardBody = document.createElement('div');
+                    cardBody.className = 'card-body';
+                    
+                    const sentenceDiv = document.createElement('div');
+                    sentenceDiv.className = 'sentence-container';
+                    // Replace \n with <br> for line breaks
+                    let sentenceText = sentence.text.replace(/\\n/g, '\n');
+                    const parts = sentenceText.split(/___|\[BLANK\]/);
+                    for (let i = 0; i < parts.length; i++) {
+                        // Add the text part (with line breaks)
+                        const textParts = parts[i].split('\n');
+                        textParts.forEach((t, j) => {
+                            if (t) sentenceDiv.appendChild(document.createTextNode(t));
+                            if (j < textParts.length - 1) sentenceDiv.appendChild(document.createElement('br'));
+                        });
+                        if (i < parts.length - 1) {
+                            const dropTarget = document.createElement('div');
+                            dropTarget.className = 'drop-target';
+                            dropTarget.dataset.sentenceIndex = idx;
+                            dropTarget.dataset.blankIndex = i;
+                            dropTarget.dataset.correctAnswer = sentence.answers ? sentence.answers[i] : sentence.answer;
+                            dropTarget.addEventListener('dragover', handleDragOver);
+                            dropTarget.addEventListener('dragenter', handleDragEnter);
+                            dropTarget.addEventListener('dragleave', handleDragLeave);
+                            dropTarget.addEventListener('drop', handleDrop);
+                            sentenceDiv.appendChild(dropTarget);
+                        }
+                    }
+                    cardBody.appendChild(sentenceDiv);
+                    sentenceCard.appendChild(cardBody);
+                    sentencesContainer.appendChild(sentenceCard);
+                });
+                questionDiv.appendChild(sentencesContainer);
+
+                // Add a check answers button
+                const checkButton = document.createElement('button');
+                checkButton.className = 'btn btn-primary mt-3';
+                checkButton.textContent = 'Check Answers';
+                checkButton.addEventListener('click', () => checkDragDropAnswers(questionDiv));
+                questionDiv.appendChild(checkButton);
+                return;
+            }
+            // ... fallback to original drag-and-drop (sequence) ...
+            // Add instructions
+            const instructionsDiv = document.createElement('div');
+            instructionsDiv.className = 'question-instructions';
+            instructionsDiv.textContent = 'Drag the words into the correct positions in the sentences.';
+            questionDiv.appendChild(instructionsDiv);
+            
+            // Create container for draggable items
+            const draggableContainer = document.createElement('div');
+            draggableContainer.className = 'draggable-items-container';
+            
+            // Get all the options (words to drag)
+            const options = question.options || [];
+            
+            // Shuffle the options to display them in random order
+            const shuffledOptions = [...options].sort(() => Math.random() - 0.5);
+            
+            // Create draggable items
+            shuffledOptions.forEach(option => {
+                const draggableItem = document.createElement('div');
+                draggableItem.className = 'draggable-item';
+                draggableItem.textContent = option;
+                draggableItem.setAttribute('draggable', 'true');
+                draggableItem.dataset.value = option;
+                
+                // Add drag event listeners
+                draggableItem.addEventListener('dragstart', handleDragStart);
+                draggableItem.addEventListener('dragend', handleDragEnd);
+                
+                draggableContainer.appendChild(draggableItem);
+            });
+            
+            questionDiv.appendChild(draggableContainer);
+            
+            // Create container for sentences with drop targets
+            const sentencesContainer = document.createElement('div');
+            sentencesContainer.className = 'sentences-container';
+            
+            // Process each sentence
+            (question.sentences || []).forEach((sentence, sentenceIndex) => {
+                const sentenceDiv = document.createElement('div');
+                sentenceDiv.className = 'sentence-container';
+                
+                // Split the sentence by [BLANK] placeholders
+                const parts = sentence.text.split('[BLANK]');
+                
+                // Create the sentence with drop targets
+                for (let i = 0; i < parts.length; i++) {
+                    // Add the text part
+                    sentenceDiv.appendChild(document.createTextNode(parts[i]));
+                    
+                    // Add drop target after each part except the last one
+                    if (i < parts.length - 1) {
+                        const dropTarget = document.createElement('div');
+                        dropTarget.className = 'drop-target';
+                        dropTarget.dataset.sentenceIndex = sentenceIndex;
+                        dropTarget.dataset.blankIndex = i;
+                        dropTarget.dataset.correctAnswer = sentence.answers[i];
+                        
+                        // Add drop event listeners
+                        dropTarget.addEventListener('dragover', handleDragOver);
+                        dropTarget.addEventListener('dragenter', handleDragEnter);
+                        dropTarget.addEventListener('dragleave', handleDragLeave);
+                        dropTarget.addEventListener('drop', handleDrop);
+                        
+                        sentenceDiv.appendChild(dropTarget);
+                    }
+                }
+                
+                sentencesContainer.appendChild(sentenceDiv);
+            });
+            
+            questionDiv.appendChild(sentencesContainer);
+            
+            // Add a check answers button
+            const checkButton = document.createElement('button');
+            checkButton.className = 'btn btn-primary mt-3';
+            checkButton.textContent = 'Check Answers';
+            checkButton.addEventListener('click', () => checkDragDropAnswers(questionDiv));
+            questionDiv.appendChild(checkButton);
+        }
+        
+        // Drag and drop event handlers
+        function handleDragStart(e) {
+            this.classList.add('dragging');
+            e.dataTransfer.setData('text/plain', this.dataset.value);
+            e.dataTransfer.effectAllowed = 'move';
+        }
+        
+        function handleDragEnd(e) {
+            this.classList.remove('dragging');
+        }
+        
+        function handleDragOver(e) {
+            if (e.preventDefault) e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            return false;
+        }
+        
+        function handleDragEnter(e) {
+            this.classList.add('highlight');
+        }
+        
+        function handleDragLeave(e) {
+            this.classList.remove('highlight');
+        }
+        
+        function handleDrop(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            this.classList.remove('highlight');
+            
+            const data = e.dataTransfer.getData('text/plain');
+            
+            // Only allow drop if the target is not already filled
+            if (!this.classList.contains('filled')) {
+                this.textContent = data;
+                this.classList.add('filled');
+                this.dataset.userAnswer = data;
+                
+                // Remove the draggable item from the container
+                const draggedItem = document.querySelector(`.draggable-item.dragging`);
+                if (draggedItem) {
+                    draggedItem.style.display = 'none';
+                }
+                
+                // Save the answer to userAnswers
+                const questionIndex = currentQuestionIndex;
+                const sentenceIndex = parseInt(this.dataset.sentenceIndex);
+                const blankIndex = parseInt(this.dataset.blankIndex);
+                
+                if (!userAnswers[questionIndex]) {
+                    userAnswers[questionIndex] = {};
+                }
+                
+                if (!userAnswers[questionIndex].dragAndDrop) {
+                    userAnswers[questionIndex].dragAndDrop = {};
+                }
+                
+                if (!userAnswers[questionIndex].dragAndDrop[sentenceIndex]) {
+                    userAnswers[questionIndex].dragAndDrop[sentenceIndex] = {};
+                }
+                
+                userAnswers[questionIndex].dragAndDrop[sentenceIndex][blankIndex] = data;
+            }
+            
+            return false;
+        }
+        
+        function checkDragDropAnswers(questionDiv) {
+            const dropTargets = questionDiv.querySelectorAll('.drop-target.filled');
+            let allCorrect = true;
+            
+            dropTargets.forEach(target => {
+                const userAnswer = target.dataset.userAnswer;
+                const correctAnswer = target.dataset.correctAnswer;
+                
+                if (userAnswer === correctAnswer) {
+                    target.classList.add('correct');
+                    target.classList.remove('incorrect');
+                } else {
+                    target.classList.add('incorrect');
+                    target.classList.remove('correct');
+                    allCorrect = false;
+                }
+            });
+            
+            // Display feedback
+            let feedbackDiv = questionDiv.querySelector('.feedback');
+            if (!feedbackDiv) {
+                feedbackDiv = document.createElement('div');
+                feedbackDiv.className = 'feedback alert mt-3';
+                questionDiv.appendChild(feedbackDiv);
+            }
+            
+            if (allCorrect) {
+                feedbackDiv.className = 'feedback alert alert-success mt-3';
+                feedbackDiv.textContent = 'All answers are correct! Well done!';
+            } else {
+                feedbackDiv.className = 'feedback alert alert-danger mt-3';
+                feedbackDiv.textContent = 'Some answers are incorrect. Try again!';
+            }
+        }
+        
+        function renderImageMatchingQuestion(question, questionDiv) {
+            // Add instructions
+            const instructionsDiv = document.createElement('div');
+            instructionsDiv.className = 'question-instructions';
+            instructionsDiv.textContent = 'Drag the labels to match each image.';
+            questionDiv.appendChild(instructionsDiv);
+            
+            // Create container for draggable items (labels)
+            const draggableContainer = document.createElement('div');
+            draggableContainer.className = 'draggable-items-container';
+            
+            // Get all the options (labels to drag)
+            const options = question.options || [];
+            
+            // Shuffle the options to display them in random order
+            const shuffledOptions = [...options].sort(() => Math.random() - 0.5);
+            
+            // Create draggable items (labels)
+            shuffledOptions.forEach(option => {
+                const draggableItem = document.createElement('div');
+                draggableItem.className = 'draggable-item';
+                draggableItem.textContent = option;
+                draggableItem.setAttribute('draggable', 'true');
+                draggableItem.dataset.value = option;
+                
+                // Add drag event listeners
+                draggableItem.addEventListener('dragstart', handleDragStart);
+                draggableItem.addEventListener('dragend', handleDragEnd);
+                
+                draggableContainer.appendChild(draggableItem);
+            });
+            
+            questionDiv.appendChild(draggableContainer);
+            
+            // Create container for images with drop targets
+            const imagesContainer = document.createElement('div');
+            imagesContainer.className = 'images-container';
+            
+            // Process each image
+            (question.images || []).forEach((imageInfo, imageIndex) => {
+                const imageItem = document.createElement('div');
+                imageItem.className = 'image-item';
+                
+                // Create image element
+                const img = document.createElement('img');
+                img.src = imageInfo.src;
+                img.alt = imageInfo.alt || `Image ${imageIndex + 1}`;
+                imageItem.appendChild(img);
+                
+                // Create drop target for this image
+                const dropTarget = document.createElement('div');
+                dropTarget.className = 'image-drop-target';
+                dropTarget.dataset.imageIndex = imageIndex;
+                dropTarget.dataset.correctAnswer = imageInfo.correctAnswer;
+                
+                // Add drop event listeners
+                dropTarget.addEventListener('dragover', handleDragOver);
+                dropTarget.addEventListener('dragenter', handleDragEnter);
+                dropTarget.addEventListener('dragleave', handleDragLeave);
+                dropTarget.addEventListener('drop', handleImageDrop);
+                
+                imageItem.appendChild(dropTarget);
+                imagesContainer.appendChild(imageItem);
+            });
+            
+            questionDiv.appendChild(imagesContainer);
+            
+            // Add a check answers button
+            const checkButton = document.createElement('button');
+            checkButton.className = 'btn btn-primary mt-3';
+            checkButton.textContent = 'Check Answers';
+            checkButton.addEventListener('click', () => checkImageMatchingAnswers(questionDiv));
+            questionDiv.appendChild(checkButton);
+        }
+        
+        // Event handler for dropping on image targets
+        function handleImageDrop(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            this.classList.remove('highlight');
+            
+            const data = e.dataTransfer.getData('text/plain');
+            
+            // Only allow drop if the target is not already filled
+            if (!this.classList.contains('filled')) {
+                this.textContent = data;
+                this.classList.add('filled');
+                this.dataset.userAnswer = data;
+                
+                // Remove the draggable item from the container
+                const draggedItem = document.querySelector(`.draggable-item.dragging`);
+                if (draggedItem) {
+                    draggedItem.style.display = 'none';
+                }
+                
+                // Save the answer to userAnswers
+                const questionIndex = currentQuestionIndex;
+                const imageIndex = parseInt(this.dataset.imageIndex);
+                
+                if (!userAnswers[questionIndex]) {
+                    userAnswers[questionIndex] = {};
+                }
+                
+                if (!userAnswers[questionIndex].imageMatching) {
+                    userAnswers[questionIndex].imageMatching = {};
+                }
+                
+                userAnswers[questionIndex].imageMatching[imageIndex] = data;
+            }
+            
+            return false;
+        }
+        
+        function checkImageMatchingAnswers(questionDiv) {
+            const dropTargets = questionDiv.querySelectorAll('.image-drop-target.filled');
+            let allCorrect = true;
+            
+            dropTargets.forEach(target => {
+                const userAnswer = target.dataset.userAnswer;
+                const correctAnswer = target.dataset.correctAnswer;
+                
+                if (userAnswer === correctAnswer) {
+                    target.classList.add('correct');
+                    target.classList.remove('incorrect');
+                } else {
+                    target.classList.add('incorrect');
+                    target.classList.remove('correct');
+                    allCorrect = false;
+                }
+            });
+            
+            // Display feedback
+            let feedbackDiv = questionDiv.querySelector('.feedback');
+            if (!feedbackDiv) {
+                feedbackDiv = document.createElement('div');
+                feedbackDiv.className = 'feedback alert mt-3';
+                questionDiv.appendChild(feedbackDiv);
+            }
+            
+            if (allCorrect) {
+                feedbackDiv.className = 'feedback alert alert-success mt-3';
+                feedbackDiv.textContent = 'All images are correctly labeled! Great job!';
+            } else {
+                feedbackDiv.className = 'feedback alert alert-danger mt-3';
+                feedbackDiv.textContent = 'Some labels are incorrect. Try again!';
+            }
+        }
+        
+        function renderDragAndDropAssessment(container) {
+            // Support both top-level and question-level drag-and-drop data
+            let words = assessment.words || assessment.wordBank || [];
+            let correct = assessment.correct || [];
+            let audio = assessment.audio;
+            let subtype = assessment.subtype;
+
+            // If not present at top level, try the first question
+            if ((!words.length || !correct.length) && assessment.questions && assessment.questions.length > 0) {
+                const q = assessment.questions[0];
+                // --- FIX: Merge wordBank and extraWords for sequence subtype ---
+                if ((q.subtype || assessment.subtype) === 'sequence') {
+                    const wordBank = q.wordBank || [];
+                    const extraWords = q.extraWords || [];
+                    words = [...wordBank, ...extraWords];
+                } else {
+                    words = q.words || q.wordBank || q.options || [];
+                }
+                correct = q.correct || q.correctSequence || [];
+                subtype = q.subtype || assessment.subtype;
+                // If audio is stored as a file name, resolve the URL here if needed
+                if (!audio && q.audioFileName && assessment.mediaFiles && assessment.mediaFiles.length > 0) {
+                    const mf = assessment.mediaFiles.find(f => f.label === q.audioFileName);
+                    if (mf) audio = mf.filePath;
+                }
+            }
+
+            // Ensure we have a valid subtype
+            if (!subtype || (subtype !== 'sequence' && subtype !== 'fill-in-blank' && subtype !== 'image-fill-blank')) {
+                container.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        Invalid drag-and-drop assessment format. Must specify either 'sequence', 'fill-in-blank', or 'image-fill-blank' subtype.
+                    </div>
+                    <a href="/student/assessments" class="btn btn-primary">
+                        <i class="bi bi-arrow-left me-2"></i>Back to Assessments
+                    </a>
+                `;
+                return;
+            }
+
+            // If fill-in-blank or image-fill-blank subtype, render sentences
+            if (subtype === 'fill-in-blank' || subtype === 'image-fill-blank') {
+                container.innerHTML = '';
+                renderDragAndDropQuestion(assessment.questions[0], container);
+                return;
+            }
+
+            // For sequence-based drag-and-drop
+            container.innerHTML = '';
+            
+            // If audio is not set, but there is an audio file in mediaFiles, use the first one
+            if (!audio && assessment.mediaFiles && assessment.mediaFiles.length > 0) {
+                const audioFile = assessment.mediaFiles.find(f => f.type && f.type.startsWith('audio')) || assessment.mediaFiles[0];
+                if (audioFile && audioFile.filePath) {
+                    audio = audioFile.filePath;
+                }
+            }
+            // If audio is present, render an audio player at the top
+            if (audio) {
+                // Display audio display name if present
+                let displayName = '';
+                if (assessment.questions && assessment.questions[0] && assessment.questions[0].audioDisplayName) {
+                    displayName = assessment.questions[0].audioDisplayName;
+                }
+                if (displayName) {
+                    const nameDiv = document.createElement('div');
+                    nameDiv.className = 'mb-1 fw-bold';
+                    nameDiv.textContent = displayName;
+                    container.appendChild(nameDiv);
+                }
+                const audioDiv = document.createElement('div');
+                audioDiv.className = 'mb-3';
+                audioDiv.innerHTML = `
+                    <audio controls>
+                        <source src="${audio}" type="audio/mpeg">
+                        Your browser does not support the audio element.
+                    </audio>
+                `;
+                container.appendChild(audioDiv);
+            }
+            // Add instructions
+            const instructionsDiv = document.createElement('div');
+            instructionsDiv.className = 'question-instructions';
+            instructionsDiv.textContent = 'Drag the words into the correct order.';
+            container.appendChild(instructionsDiv);
+
+            // Create container for drop targets
+            const dropTargetsContainer = document.createElement('div');
+            dropTargetsContainer.className = 'drop-targets-container mb-4';
+            
+            // Create drop targets based on correct order
+            correct.forEach((word, index) => {
+                const dropTarget = document.createElement('div');
+                dropTarget.className = 'drop-target';
+                dropTarget.dataset.index = index;
+                dropTarget.dataset.correctAnswer = word;
+                
+                // Add drop event listeners
+                dropTarget.addEventListener('dragover', handleDragOver);
+                dropTarget.addEventListener('dragenter', handleDragEnter);
+                dropTarget.addEventListener('dragleave', handleDragLeave);
+                dropTarget.addEventListener('drop', handleDrop);
+                
+                dropTargetsContainer.appendChild(dropTarget);
+            });
+            
+            container.appendChild(dropTargetsContainer);
+
+            // Create container for draggable items (word bank)
+            const draggableContainer = document.createElement('div');
+            draggableContainer.className = 'draggable-items-container';
+            
+            // Add word bank label
+            const wordBankLabel = document.createElement('div');
+            wordBankLabel.className = 'mb-2';
+            wordBankLabel.innerHTML = '<strong>Word Bank:</strong>';
+            container.appendChild(wordBankLabel);
+            
+            // Shuffle the words to display them in random order
+            const shuffledWords = [...words].sort(() => Math.random() - 0.5);
+            
+            // Create draggable items
+            shuffledWords.forEach(word => {
+                const draggableItem = document.createElement('div');
+                draggableItem.className = 'draggable-item';
+                draggableItem.textContent = word;
+                draggableItem.setAttribute('draggable', 'true');
+                draggableItem.dataset.value = word;
+                
+                // Add drag event listeners
+                draggableItem.addEventListener('dragstart', handleDragStart);
+                draggableItem.addEventListener('dragend', handleDragEnd);
+                
+                draggableContainer.appendChild(draggableItem);
+            });
+            
+            container.appendChild(draggableContainer);
+            
+            // Add a submit button instead of check answers
+            const submitButton = document.createElement('button');
+            submitButton.className = 'btn btn-primary mt-3';
+            submitButton.textContent = 'Submit';
+            submitButton.addEventListener('click', () => submitDragDropAssessment(container));
+            container.appendChild(submitButton);
+        }
+
+        function submitDragDropAssessment(container) {
+            // Detect subtype
+            let subtype = assessment.subtype;
+            if (!subtype && assessment.questions && assessment.questions[0]) {
+                subtype = assessment.questions[0].subtype;
+            }
+            if (subtype === 'sequence') {
+                // For sequence, collect answers as an array in order
+                const dropTargets = container.querySelectorAll('.drop-target');
+                const answer = [];
+                dropTargets.forEach(target => {
+                    answer.push(target.dataset.userAnswer || null);
+                });
+                // Save to userAnswers in the expected format
+                userAnswers[currentQuestionIndex] = answer;
+                submitAssessment();
+                return;
+            }
+            // For fill-in-blank, keep existing logic
+            const dropTargets = container.querySelectorAll('.drop-target.filled');
+            let correctCount = 0;
+            let totalCount = dropTargets.length;
+            dropTargets.forEach(target => {
+                const userAnswer = target.dataset.userAnswer;
+                const correctAnswer = target.dataset.correctAnswer;
+                if (userAnswer === correctAnswer) {
+                    correctCount++;
+                }
+            });
+            const score = Math.round((correctCount / totalCount) * 100);
+            submitAssessment(score);
+        }
+
+        // Add loader functions
+        function showLoader() {
+            // Check if loader exists, create if not
+            let loader = document.getElementById('loader');
+            if (!loader) {
+                loader = document.createElement('div');
+                loader.id = 'loader';
+                loader.className = 'position-fixed top-0 start-0 w-100 h-100 d-flex justify-content-center align-items-center bg-white bg-opacity-75';
+                loader.style.zIndex = '9999';
+                loader.innerHTML = `
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                `;
+                document.body.appendChild(loader);
+            } else {
+                loader.style.display = 'flex';
+            }
+        }
+        
+        function hideLoader() {
+            const loader = document.getElementById('loader');
+            if (loader) {
+                loader.style.display = 'none';
+            }
+        }
+
+        // Sample drag-and-drop question for testing
+        const sampleDragDropQuestion = {
+            type: 'drag-and-drop',
+            text: 'Fill in the blanks in the following sentences with the correct words.',
+            options: ['happy', 'sad', 'angry', 'excited', 'tired', 'hungry', 'thirsty'],
+            sentences: [
+                {
+                    text: 'I am [BLANK] to see you today!',
+                    answers: ['happy']
+                },
+                {
+                    text: 'She was [BLANK] because she lost her favorite toy.',
+                    answers: ['sad']
+                },
+                {
+                    text: 'After running, I was [BLANK] and [BLANK].',
+                    answers: ['tired', 'thirsty']
+                }
+            ]
+        };
+        
+        // Function to test the drag-and-drop functionality
+        function testDragAndDrop() {
+            // Create a container 
+            const container = document.getElementById('assessmentContent');
+            container.innerHTML = `
+                <div class="container mt-5">
+                    <h2>Drag and Drop Test</h2>
+                    <div id="questionContainer"></div>
+                    <button class="btn btn-secondary mt-3" onclick="window.location.reload()">Reset Test</button>
+                </div>
+            `;
+            
+            // Create the question div
+            const questionDiv = document.createElement('div');
+            questionDiv.className = 'question-container';
+            
+            // Render the drag-and-drop question
+            renderDragAndDropQuestion(sampleDragDropQuestion, questionDiv);
+            
+            // Add to the container
+            document.getElementById('questionContainer').appendChild(questionDiv);
+        }
+        
+        // Sample image-matching question for testing
+        const sampleImageMatchingQuestion = {
+            type: 'image-matching',
+            text: 'Match the correct labels with each medical image.',
+            options: ['a doctor', 'a nurse', 'have a fever', 'take a temperature'],
+            images: [
+                {
+                    src: 'https://img.freepik.com/free-photo/portrait-smiling-handsome-male-doctor-man_171337-5055.jpg',
+                    alt: 'Doctor in white coat with stethoscope',
+                    correctAnswer: 'a doctor'
+                },
+                {
+                    src: 'https://img.freepik.com/free-photo/portrait-smiling-male-nurse_171337-1064.jpg',
+                    alt: 'Nurse in scrubs',
+                    correctAnswer: 'a nurse'
+                },
+                {
+                    src: 'https://img.freepik.com/free-photo/sick-woman-bed-having-fever-measuring-body-temperature_1301-7724.jpg',
+                    alt: 'Patient with thermometer',
+                    correctAnswer: 'have a fever'
+                },
+                {
+                    src: 'https://img.freepik.com/free-photo/woman-measuring-temperature-girl-bed_1301-2173.jpg',
+                    alt: 'Person taking temperature',
+                    correctAnswer: 'take a temperature'
+                }
+            ]
+        };
+        
+        // Function to test the image-matching functionality
+        function testImageMatching() {
+            // Create a container 
+            const container = document.getElementById('assessmentContent');
+            container.innerHTML = `
+                <div class="container mt-5">
+                    <h2>Image Matching Test</h2>
+                    <div id="questionContainer"></div>
+                    <button class="btn btn-secondary mt-3" onclick="window.location.reload()">Reset Test</button>
+                </div>
+            `;
+            
+            // Create the question div
+            const questionDiv = document.createElement('div');
+            questionDiv.className = 'question-container';
+            
+            // Render the image-matching question
+            renderImageMatchingQuestion(sampleImageMatchingQuestion, questionDiv);
+            
+            // Add to the container
+            document.getElementById('questionContainer').appendChild(questionDiv);
+        }
+        
+        // To test both types, add buttons to switch between them
+        function showTestOptions() {
+            const container = document.getElementById('assessmentContent');
+            container.innerHTML = `
+                <div class="container mt-5">
+                    <h2>Drag & Drop Testing</h2>
+                    <p>Select which type of drag & drop questions you want to test:</p>
+                    <div class="d-flex gap-3 mt-4">
+                        <button class="btn btn-primary" onclick="testDragAndDrop()">
+                            Test Sentence Completion
+                        </button>
+                        <button class="btn btn-primary" onclick="testImageMatching()">
+                            Test Image Matching
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Uncomment this line to show test options immediately
+        document.addEventListener('DOMContentLoaded', showTestOptions);
+
+        function startAttemptTimer() {
+            clearInterval(timerInterval);
+            attemptStartTime = Date.now();
+            updateTimerDisplay();
+            timerInterval = setInterval(updateTimerDisplay, 1000);
+        }
+
+        function updateTimerDisplay() {
+            if (!attemptStartTime) return;
+            const elapsed = Math.floor((Date.now() - attemptStartTime) / 1000);
+            const minutes = String(Math.floor(elapsed / 60)).padStart(2, '0');
+            const seconds = String(elapsed % 60).padStart(2, '0');
+            document.getElementById('timer').textContent = `${minutes}:${seconds}`;
+        }
+
+        function stopAttemptTimer() {
+            if (!attemptStartTime) return 0;
+            clearInterval(timerInterval);
+            const elapsed = Math.floor((Date.now() - attemptStartTime) / 1000);
+            totalTime += elapsed;
+            attemptStartTime = null;
+            return elapsed;
+        }
+
+        function renderTrueFalseQuestion(question, questionDiv) {
+            // Add instructions if present
+            if (question.instructions) {
+                const instructionsDiv = document.createElement('div');
+                instructionsDiv.className = 'question-instructions';
+                instructionsDiv.textContent = question.instructions;
+                questionDiv.appendChild(instructionsDiv);
+            }
+            // Render each sentence with T/F toggles
+            const sentencesDiv = document.createElement('div');
+            sentencesDiv.className = 'tf-sentences';
+            userAnswers[currentQuestionIndex] = userAnswers[currentQuestionIndex] || { tf: [] };
+            question.sentences.forEach((sentence, idx) => {
+                const row = document.createElement('div');
+                row.className = 'tf-sentence-row mb-2 d-flex align-items-center';
+                const text = document.createElement('span');
+                text.textContent = sentence.text;
+                text.style.flex = '1';
+                row.appendChild(text);
+                // T/F toggle button
+                const tfBtn = document.createElement('button');
+                tfBtn.type = 'button';
+                tfBtn.className = 'btn btn-outline-secondary tf-toggle ms-2';
+                tfBtn.dataset.state = '';
+                tfBtn.textContent = '?';
+                // Set initial state if already answered
+                const saved = userAnswers[currentQuestionIndex].tf[idx];
+                if (saved === true) {
+                    tfBtn.dataset.state = 'T';
+                    tfBtn.textContent = 'T';
+                    tfBtn.classList.add('btn-success');
+                } else if (saved === false) {
+                    tfBtn.dataset.state = 'F';
+                    tfBtn.textContent = 'F';
+                    tfBtn.classList.add('btn-danger');
+                }
+                tfBtn.onclick = function() {
+                    const states = ['', 'T', 'F'];
+                    let stateIdx = states.indexOf(tfBtn.dataset.state || '');
+                    stateIdx = (stateIdx + 1) % states.length;
+                    tfBtn.dataset.state = states[stateIdx];
+                    tfBtn.textContent = states[stateIdx] || '?';
+                    tfBtn.classList.toggle('btn-success', states[stateIdx] === 'T');
+                    tfBtn.classList.toggle('btn-danger', states[stateIdx] === 'F');
+                    tfBtn.classList.toggle('btn-outline-secondary', states[stateIdx] === '');
+                    // Save answer
+                    userAnswers[currentQuestionIndex].tf[idx] = states[stateIdx] === 'T' ? true : states[stateIdx] === 'F' ? false : null;
+                };
+                row.appendChild(tfBtn);
+                sentencesDiv.appendChild(row);
+            });
+            questionDiv.appendChild(sentencesDiv);
+        }
+
+        // Update the startRecording function
+        function startRecording(questionIndex, isVideo) {
+            const constraints = {
+                audio: true,
+                video: isVideo ? {
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
+                } : false
+            };
+
+            navigator.mediaDevices.getUserMedia(constraints)
+                .then(stream => {
+                    const mediaRecorder = new MediaRecorder(stream);
+                    const chunks = [];
+                    
+                    mediaRecorder.ondataavailable = (e) => {
+                        if (e.data.size > 0) {
+                            chunks.push(e.data);
+                        }
+                    };
+                    
+                    mediaRecorder.onstop = () => {
+                        const blob = new Blob(chunks, { type: isVideo ? 'video/webm' : 'audio/webm' });
+                        const url = URL.createObjectURL(blob);
+                        
+                        const previewDiv = document.getElementById(`mediaPreview${questionIndex}`);
+                        previewDiv.innerHTML = isVideo ? 
+                            `<video controls class="w-100"><source src="${url}" type="video/webm"></video>` :
+                            `<audio controls class="w-100"><source src="${url}" type="audio/webm"></audio>`;
+                        
+                        // Store the blob for later upload
+                        window.recordedMedia = {
+                            blob: blob,
+                            type: isVideo ? 'video' : 'audio'
+                        };
+                        
+                        document.getElementById(`uploadBtn${questionIndex}`).style.display = 'inline-block';
+                    };
+                    
+                    // Start recording
+                    mediaRecorder.start();
+                    window.mediaRecorder = mediaRecorder;
+                    window.recordingStream = stream;
+                    
+                    // Update UI
+                    document.getElementById(`recordBtn${questionIndex}`).style.display = 'none';
+                    document.getElementById(`stopBtn${questionIndex}`).style.display = 'inline-block';
+                    
+                    // Start timer
+                    const timeLimit = parseInt(document.querySelector(`#question${questionIndex} .progress`).parentElement.textContent.match(/\d+/)[0]);
+                    let timeLeft = timeLimit;
+                    const progressBar = document.querySelector(`#question${questionIndex} .progress-bar`);
+                    const statusDiv = document.getElementById(`recordingStatus${questionIndex}`);
+                    
+                    const timer = setInterval(() => {
+                        timeLeft--;
+                        const progress = ((timeLimit - timeLeft) / timeLimit) * 100;
+                        progressBar.style.width = `${progress}%`;
+                        statusDiv.textContent = `Recording... ${timeLeft} seconds left`;
+                        
+                        if (timeLeft <= 0) {
+                            clearInterval(timer);
+                            stopRecording(questionIndex);
+                        }
+                    }, 1000);
+                    
+                    window.recordingTimer = timer;
+                })
+                .catch(error => {
+                    console.error('Error accessing media devices:', error);
+                    alert('Error accessing media devices. Please make sure you have granted the necessary permissions.');
+                });
+        }
+
+        // Update the uploadMedia function
+        function uploadMedia(questionIndex) {
+            if (!window.recordedMedia) {
+                alert('Please record your response first');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('media', window.recordedMedia.blob, `recording.${window.recordedMedia.type === 'video' ? 'webm' : 'webm'}`);
+            formData.append('type', window.recordedMedia.type);
+
+            fetch(`/api/assessments/${assessmentId}/submit-speaking`, {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('Recording uploaded successfully');
+                    // Clear the recording
+                    window.recordedMedia = null;
+                    document.getElementById(`mediaPreview${questionIndex}`).innerHTML = '';
+                    document.getElementById(`uploadBtn${questionIndex}`).style.display = 'none';
+                } else {
+                    alert('Error uploading recording: ' + data.error);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error uploading recording');
+            });
+        }
+
+        function renderWritingQuestion(question, questionDiv, index) {
+            // Render a short answer input for writing questions
+            const promptDiv = document.createElement('div');
+            promptDiv.className = 'question-text';
+            promptDiv.innerText = question.text;
+            questionDiv.appendChild(promptDiv);
+
+            const inputGroup = document.createElement('div');
+            inputGroup.className = 'input-group mb-3';
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'form-control';
+            input.placeholder = 'Type your answer here...';
+            if (userAnswers[index] && userAnswers[index].text) {
+                input.value = userAnswers[index].text;
+            }
+            input.addEventListener('input', function() {
+                if (!userAnswers[index]) userAnswers[index] = {};
+                userAnswers[index].text = this.value;
+            });
+            inputGroup.appendChild(input);
+            questionDiv.appendChild(inputGroup);
+        }
+
+        function renderWritingAssessment(container, question, assessment) {
+            container.innerHTML = '';
+            const form = document.createElement('form');
+            form.className = 'writing-form';
+            let inputGroup = '';
+            if (question.subtype === 'long-answer') {
+                // Only allow image upload
+                inputGroup = `
+                    <div class="mb-3">
+                        <label for="writingImage" class="form-label">Upload a photo of your handwritten answer:</label>
+                        <input type="file" accept="image/*" class="form-control" id="writingImage" name="writingImage" required>
+                    </div>
+                `;
+            } else if (question.subtype === 'short-answer') {
+                // Allow text input and/or image upload
+                inputGroup = `
+                    <div class="mb-3">
+                        <label for="writingText" class="form-label">Type your answer (optional):</label>
+                        <textarea class="form-control" id="writingText" name="writingText" rows="3"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label for="writingImage" class="form-label">Or upload a photo of your answer (optional):</label>
+                        <input type="file" accept="image/*" class="form-control" id="writingImage" name="writingImage">
+                    </div>
+                `;
+            }
+            form.innerHTML = inputGroup + `
+                <button type="submit" class="btn btn-primary">Submit</button>
+            `;
+            container.appendChild(form);
+            form.onsubmit = async function(e) {
+                e.preventDefault();
+                const formData = new FormData();
+                if (question.subtype === 'long-answer') {
+                    const file = form.writingImage.files[0];
+                    if (!file) {
+                        alert('Please upload an image.');
+                        return;
+                    }
+                    formData.append('image', file);
+                } else if (question.subtype === 'short-answer') {
+                    if (form.writingText.value) formData.append('text', form.writingText.value);
+                    if (form.writingImage.files[0]) formData.append('image', form.writingImage.files[0]);
+                }
+                // Submit to backend
+                const res = await fetch(`/api/assessments/${assessment.id}/submit-writing`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                    body: formData
+                });
+                const result = await res.json();
+                if (result.success) {
+                    alert('Submission successful!');
+                    // Once submitted, fetch submission data to update the attempts counter
+                    await fetchSubmissionData();
+                    window.location.reload();
+                } else {
+                    alert('Submission failed: ' + (result.error || 'Unknown error'));
+                }
+            };
+        }
+    </script>
+</body>
+</html> 

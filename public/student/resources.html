@@ -12,6 +12,11 @@
             padding: 15px;
             margin-bottom: 15px;
             background-color: white;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            min-height: 340px;
         }
         .resource-type-badge {
             background-color: #e9ecef;
@@ -26,6 +31,8 @@
             border-left: 3px solid #007bff;
             padding-left: 15px;
             margin-bottom: 25px;
+            background: #f8f9fa;
+            border-radius: 8px;
         }
         .unit-section h3 {
             color: #007bff;
@@ -36,14 +43,112 @@
             border-left: 2px solid #6c757d;
             padding-left: 15px;
             margin-bottom: 20px;
+            background: #f1f3f4;
+            border-radius: 8px;
+            width: max-content;
+            min-width: 340px;
+            max-width: 1000px;
+            margin-left: 0;
+            margin-right: 0;
         }
         .part-section h4 {
             color: #495057;
             font-size: 1.25rem;
             margin-bottom: 10px;
         }
+        .sections-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-top: 10px;
+            width: 100%;
+            min-width: 0;
+            max-width: 100%;
+            margin-left: 0;
+            margin-right: 0;
+        }
+        @media (max-width: 900px) {
+            .sections-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        @media (max-width: 600px) {
+            .sections-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        .section-content, .section-resources {
+            width: auto;
+            min-width: 0;
+            max-width: 100%;
+            margin-left: 0;
+            margin-right: 0;
+            border-left: 2px dashed #adb5bd;
+            padding-left: 15px;
+            margin-bottom: 15px;
+            background: #fff;
+            border-radius: 8px;
+        }
         .resources-container {
             margin-top: 10px;
+        }
+        .resource-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-top: 20px;
+            justify-items: start;
+            width: max-content;
+            min-width: 320px;
+            max-width: 960px;
+            margin-left: 0;
+            margin-right: 0;
+        }
+        @media (max-width: 900px) {
+            .resource-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        @media (max-width: 600px) {
+            .resource-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        .completed-resource {
+            background-color: #d4edda !important;
+            border-color: #b6e2c6 !important;
+        }
+        .resource-thumbnail-corner {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            width: 48px;
+            height: 48px;
+            object-fit: cover;
+            border-radius: 6px;
+            opacity: 0.8;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+            z-index: 2;
+        }
+        .resource-score-badge {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background: #28a745;
+            color: #fff;
+            font-weight: bold;
+            border-radius: 6px;
+            padding: 4px 10px;
+            font-size: 1rem;
+            z-index: 3;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+        }
+        .view-btn-bottom {
+            position: absolute;
+            left: 50%;
+            bottom: 18px;
+            transform: translateX(-50%);
+            z-index: 4;
         }
     </style>
 </head>
@@ -98,6 +203,14 @@
 
         async function loadEnrolledSubjects() {
             try {
+                // Fetch student assessment completion and scores
+                const assessmentsResponse = await fetch('/api/student/assessments', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const assessmentsData = await assessmentsResponse.json();
+                const studentAssessments = (assessmentsData.assessments || []);
+                console.log('Student Assessments:', studentAssessments); // Debug log
+
                 // Get user info to get enrolled subjects
                 const userResponse = await fetch('/api/user/info', {
                     headers: {
@@ -112,7 +225,6 @@
                 }
 
                 const resourcesContent = document.getElementById('resourcesContent');
-                
                 if (!userData.user.subjects || userData.user.subjects.length === 0) {
                     resourcesContent.innerHTML = `
                         <div class="alert alert-info">
@@ -127,7 +239,7 @@
 
                 // Load resources for each enrolled subject
                 for (const subject of userData.user.subjects) {
-                    await loadSubjectResources(subject);
+                    await loadSubjectResources(subject, studentAssessments);
                 }
             } catch (error) {
                 console.error('Error loading enrolled subjects:', error);
@@ -139,7 +251,8 @@
             }
         }
 
-        async function loadSubjectResources(subject) {
+        // Update loadSubjectResources to accept studentAssessments
+        async function loadSubjectResources(subject, studentAssessments) {
             try {
                 console.log('Loading resources for subject:', subject.id); // Debug log
                 const response = await fetch(`/api/subjects/${subject.id}/resources`, {
@@ -148,96 +261,116 @@
                     }
                 });
                 const resources = await response.json();
-                console.log('Resources loaded:', resources); // Debug log
+                console.log('Resources:', resources); // Debug log
 
-                // Get subject structure
-                const structureResponse = await fetch(`/api/subjects/${subject.id}/structure`, {
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
-                });
-                const structure = await structureResponse.json();
-                console.log('Subject structure:', structure); // Debug log
-
-                // Group resources by unit and part
-                const resourcesByUnit = {};
-                resources.forEach(resource => {
-                    if (!resourcesByUnit[resource.unitId]) {
-                        resourcesByUnit[resource.unitId] = {
-                            parts: {}
-                        };
-                    }
-                    if (!resourcesByUnit[resource.unitId].parts[resource.partId]) {
-                        resourcesByUnit[resource.unitId].parts[resource.partId] = {
-                            sections: {}
-                        };
-                    }
-                    if (!resourcesByUnit[resource.unitId].parts[resource.partId].sections[resource.sectionId]) {
-                        resourcesByUnit[resource.unitId].parts[resource.partId].sections[resource.sectionId] = [];
-                    }
-                    resourcesByUnit[resource.unitId].parts[resource.partId].sections[resource.sectionId].push(resource);
-                });
-                console.log('Grouped resources:', resourcesByUnit); // Debug log
-
-                // Create HTML for subject resources
-                const subjectSection = document.createElement('div');
-                subjectSection.className = 'subject-section';
-                subjectSection.innerHTML = `
-                    <h2 class="mb-4">${subject.name}</h2>
-                    ${structure.units.map(unit => `
-                        <div class="unit-section">
-                            <h3>${unit.name}</h3>
-                            ${unit.parts.map(part => `
-                                <div class="part-section">
-                                    <h4>${part.name}</h4>
-                                    ${part.sections.map(section => `
-                                        <div class="section-resources">
-                                            <h5>${section.name}</h5>
-                                            <div class="resources-container">
-                                                ${(resourcesByUnit[unit.id]?.parts[part.id]?.sections[section.id] || [])
-                                                    .map(resource => createResourceCard(resource))
-                                                    .join('') || '<p class="text-muted">No resources available</p>'}
-                                            </div>
-                                        </div>
-                                    `).join('')}
-                                </div>
-                            `).join('')}
+                const resourcesContent = document.getElementById('resourcesContent');
+                resourcesContent.innerHTML += `
+                    <div class="subject-section">
+                        <h2>${subject.name}</h2>
+                        <div class="resource-grid">
+                            ${resources.map(resource => createResourceCard(resource, studentAssessments)).join('')}
                         </div>
-                    `).join('')}
+                    </div>
                 `;
 
-                document.getElementById('resourcesContent').appendChild(subjectSection);
+                if (subject.parts && subject.parts.length > 0) {
+                    const partsGrid = document.createElement('div');
+                    partsGrid.className = 'parts-grid';
+                    subject.parts.forEach(part => {
+                        const partDiv = document.createElement('div');
+                        partDiv.className = 'part-section mb-2';
+                        partDiv.innerHTML = `
+                            <h3>${part.name}</h3>
+                            <div class="sections-grid">
+                                ${part.sections && part.sections.length > 0 ? part.sections.map(section => {
+                                    const sectionDiv = document.createElement('div');
+                                    sectionDiv.className = 'section-content mb-2';
+                                    // Calculate section grade
+                                    const sectionAssessments = getSectionAssessments(section.id);
+                                    let sectionGradeHtml = '';
+                                    if (sectionAssessments.length > 0) {
+                                        const graded = sectionAssessments.filter(a => typeof a.score === 'number');
+                                        if (graded.length > 0) {
+                                            const avg = graded.reduce((sum, a) => sum + a.score, 0) / graded.length;
+                                            sectionGradeHtml = `<div class="mb-2"><span class="badge bg-info">Section Grade: ${avg.toFixed(1)}%</span></div>`;
+                                        }
+                                    }
+                                    sectionDiv.innerHTML = `
+                                        <h5>${section.name}</h5>
+                                        ${sectionGradeHtml}
+                                        <div class="resource-grid">
+                                            ${resources
+                                                .filter(r => r.sectionId === section.id)
+                                                .map(resource => createResourceCard(resource, studentAssessments))
+                                                .join('') || '<p class="text-muted">No resources available</p>'}
+                                        </div>
+                                    `;
+                                    return sectionDiv;
+                                }).join('') : '<p class="text-muted">No sections available</p>'}
+                            </div>
+                        `;
+                        partsGrid.appendChild(partDiv);
+                    });
+                    resourcesContent.appendChild(partsGrid);
+                }
             } catch (error) {
                 console.error('Error loading subject resources:', error);
+                document.getElementById('resourcesContent').innerHTML += `
+                    <div class="alert alert-danger">
+                        Failed to load resources for ${subject.name}. Please try again later.
+                    </div>
+                `;
             }
         }
 
-        function createResourceCard(resource) {
-            const resourceUrl = resource.url?.startsWith('http') ? resource.url : `${window.location.origin}${resource.url}`;
+        // Helper: get assessment completion and score by id
+        function getAssessmentStatus(assessmentId) {
+            return studentAssessments.find(a => a.id === assessmentId) || {};
+        }
+
+        // Helper: get all assessment objects for a section
+        function getSectionAssessments(sectionId) {
+            return studentAssessments.filter(a => a.sectionId === sectionId);
+        }
+
+        // Update resource card rendering to show assessment links and completion
+        function createResourceCard(resource, studentAssessments) {
+            const resourceAssessments = resource.assessments || [];
+            // Check if all assessments are completed
+            const allCompleted = resourceAssessments.length > 0 &&
+                resourceAssessments.every(a => {
+                    const status = studentAssessments.find(sa => sa.id === a.id);
+                    return status && status.completed;
+                });
+            // Render assessment links
+            const assessmentLinks = resourceAssessments.map(a => {
+                const status = studentAssessments.find(sa => sa.id === a.id);
+                return `<a href="/student/assessment.html?id=${a.id}" class="btn btn-sm ${status && status.completed ? 'btn-success' : 'btn-outline-primary'} mt-1 me-1">${a.title || 'Assessment'}${status && status.completed ? ' ✓' : ''}</a>`;
+            }).join('');
+            // Find the highest score for this resource's assessments
+            let scoreHtml = '';
+            const scores = resourceAssessments
+                .map(a => {
+                    const status = studentAssessments.find(sa => sa.id === a.id);
+                    return status && typeof status.score === 'number' ? status.score : null;
+                })
+                .filter(s => s !== null);
+            if (scores.length > 0) {
+                const bestScore = Math.max(...scores);
+                scoreHtml = `<div class="resource-score-badge">${bestScore}%</div>`;
+            }
             return `
-                <div class="resource-card">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div>
-                            <h5 class="mb-1">${resource.title}</h5>
-                            <p class="text-muted mb-2">${resource.description || ''}</p>
-                            <span class="resource-type-badge">${resource.type}</span>
-                        </div>
-                    </div>
-                    <div class="mt-3">
-                        ${resource.type === 'link' ? `
-                            <a href="${resourceUrl}" target="_blank" class="btn btn-primary btn-sm">Open Link</a>
-                        ` : `
-                            <a href="${resourceUrl}" target="_blank" class="btn btn-primary btn-sm">View Resource</a>
-                        `}
-                    </div>
+                <div class="resource-card${allCompleted ? ' completed-resource' : ''}" style="position: relative;">
+                    ${resource.thumbnail ? `<img src="${resource.thumbnail}" class="resource-thumbnail-corner" alt="thumbnail">` : ''}
+                    ${scoreHtml}
+                    <h3 class="resource-type-badge">${resource.type}</h3>
+                    <h4>${resource.title}</h4>
+                    <p>${resource.description}</p>
+                    <a href="${resource.url}" class="btn btn-primary view-btn-bottom">View</a>
+                    <div class="mt-2">${assessmentLinks}</div>
                 </div>
             `;
         }
-
-        function logout() {
-            localStorage.removeItem('token');
-            window.location.href = '/login';
-        }
     </script>
 </body>
-</html> 
+</html>

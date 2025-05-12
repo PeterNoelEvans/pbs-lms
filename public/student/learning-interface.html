@@ -181,12 +181,29 @@
                 currentResources = await resourcesResponse.json();
                 displayResources(currentResources);
 
-                // Load questions
+                // Collect all assessments linked to resources
+                let resourceAssessments = [];
+                for (const resource of currentResources) {
+                    if (resource.assessments && resource.assessments.length > 0) {
+                        resource.assessments.forEach(a => {
+                            resourceAssessments.push({
+                                ...a,
+                                resourceTitle: resource.title
+                            });
+                        });
+                    }
+                }
+
+                // Load assessments directly linked to the topic (if any)
                 const questionsResponse = await fetch(`/api/topics/${topicId}/questions`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-                currentQuestions = await questionsResponse.json();
-                displayQuestions(currentQuestions);
+                let topicAssessments = await questionsResponse.json();
+                // If topicAssessments is an array of quizzes, add a label
+                topicAssessments = (topicAssessments || []).map(a => ({ ...a, resourceTitle: null }));
+
+                // Combine and display all assessments
+                displayAssessments([...topicAssessments, ...resourceAssessments]);
 
             } catch (error) {
                 console.error('Error loading content:', error);
@@ -241,46 +258,24 @@
             }
         }
 
-        function displayQuestions(questions) {
+        function displayAssessments(assessments) {
             const container = document.getElementById('questionsList');
-            container.innerHTML = questions.map((question, index) => `
+            if (!assessments.length) {
+                container.innerHTML = '<p class="text-muted">No assessment activities available.</p>';
+                return;
+            }
+            container.innerHTML = assessments.map((a, idx) => `
                 <div class="question-card">
-                    <h5>Question ${index + 1}</h5>
-                    <p>${question.text}</p>
-                    ${renderQuestionInput(question, index)}
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h5 class="mb-1">${a.title || a.text || 'Assessment ' + (idx + 1)}</h5>
+                            ${a.resourceTitle ? `<div class='text-muted small'>Linked to: ${a.resourceTitle}</div>` : ''}
+                            <span class="badge bg-secondary">${a.type || 'quiz'}</span>
+                        </div>
+                        <a href="/student/assessment.html?id=${a.id}" class="btn btn-outline-primary btn-sm">Take Assessment</a>
+                    </div>
                 </div>
             `).join('');
-            updateProgress();
-        }
-
-        function renderQuestionInput(question, index) {
-            switch (question.type) {
-                case 'multiple_choice':
-                    return `
-                        <div class="options">
-                            ${question.options.map((option, optIndex) => `
-                                <div class="form-check">
-                                    <input class="form-check-input" type="radio" 
-                                        name="question${index}" id="q${index}opt${optIndex}"
-                                        onchange="saveAnswer(${index}, '${option}')">
-                                    <label class="form-check-label" for="q${index}opt${optIndex}">
-                                        ${option}
-                                    </label>
-                                </div>
-                            `).join('')}
-                        </div>
-                    `;
-                case 'text':
-                    return `
-                        <div class="form-group">
-                            <textarea class="form-control" rows="3" 
-                                onchange="saveAnswer(${index}, this.value)"
-                                placeholder="Type your answer here..."></textarea>
-                        </div>
-                    `;
-                default:
-                    return '';
-            }
         }
 
         function filterResources(type) {

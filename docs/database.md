@@ -117,6 +117,26 @@ The database manages users, subjects, topics, resources, weekly planning, assess
   - `last_updated`: Last update timestamp
   - `notes`: Additional notes
 
+### Media Files
+- **Purpose**: Stores uploaded media files (audio, image, video) associated with assessments.
+- **Fields**:
+  - `id`: Unique identifier
+  - `type`: Media type (e.g., 'audio', 'video', 'image')
+  - `url`: For externally hosted media (optional)
+  - `filePath`: Path to the uploaded file on the server
+  - `duration`: Duration in seconds (for audio/video)
+  - `label`: Original field name or label (e.g., 'audio_0', 'image_1') used to link the file to a specific question or UI element
+  - `assessmentId`: Reference to the associated assessment
+  - `createdAt`: Record creation timestamp
+  - `updatedAt`: Last update timestamp
+
+**Usage Notes:**
+- The `label` field is critical for linking each uploaded file to the correct question or UI element in an assessment.
+- When creating or editing an assessment, each file input (audio, image, etc.) should have a unique field name (e.g., 'audio_0', 'audio_1', 'image_0').
+- The frontend stores this field name in the question data (e.g., `audioFileName`), and the backend saves it as the `label` in the MediaFile record.
+- When rendering assessments, the frontend matches the question's `audioFileName` (or similar) to the `label` in `mediaFiles` to display the correct file.
+- This approach supports multiple media files per assessment and per question, and is robust for complex activities (e.g., drag-and-drop with multiple audio prompts).
+
 ## Relationships
 - Users (parents) → Students (one-to-many)
 - Subjects → Topics (one-to-many)
@@ -140,6 +160,13 @@ The database manages users, subjects, topics, resources, weekly planning, assess
 - Parent access to results
 - Time tracking for assessments
 - Comprehensive feedback system
+
+## Resource-Assessment Linking
+
+- The `Resource` model now has an `assessments` field (many-to-many with `Assessment`).
+- The `Assessment` model has a `resources` field (many-to-many with `Resource`).
+- This allows any resource to be linked to multiple assessments (quizzes or assignments), and vice versa.
+- Students can access all related assessments directly from the resource view in the UI.
 
 ## Maintenance
 - Regular backups required

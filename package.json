@@ -15,7 +15,7 @@
     "prisma:studio": "prisma studio"
   },
   "dependencies": {
-    "@prisma/client": "^6.5.0",
+    "@prisma/client": "^6.7.0",
     "bcrypt": "^5.1.1",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
@@ -25,12 +25,14 @@
     "mongoose": "^7.8.6",
     "multer": "^1.4.5-lts.1",
     "nodemailer": "^6.10.0",
-    "prisma": "^6.5.0",
+    "save-dev": "^0.0.1-security",
+    "semver": "^7.7.1",
+    "simple-update-notifier": "^2.0.0",
     "sqlite3": "^5.1.6"
   },
   "devDependencies": {
     "jest": "^29.5.0",
-    "nodemon": "^2.0.15",
-    "prisma": "^3.0.0"
+    "nodemon": "^3.1.10",
+    "prisma": "^6.7.0"
   }
 }

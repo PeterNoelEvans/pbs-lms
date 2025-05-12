@@ -4,10 +4,16 @@
 
 ### Visible Structure (User Interface)
 The system presents a clear hierarchical structure to users:
-
+for Let's Find Out
 1. **Unit** (e.g., "Unit 1: All About Me")
 2. **Part** (e.g., "Part 1: Who Am I")
 3. **Section** (e.g., "Let's Read and Talk!")
+
+For Oxford Project Explorer 3
+1. **Unit** ("There are normally 6 units in a book - three units a term")
+2. **Part** ("Each Unit is divided into Parts which are A, B, C, D etc")
+3. **Section** ("Each part has a section - that includes listening, discussing, grammar, look, vocabulary etc.")
+
 
 ### Database Structure
 Behind the scenes, the system uses a more complex structure to manage resources and track progress:
@@ -197,4 +203,70 @@ The system uses the following models:
    SELECT * FROM Topic t 
    LEFT JOIN Resource r ON t.id = r.topicId 
    WHERE r.id IS NULL;
-   ``` 
+   ```
+
+## Important: Singular vs. Plural Relations in the Database Schema
+
+### Singular vs. Plural Fields
+- **Singular fields** (e.g., `section`, `unit`, `part`) represent a single, direct link from a resource to a specific section, part, or unit.
+- **Plural fields** (e.g., `sections`, `resources`, `resourcesMany`) represent many-to-many relationships, where a resource can be linked to multiple sections, and vice versa.
+
+### Relation Names in Prisma
+- When a model has more than one relation to the same model (e.g., `Resource` has both `section` and `sections` to `Section`), you must use the `@relation("RelationName")` attribute to distinguish them.
+- Example:
+  ```prisma
+  section     Section?   @relation("ResourceSection", fields: [sectionId], references: [id])
+  sectionId   String?
+  sections    Section[]  @relation("ResourceSections")
+  ```
+
+### Section Model Example
+```prisma
+model Section {
+  id            String       @id @default(uuid())
+  name          String
+  ...
+  resources     Resource[]   @relation("ResourceSection")      // One-to-many: each resource has one section
+  resourcesMany Resource[]   @relation("ResourceSections")     // Many-to-many: resources can belong to many sections
+  ...
+}
+```
+
+### Resource Model Example
+```prisma
+model Resource {
+  id          String   @id @default(uuid())
+  ...
+  section     Section?   @relation("ResourceSection", fields: [sectionId], references: [id])
+  sectionId   String?
+  sections    Section[]  @relation("ResourceSections")
+  ...
+}
+```
+
+### Why This Matters
+- **Singular fields** are for direct, primary links (e.g., a resource belongs to one section).
+- **Plural fields** are for many-to-many links (e.g., a resource can be shared across multiple sections).
+- **Relation names** are required when you have more than one relation between the same two models.
+
+### Best Practices
+- Always use clear, descriptive relation names when you have multiple relations between the same models.
+- Document the purpose of each relation in your schema and in your project documentation.
+- When querying, use the correct field for your use case (e.g., use `section` for the primary link, `sections` for shared/many-to-many links).
+
+## Linking Resources and Assessments
+
+The system now supports a many-to-many relationship between resources and assessments (quizzes or assignments). This means:
+- Each resource can have multiple linked assessments.
+- Each assessment can be linked to multiple resources.
+- Students will see assessment links directly on the resource page.
+
+### How to Link/Unlink Assessments to Resources
+- Use Prisma Studio or a future admin UI to manage these links.
+- In Prisma Studio, open a Resource and edit its `assessments` field to add or remove links to Assessment records.
+
+### API Changes
+- The `/api/subjects/:subjectId/resources` endpoint now returns an `assessments` array for each resource, with id, title, and type.
+
+### Student Experience
+- On the student resources page, each resource card displays buttons for all linked assessments, allowing direct access to related quizzes or assignments. 

@@ -27,7 +27,8 @@
             border-radius: 0.25rem;
             padding: 0.25rem;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            height: fit-content;
+            /* height: 120px; */
+            /* overflow: hidden; */
         }
         .sections-list {
             list-style-position: outside;
@@ -51,7 +52,7 @@
         .section-card {
             margin: 0;
             border: 1px solid rgba(0,0,0,0.08);
-            background-color: #fff;
+            background-color: #e6f9e6;
             border-radius: 0.25rem;
             padding: 0.1rem 0.25rem;
         }
@@ -100,7 +101,8 @@
             display: block;
         }
         .description-preview.collapsed {
-            max-height: 7.5em;
+            height: 90px;
+            max-height: 90px;
             overflow: hidden;
             position: relative;
         }
@@ -232,6 +234,17 @@
             font-size: 0.75rem;
             line-height: 1.2;
         }
+        .part-card .description-preview,
+        .part-card .description-preview.collapsed {
+            height: 90px;
+            max-height: 90px;
+            overflow: hidden;
+        }
+        .part-card .description-preview {
+            height: auto;
+            max-height: none;
+            overflow: visible;
+        }
     </style>
 </head>
 <body>
@@ -245,22 +258,27 @@
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item">
                         <a class="btn btn-outline-light me-2" href="/teacher/dashboard.html">
-                            <i class="bi bi-speedometer2"></i> Dashboard
+                            <i class="bi bi-speedometer2 me-1"></i> Dashboard
                         </a>
                     </li>
                     <li class="nav-item">
                         <a class="btn btn-outline-light me-2" href="/teacher/subjects.html">
-                            <i class="bi bi-book"></i> Subjects
+                            <i class="bi bi-book me-1"></i> Subjects
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="btn btn-light text-primary fw-bold me-2" href="/teacher/course-structure.html">
+                            <i class="bi bi-diagram-3 me-1"></i> Course Structure
                         </a>
                     </li>
                     <li class="nav-item">
                         <a class="btn btn-outline-light me-2" href="/teacher/assessments.html">
-                            <i class="bi bi-check-square"></i> Assessments
+                            <i class="bi bi-check-square me-1"></i> Create Assessments
                         </a>
                     </li>
                     <li class="nav-item">
                         <a class="btn btn-outline-light" href="/teacher/resources.html">
-                            <i class="bi bi-files"></i> Resources
+                            <i class="bi bi-files me-1"></i> Resources
                         </a>
                     </li>
                 </ul>
@@ -416,6 +434,11 @@
                                 <option value="Time for a Joke">Time for a Joke</option>
                                 <option value="Let's Practice">Let's Practice</option>
                                 <option value="Let's Talk">Let's Talk</option>
+                                <option value="Grammar">Grammar</option>
+                                <option value="Listening and Speaking">Listening and Speaking</option>
+                                <option value="Vocabulary">Vocabulary</option>
+                                <option value="Speaking">Speaking</option>
+                                <option value="Writing">Writing</option>
                                 <option value="custom">Custom Section...</option>
                             </select>
                         </div>
@@ -448,6 +471,7 @@
             window.location.href = '/login';
         }
 
+        let customSectionNames = new Set();
         let unitModal, partModal, sectionModal;
 
         document.addEventListener('DOMContentLoaded', function() {
@@ -820,6 +844,8 @@
                     alert('Please enter a custom section name');
                     return;
                 }
+                // Add custom name to the set
+                customSectionNames.add(name);
             } else {
                 name = sectionNameSelect.value;
             }
@@ -834,7 +860,7 @@
                 const url = sectionId ? 
                     `/api/sections/${sectionId}` : 
                     `/api/parts/${partId}/sections`;
-                
+                console.log('Saving section. sectionId:', sectionId, 'URL:', url, 'Data:', sectionData);
                 const response = await fetch(url, {
                     method: sectionId ? 'PUT' : 'POST',
                     headers: {
@@ -848,7 +874,14 @@
                     sectionModal.hide();
                     loadUnits();
                 } else {
-                    const error = await response.json();
+                    const text = await response.text();
+                    let error;
+                    try {
+                        error = JSON.parse(text);
+                    } catch (e) {
+                        error = { message: text };
+                    }
+                    console.error('Error saving section:', error);
                     alert(error.message || 'Failed to save section');
                 }
             } catch (error) {

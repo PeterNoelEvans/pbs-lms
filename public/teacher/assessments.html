@@ -105,36 +105,57 @@
                             </div>
 
                             <div class="mb-3">
-                                <label for="assessmentType" class="form-label">Assessment Type</label>
-                                <select class="form-select" id="assessmentType" required onchange="updateQuestionOptions()">
-                                    <option value="quiz">Multiple Choice Quiz</option>
+                                <label for="title" class="form-label">Title</label>
+                                <input type="text" class="form-control" id="title" name="title" required placeholder="Enter assessment title">
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="type" class="form-label">Type</label>
+                                <select class="form-select" id="type" name="type" required>
+                                    <option value="multiple-choice">Multiple Choice</option>
+                                    <option value="true-false">True/False</option>
+                                    <option value="matching">Matching</option>
+                                    <option value="drag-drop">Drag and Drop</option>
+                                    <option value="writing">Writing</option>
+                                    <option value="writing-long">Writing (Long)</option>
+                                    <option value="speaking">Speaking</option>
+                                    <option value="assignment">Assignment</option>
                                     <option value="listening">Listening Comprehension</option>
-                                    <option value="speaking">Speaking Assessment</option>
-                                    <option value="mixed">Mixed Assessment</option>
                                 </select>
                             </div>
 
                             <div class="mb-3">
-                                <label for="title" class="form-label">Title</label>
-                                <input type="text" class="form-control" id="title" required>
+                                <label for="assessmentCategory" class="form-label">Category/Skill</label>
+                                <input type="text" class="form-control" id="assessmentCategory" name="category" placeholder="E.g., Grammar, Vocabulary, Listening, etc.">
                             </div>
 
                             <div class="mb-3">
-                                <label for="description" class="form-label">Instructions</label>
-                                <textarea class="form-control" id="description" rows="3" placeholder="Provide clear instructions for students..."></textarea>
+                                <label for="description" class="form-label">Description</label>
+                                <textarea class="form-control" id="description" rows="3"></textarea>
                             </div>
-
+                            <div class="mb-3">
+                                <label for="criteria" class="form-label">Grading Criteria</label>
+                                <textarea class="form-control" id="criteria" rows="3" placeholder="Enter grading criteria or rubric for this assessment"></textarea>
+                            </div>
                             <div class="mb-3">
                                 <label for="dueDate" class="form-label">Due Date</label>
                                 <input type="datetime-local" class="form-control" id="dueDate">
                             </div>
 
+                            <div class="mb-3">
+                                <label for="maxAttempts" class="form-label">Maximum Attempts (optional)</label>
+                                <input type="number" class="form-control" id="maxAttempts" min="1" placeholder="Leave blank for unlimited attempts">
+                            </div>
+
                             <div id="questionsSection">
                                 <div class="d-flex justify-content-between align-items-center mb-3">
                                     <h5>Questions</h5>
-                                    <div class="btn-group">
+                                    <div class="btn-group" id="questionButtonsContainer">
                                         <button type="button" class="btn btn-outline-primary" onclick="addQuestion('multiple-choice')">
                                             <i class="bi bi-list-check"></i> Add Multiple Choice
+                                        </button>
+                                        <button type="button" class="btn btn-outline-secondary" id="bulkImportBtn" style="display:none;" onclick="showBulkImport()">
+                                            <i class="bi bi-upload"></i> Bulk Import
                                         </button>
                                         <button type="button" class="btn btn-outline-primary" onclick="addQuestion('listening')">
                                             <i class="bi bi-headphones"></i> Add Listening
@@ -145,6 +166,50 @@
                                     </div>
                                 </div>
                                 <div id="questionsList" class="mb-4"></div>
+                            </div>
+
+                            <!-- Bulk Import for Multiple Choice -->
+                            <div id="bulkImportContainer" style="display:none; margin-bottom:1em;">
+                                <label for="bulkImportFile" class="form-label">Bulk Import Questions (JSON):</label>
+                                <input type="file" id="bulkImportFile" accept="application/json" class="form-control" />
+                                <button type="button" class="btn btn-primary mt-2" onclick="handleBulkImport()">Import File</button>
+                                <button type="button" class="btn btn-secondary mt-2 ms-2" onclick="showPasteJsonModal()">Paste JSON</button>
+                                <div id="bulkImportError" class="text-danger mt-2" style="display:none;"></div>
+                            </div>
+
+                            <!-- Paste JSON Modal -->
+                            <div class="modal fade" id="pasteJsonModal" tabindex="-1" aria-labelledby="pasteJsonModalLabel" aria-hidden="true">
+                              <div class="modal-dialog">
+                                <div class="modal-content">
+                                  <div class="modal-header">
+                                    <h5 class="modal-title" id="pasteJsonModalLabel">Paste JSON Questions</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                  </div>
+                                  <div class="modal-body">
+                                    <textarea id="pastedJson" class="form-control" rows="10" placeholder='{
+  "questions": [
+    {
+      "type": "multiple-choice",
+      "text": "What is the capital of France?",
+      "options": ["London", "Berlin", "Paris", "Madrid"],
+      "correctAnswer": 2
+    },
+    {
+      "type": "multiple-choice",
+      "text": "Which planet is known as the Red Planet?",
+      "options": ["Earth", "Mars", "Jupiter", "Venus"],
+      "correctAnswer": 1
+    }
+  ]
+}'></textarea>
+                                    <div id="pasteJsonError" class="text-danger mt-2"></div>
+                                  </div>
+                                  <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                    <button type="button" class="btn btn-primary" onclick="handlePasteJsonImport()">Import</button>
+                                  </div>
+                                </div>
+                              </div>
                             </div>
 
                             <div class="mt-4">
@@ -178,7 +243,11 @@
         }
 
         // Load subjects when page loads
-        document.addEventListener('DOMContentLoaded', loadSubjects);
+        document.addEventListener('DOMContentLoaded', () => {
+            loadSubjects();
+            loadExistingAssessments();
+            updateQuestionOptions();
+        });
 
         // Handle subject selection
         document.getElementById('subjectSelect').addEventListener('change', function() {
@@ -225,11 +294,30 @@
                 });
                 const subjects = await response.json();
                 const select = document.getElementById('subjectSelect');
+                select.innerHTML = '<option value="">Select subject...</option>';
                 
+                // Sort subjects by core subject name and year level
+                subjects.sort((a, b) => {
+                    if (a.coreSubject.name === b.coreSubject.name) {
+                        return a.yearLevel - b.yearLevel;
+                    }
+                    return a.coreSubject.name.localeCompare(b.coreSubject.name);
+                });
+
                 subjects.forEach(subject => {
                     const option = document.createElement('option');
                     option.value = subject.id;
-                    option.textContent = subject.coreSubject.name;
+                    
+                    // Convert year level number back to P1-P6 or M1-M3 format
+                    let yearLevelStr = '';
+                    if (subject.yearLevel <= 6) {
+                        yearLevelStr = `P${subject.yearLevel}`;
+                    } else {
+                        yearLevelStr = `M${subject.yearLevel - 6}`;
+                    }
+                    
+                    // Display format: "English (M3) - [Actual Subject Name]"
+                    option.textContent = `${subject.coreSubject.name} (${yearLevelStr}) - ${subject.name}`;
                     select.appendChild(option);
                 });
             } catch (error) {
@@ -303,10 +391,29 @@
             }
         }
 
+        // Add MutationObserver for #questionsSection
+        (function() {
+            const qs = document.getElementById('questionsSection');
+            if (qs && !qs._mutationObserverAdded) {
+                new MutationObserver((mutations) => {
+                    mutations.forEach(m => {
+                        if (m.attributeName === 'style') {
+                            console.log('[MutationObserver] questionsSection style changed:', qs.style.display, new Date());
+                        }
+                    });
+                }).observe(qs, { attributes: true, attributeFilter: ['style'] });
+                qs._mutationObserverAdded = true;
+            }
+        })();
+
         function updateQuestionOptions() {
-            const type = document.getElementById('assessmentType').value;
-            const buttonsContainer = document.querySelector('#questionsSection .btn-group');
-            
+            const type = document.getElementById('type').value;
+            console.log('[updateQuestionOptions] called, type:', type, 'at', new Date());
+            const buttonsContainer = document.getElementById('questionButtonsContainer');
+            if (!buttonsContainer) {
+                console.error('[updateQuestionOptions] questionButtonsContainer not found!');
+                return;
+            }
             switch(type) {
                 case 'quiz':
                     buttonsContainer.innerHTML = `
@@ -326,27 +433,78 @@
                             <i class="bi bi-mic"></i> Add Speaking
                         </button>`;
                     break;
-                case 'mixed':
+                case 'matching':
                     buttonsContainer.innerHTML = `
-                        <button type="button" class="btn btn-outline-primary" onclick="addQuestion('multiple-choice')">
-                            <i class="bi bi-list-check"></i> Add Multiple Choice
-                        </button>
-                        <button type="button" class="btn btn-outline-primary" onclick="addQuestion('listening')">
-                            <i class="bi bi-headphones"></i> Add Listening
-                        </button>
-                        <button type="button" class="btn btn-outline-primary" onclick="addQuestion('speaking')">
-                            <i class="bi bi-mic"></i> Add Speaking
+                        <button type="button" class="btn btn-outline-primary" onclick="addQuestion('matching')">
+                            <i class="bi bi-arrow-left-right"></i> Add Matching Exercise
                         </button>`;
                     break;
+                case 'drag-and-drop':
+                    buttonsContainer.innerHTML = `
+                        <button type="button" class="btn btn-outline-primary" onclick="addQuestion('drag-and-drop')">
+                            <i class="bi bi-arrows-move"></i> Add Drag-and-Drop
+                        </button>`;
+                    break;
+                case 'true-false':
+                    buttonsContainer.innerHTML = `
+                        <button type="button" class="btn btn-outline-primary" onclick="addQuestion('true-false')">
+                            <i class="bi bi-check2-square"></i> Add True/False
+                        </button>`;
+                    break;
+                case 'writing':
+                    buttonsContainer.innerHTML = `
+                        <button type="button" class="btn btn-outline-primary" onclick="addQuestion('writing')">
+                            <i class="bi bi-pencil"></i> Add Writing Question
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary ms-2" onclick="showBulkImportWritingModal()">
+                            <i class="bi bi-upload"></i> Bulk Import Questions
+                        </button>`;
+                    break;
+                default:
+                    buttonsContainer.innerHTML = '';
+            }
+            console.log('[updateQuestionOptions] questionButtonsContainer updated for type:', type, 'at', new Date());
+            // Show/hide Bulk Import button for quiz
+            const bulkImportBtn = document.getElementById('bulkImportBtn');
+            if (bulkImportBtn) {
+                bulkImportBtn.style.display = (type === 'quiz') ? '' : 'none';
+            }
+            const bulkImportContainer = document.getElementById('bulkImportContainer');
+            if (bulkImportContainer) {
+                bulkImportContainer.style.display = (type === 'quiz') ? '' : 'none';
+            }
+            // Always set questionsSection display at the end
+            const questionsSection = document.getElementById('questionsSection');
+            if (questionsSection) {
+                const showQuestions = ['quiz', 'drag-and-drop', 'matching', 'true-false', 'mixed'].includes(type);
+                questionsSection.style.display = showQuestions ? 'block' : 'none';
+                console.log('[updateQuestionOptions] questionsSection display set to', showQuestions ? 'block' : 'none', 'at', new Date());
+            }
+            // Log all event listeners on assessmentType (if possible)
+            const at = document.getElementById('type');
+            if (at) {
+                try {
+                    if (typeof getEventListeners === 'function') {
+                        console.log('[updateQuestionOptions] assessmentType event listeners:', getEventListeners(at));
+                    } else {
+                        console.log('[updateQuestionOptions] assessmentType onchange:', at.onchange);
+                    }
+                } catch (e) {
+                    console.log('[updateQuestionOptions] Could not log event listeners:', e);
+                }
             }
         }
 
-        function addQuestion(type) {
+        function addQuestion(type, questionData) {
+            console.log('addQuestion called with type:', type, questionData);
             const questionsList = document.getElementById('questionsList');
-            const questionId = 'question_' + Date.now();
-            
+            if (!questionsList) {
+                console.error('questionsList container not found!');
+                return;
+            }
+            const questionId = 'question_' + Date.now() + Math.floor(Math.random() * 10000);
             let questionHtml = `
-                <div class="card mb-3" id="${questionId}">
+                <div class="card mb-3 question-card" id="${questionId}" data-type="${type}">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h6 class="mb-0">${type.charAt(0).toUpperCase() + type.slice(1)} Question</h6>
                         <button type="button" class="btn btn-outline-danger btn-sm" onclick="removeQuestion('${questionId}')">
@@ -404,12 +562,192 @@
                             <textarea class="form-control" rows="2" placeholder="What should the student talk about?" required></textarea>
                         </div>
                         <div class="mb-3">
+                            <label class="form-label">Response Type</label>
+                            <select class="form-control" onchange="toggleResponseType(this)">
+                                <option value="audio">Audio Only</option>
+                                <option value="video">Video</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
                             <label class="form-label">Time Limit (seconds)</label>
                             <input type="number" class="form-control" min="10" max="300" value="60" required>
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Evaluation Criteria</label>
                             <textarea class="form-control" rows="3" placeholder="How will you evaluate the response? (pronunciation, fluency, content, etc.)" required></textarea>
+                        </div>`;
+                    break;
+
+                case 'matching':
+                    questionHtml += `
+                        <div class="d-flex justify-content-end mb-3">
+                            <button type="button" class="btn btn-outline-secondary" onclick="bulkImportMatchingPairs('${questionId}')">
+                                <i class="bi bi-upload"></i> Bulk Import Pairs
+                            </button>
+                        </div>
+                        <div class="matching-pairs">
+                            <div class="row mb-2">
+                                <div class="col-md-5">
+                                    <label class="form-label">Expression</label>
+                                </div>
+                                <div class="col-md-5">
+                                    <label class="form-label">Meaning</label>
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label">Actions</label>
+                                </div>
+                            </div>
+                            <div class="matching-pair">
+                                <div class="row mb-2">
+                                    <div class="col-md-5">
+                                        <input type="text" class="form-control" name="expression_${questionId}_0" placeholder="Enter expression" required>
+                                    </div>
+                                    <div class="col-md-5">
+                                        <input type="text" class="form-control" name="meaning_${questionId}_0" placeholder="Enter meaning" required>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <button type="button" class="btn btn-outline-danger" onclick="removeMatchingPair(this)">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-outline-primary btn-sm mt-2" onclick="addMatchingPair('${questionId}')">
+                            <i class="bi bi-plus"></i> Add Pair
+                        </button>
+                        <button type="button" class="btn btn-outline-success btn-sm mt-2" onclick="previewMatchingExercise('${questionId}')">
+                            <i class="bi bi-eye"></i> Preview Exercise
+                        </button>`;
+                    break;
+
+                case 'drag-and-drop':
+                    questionHtml += `
+                        <div class="mb-3">
+                            <label class="form-label">Subtype</label>
+                            <select class="form-select dragdrop-subtype-select" onchange="window.toggleDragDropSubtypeFields(this)">
+                                <option value="sequence">Sequence (with Audio & Word Bank)</option>
+                                <option value="fill-in-blank">Fill-in-the-Blank</option>
+                                <option value="image-fill-blank">Image Fill-in-the-Blank</option>
+                                <option value="long-paragraph-fill-in-blank">Long Paragraph Fill-in-the-Blank</option>
+                            </select>
+                        </div>
+                        <div class="dragdrop-sequence-fields" style="display:none;">
+                            <label class="form-label">Audio File (optional)</label>
+                            <input type="file" class="form-control sequence-audio" accept="audio/*">
+                            <label class="form-label mt-2">Word Bank (comma-separated)</label>
+                            <input type="text" class="form-control sequence-items" placeholder="August, September, October, November, December">
+                            <label class="form-label mt-2">Correct Sequence (comma-separated, use words from the word bank in order)</label>
+                            <input type="text" class="form-control sequence-correct" placeholder="September, October, November, December">
+                            <label class="form-label mt-2">Extra Word Bank Words (optional, comma-separated)</label>
+                            <input type="text" class="form-control sequence-extra" placeholder="trick1, trick2">
+                            <label class="form-label mt-2">Audio Display Name (optional)</label>
+                            <input type="text" class="form-control sequence-audio-display-name" placeholder="e.g. Months of the Year Audio">
+                        </div>
+                        <div class="dragdrop-fillblank-fields" style="display:none;">
+                            <label class="form-label">Sentences with [BLANK] and correct answers</label>
+                            <div class="fillblank-sentences-list"></div>
+                            <button type="button" class="btn btn-outline-primary btn-sm mt-2" onclick="window.addFillBlankSentence(this)"><i class="bi bi-plus"></i> Add Sentence</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm mt-2" onclick="window.showBulkImportFillBlankModal(this)"><i class="bi bi-upload"></i> Bulk Import</button>
+                            <label class="form-label mt-2">Extra Word Bank Words (optional, comma-separated)</label>
+                            <input type="text" class="form-control fillblank-extra" placeholder="trick1, trick2">
+                        </div>
+                        <div class="dragdrop-image-fillblank-fields" style="display:none;">
+                            <label class="form-label">Image-Sentence Pairs</label>
+                            <div class="image-fillblank-pairs-list"></div>
+                            <button type="button" class="btn btn-outline-primary btn-sm mt-2" onclick="window.addImageFillBlankPair(this)"><i class="bi bi-plus"></i> Add Pair</button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm mt-2" onclick="window.showBulkImportImageFillBlankModal(this)"><i class="bi bi-upload"></i> Bulk Import</button>
+                            <label class="form-label mt-2">Extra Word Bank Words (optional, comma-separated)</label>
+                            <input type="text" class="form-control imagefillblank-extra" placeholder="trick1, trick2">
+                        </div>
+                        <div class="dragdrop-long-paragraph-fields" style="display:none;">
+                            <label class="form-label">Paragraph (use [BLANK] for blanks)</label>
+                            <textarea class="form-control long-paragraph-text" rows="5" placeholder="Type a paragraph with [BLANK] for each blank."></textarea>
+                            <label class="form-label mt-2">Word Bank (comma-separated)</label>
+                            <input type="text" class="form-control long-paragraph-wordbank" placeholder="word1, word2, word3">
+                            <label class="form-label mt-2">Correct Answers (comma-separated, in order)</label>
+                            <input type="text" class="form-control long-paragraph-answers" placeholder="answer1, answer2, answer3">
+                            <label class="form-label mt-2">Extra Word Bank Words (optional, comma-separated)</label>
+                            <input type="text" class="form-control long-paragraph-extra" placeholder="trick1, trick2">
+                        </div>
+                        <div class="dragdrop-matching-fields" style="display:none;">
+                            <div class="d-flex justify-content-end mb-3">
+                                <button type="button" class="btn btn-outline-secondary" onclick="bulkImportDragDropPairs('${questionId}')">
+                                    <i class="bi bi-upload"></i> Bulk Import Pairs
+                                </button>
+                            </div>
+                            <div class="dragdrop-pairs">
+                                <div class="row mb-2">
+                                    <div class="col-md-5">
+                                        <label class="form-label">Expression</label>
+                                    </div>
+                                    <div class="col-md-5">
+                                        <label class="form-label">Meaning</label>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label">Actions</label>
+                                    </div>
+                                </div>
+                                <div class="dragdrop-pair">
+                                    <div class="row mb-2">
+                                        <div class="col-md-5">
+                                            <input type="text" class="form-control" name="expression_${questionId}_0" placeholder="Enter expression" required>
+                                        </div>
+                                        <div class="col-md-5">
+                                            <input type="text" class="form-control" name="meaning_${questionId}_0" placeholder="Enter meaning" required>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <button type="button" class="btn btn-outline-danger" onclick="removeDragDropPair(this)">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-outline-primary btn-sm mt-2" onclick="addDragDropPair('${questionId}')">
+                                <i class="bi bi-plus"></i> Add Pair
+                            </button>
+                            <button type="button" class="btn btn-outline-success btn-sm mt-2" onclick="previewDragDropExercise('${questionId}')">
+                                <i class="bi bi-eye"></i> Preview Exercise
+                            </button>
+                        </div>`;
+                    break;
+
+                case 'true-false':
+                    questionHtml += `
+                        <div class="true-false-sentences">
+                            <div class="tf-sentence-row mb-2 d-flex align-items-center">
+                                <input type="text" class="form-control me-2" placeholder="Enter sentence" required style="max-width: 70%">
+                                <button type="button" class="btn btn-outline-secondary tf-toggle" data-state="" onclick="toggleTfButton(this)">?</button>
+                                <button type="button" class="btn btn-outline-danger ms-2" onclick="removeTfSentence(this)"><i class="bi bi-trash"></i></button>
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-outline-primary btn-sm mt-2" onclick="addTfSentence(this)"><i class="bi bi-plus"></i> Add Sentence</button>
+                    `;
+                    break;
+
+                case 'writing':
+                    questionHtml += `
+                        <div class="mb-3">
+                            <label class="form-label">Question</label>
+                            <input type="text" class="form-control" placeholder="Enter the question (prompt)" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Correct Answer</label>
+                            <input type="text" class="form-control" placeholder="Enter the correct answer" required>
+                        </div>`;
+                    break;
+
+                case 'writing-long':
+                    questionHtml += `
+                        <div class="mb-3">
+                            <label class="form-label">Prompt</label>
+                            <textarea class="form-control" rows="3" placeholder="Enter the writing prompt" required></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Allow students to upload a file (Word, PDF, image, etc.)</label>
+                            <input type="file" class="form-control" accept=".doc,.docx,.pdf,.jpg,.jpeg,.png">
+                            <div class="form-text">Students can type their answer, upload a file, or both.</div>
                         </div>`;
                     break;
             }
@@ -419,6 +757,84 @@
                 </div>`;
             
             questionsList.insertAdjacentHTML('beforeend', questionHtml);
+            console.log('Card inserted for type:', type);
+            const card = document.getElementById(questionId);
+            // Populate fields if questionData is provided
+            if (questionData && type === 'drag-and-drop') {
+                // Set subtype
+                if (questionData.subtype) {
+                    const subtypeSelect = card.querySelector('.dragdrop-subtype-select');
+                    if (subtypeSelect) {
+                        subtypeSelect.value = questionData.subtype;
+                        window.toggleDragDropSubtypeFields(subtypeSelect);
+                    }
+                }
+                // Populate fields for each subtype
+                switch (questionData.subtype) {
+                    case 'sequence': {
+                        if (Array.isArray(questionData.wordBank)) {
+                            card.querySelector('.sequence-items').value = questionData.wordBank.join(', ');
+                        }
+                        if (Array.isArray(questionData.correctSequence)) {
+                            card.querySelector('.sequence-correct').value = questionData.correctSequence.join(', ');
+                        }
+                        if (Array.isArray(questionData.extraWords)) {
+                            card.querySelector('.sequence-extra').value = questionData.extraWords.join(', ');
+                        }
+                        // Attach audio file if present
+                        const audioInput = card.querySelector('.sequence-audio');
+                        if (audioInput && audioInput.files && audioInput.files.length > 0) {
+                            const displayNameInput = card.querySelector('.sequence-audio-display-name');
+                            const displayName = displayNameInput ? displayNameInput.value.trim() : '';
+                            const label = `sequence_audio_${index}`;
+                            formData.append(`audio_${index}`, audioInput.files[0]);
+                            question.audioFileName = label;
+                            question.audioDisplayName = displayName;
+                            // Add to mediaFiles array (if you build it here)
+                            // mediaFiles.push({ label, type: audioInput.files[0].type, filePath: ..., displayName });
+                        }
+                        break;
+                    }
+                    case 'fill-in-blank': {
+                        const list = card.querySelector('.fillblank-sentences-list');
+                        if (Array.isArray(questionData.sentences)) {
+                            questionData.sentences.forEach(item => {
+                                const row = document.createElement('div');
+                                row.className = 'fillblank-sentence-row mb-2';
+                                row.innerHTML = `
+                                    <input type="text" class="form-control d-inline-block me-2" style="width:60%" placeholder="Type sentence, use [BLANK] for blank(s)" required value="${item.text.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}">
+                                    <input type="text" class="form-control d-inline-block me-2" style="width:30%" placeholder="Correct answer(s), comma-separated" required value="${(item.answers || []).join(', ')}">
+                                    <button type="button" class="btn btn-outline-danger btn-sm" onclick="this.parentElement.remove()"><i class="bi bi-trash"></i></button>
+                                `;
+                                list.appendChild(row);
+                            });
+                        }
+                        if (Array.isArray(questionData.extraWords)) {
+                            card.querySelector('.fillblank-extra').value = questionData.extraWords.join(', ');
+                        }
+                        break;
+                    }
+                    case 'image-fill-blank': {
+                        if (Array.isArray(questionData.extraWords)) {
+                            card.querySelector('.imagefillblank-extra').value = questionData.extraWords.join(', ');
+                        }
+                        // (Image-sentence pairs logic would go here)
+                        break;
+                    }
+                    case 'long-paragraph-fill-in-blank': {
+                        if (Array.isArray(questionData.wordBank)) {
+                            card.querySelector('.long-paragraph-wordbank').value = questionData.wordBank.join(', ');
+                        }
+                        if (Array.isArray(questionData.answers)) {
+                            card.querySelector('.long-paragraph-answers').value = questionData.answers.join(', ');
+                        }
+                        if (Array.isArray(questionData.extraWords)) {
+                            card.querySelector('.long-paragraph-extra').value = questionData.extraWords.join(', ');
+                        }
+                        break;
+                    }
+                }
+            }
         }
 
         function removeQuestion(questionId) {
@@ -489,11 +905,6 @@
         }
 
         // Load existing assessments when page loads
-        document.addEventListener('DOMContentLoaded', () => {
-            loadSubjects();
-            loadExistingAssessments();
-        });
-
         async function loadExistingAssessments() {
             try {
                 const response = await fetch('/api/teacher/assessments', {
@@ -516,7 +927,31 @@
                     
                     // Parse questions array safely
                     const questionsArray = Array.isArray(assessment.questions) ? assessment.questions : [];
-                    const questionCount = questionsArray.length;
+                    let questionCount = questionsArray.length;
+                    let questionDisplay = questionCount.toString();
+                    
+                    // For writing assessments, show "N/A" instead of 0
+                    if ((assessment.type === 'writing' || assessment.type === 'writing-long') && questionCount === 0) {
+                        questionDisplay = 'N/A';
+                    }
+                    // Improved count for drag-and-drop subtypes
+                    else if (assessment.type === 'drag-and-drop' && questionsArray.length > 0) {
+                        const q = questionsArray[0];
+                        if (q.subtype === 'fill-in-blank' && Array.isArray(q.sentences)) {
+                            questionCount = q.sentences.length;
+                            questionDisplay = questionCount.toString();
+                        } else if (q.subtype === 'sequence') {
+                            questionCount = 1;
+                            questionDisplay = questionCount.toString();
+                        } else if (q.subtype === 'sequence' && Array.isArray(q.correctSequence)) {
+                            questionCount = q.correctSequence.length;
+                            questionDisplay = questionCount.toString();
+                        }
+                    }
+                    
+                    // Determine if this assessment needs manual grading
+                    const manualTypes = ['speaking', 'assignment', 'writing', 'writing-long'];
+                    const showGradeBtn = manualTypes.includes((assessment.type || '').toLowerCase());
                     
                     card.innerHTML = `
                         <div class="card-body">
@@ -528,7 +963,7 @@
                                 ${assessment.section.name}
                             </p>
                             <p class="card-text small">
-                                Questions: ${questionCount}
+                                Questions: ${questionDisplay}
                             </p>
                             <div class="btn-group">
                                 <button class="btn btn-sm btn-primary" onclick="editAssessment('${assessment.id}')">
@@ -537,6 +972,7 @@
                                 <button class="btn btn-sm btn-danger" onclick="deleteAssessment('${assessment.id}')">
                                     <i class="bi bi-trash"></i> Delete
                                 </button>
+                                ${showGradeBtn ? `<a href="/teacher/grade-assessment.html?assessmentId=${assessment.id}" class="btn btn-success btn-sm ms-2"><i class="bi bi-clipboard-check"></i> Grade</a>` : ''}
                             </div>
                         </div>
                     `;
@@ -565,10 +1001,12 @@
                 // Populate form fields
                 document.getElementById('title').value = assessment.title;
                 document.getElementById('description').value = assessment.description;
-                document.getElementById('assessmentType').value = assessment.type;
+                document.getElementById('type').value = assessment.type;
                 if (assessment.dueDate) {
                     document.getElementById('dueDate').value = new Date(assessment.dueDate).toISOString().slice(0, 16);
                 }
+                // Set Skill/Category
+                document.getElementById('assessmentCategory').value = assessment.category || '';
 
                 // Set section selectors
                 await setSelectors(assessment.section);
@@ -619,58 +1057,110 @@
             
             const formData = new FormData();
             formData.append('title', document.getElementById('title').value);
-            formData.append('type', document.getElementById('assessmentType').value);
+            formData.append('type', document.getElementById('type').value);
             formData.append('description', document.getElementById('description').value);
             formData.append('dueDate', document.getElementById('dueDate').value);
+            formData.append('criteria', document.getElementById('criteria').value);  // Add criteria to form data
+            
+            // Add maxAttempts if set
+            const maxAttemptsValue = document.getElementById('maxAttempts').value;
+            if (maxAttemptsValue) {
+                formData.append('maxAttempts', maxAttemptsValue);
+            }
             
             const questions = [];
-            document.querySelectorAll('#questionsList .card').forEach(questionCard => {
-                const type = questionCard.querySelector('.card-header h6').textContent.toLowerCase().replace(' question', '');
-                const question = {
-                    type: type,
-                    text: questionCard.querySelector('textarea').value
-                };
-                
-                switch(type) {
-                    case 'multiple-choice':
-                        const choices = [];
-                        let correctIndex = -1;
-                        questionCard.querySelectorAll('.input-group').forEach((group, index) => {
-                            choices.push(group.querySelector('input[type="text"]').value);
-                            if (group.querySelector('input[type="radio"]').checked) {
-                                correctIndex = index;
+            let topLevelSubtype = null;
+            // Loop through question cards to build questions array
+            document.querySelectorAll('.question-card').forEach((questionCard, index) => {
+                const type = questionCard.getAttribute('data-type');
+                const question = { type };
+                if (type === 'drag-and-drop') {
+                    const subtypeSelect = questionCard.querySelector('.dragdrop-subtype-select');
+                    if (subtypeSelect) {
+                        question.subtype = subtypeSelect.value;
+                        if (!topLevelSubtype) topLevelSubtype = subtypeSelect.value;
+                    }
+                    switch (question.subtype) {
+                        case 'sequence': {
+                            // Word bank (comma-separated)
+                            const wordBankInput = questionCard.querySelector('.sequence-items');
+                            const correctSeqInput = questionCard.querySelector('.sequence-correct');
+                            const extraInput = questionCard.querySelector('.sequence-extra');
+                            question.wordBank = wordBankInput ? wordBankInput.value.split(',').map(w => w.trim()).filter(Boolean) : [];
+                            question.correctSequence = correctSeqInput ? correctSeqInput.value.split(',').map(w => w.trim()).filter(Boolean) : [];
+                            question.extraWords = extraInput ? extraInput.value.split(',').map(w => w.trim()).filter(Boolean) : [];
+                            // Attach audio file if present
+                            const audioInput = questionCard.querySelector('.sequence-audio');
+                            if (audioInput && audioInput.files && audioInput.files.length > 0) {
+                                const displayNameInput = questionCard.querySelector('.sequence-audio-display-name');
+                                const displayName = displayNameInput ? displayNameInput.value.trim() : '';
+                                const label = `sequence_audio_${index}`;
+                                formData.append(`audio_${index}`, audioInput.files[0]);
+                                question.audioFileName = label;
+                                question.audioDisplayName = displayName;
+                                // Add to mediaFiles array (if you build it here)
+                                // mediaFiles.push({ label, type: audioInput.files[0].type, filePath: ..., displayName });
                             }
-                        });
-                        question.choices = choices;
-                        question.correctIndex = correctIndex;
-                        break;
-                        
-                    case 'listening':
-                        const audioFile = questionCard.querySelector('input[type="file"]').files[0];
-                        if (audioFile) {
-                            formData.append('audio_' + questions.length, audioFile);
-                            question.audioFileName = 'audio_' + questions.length;
+                            break;
                         }
-                        question.expectedAnswer = questionCard.querySelectorAll('textarea')[1].value;
-                        break;
-                        
-                    case 'speaking':
-                        question.timeLimit = parseInt(questionCard.querySelector('input[type="number"]').value);
-                        question.evaluationCriteria = questionCard.querySelectorAll('textarea')[1].value;
-                        break;
+                        case 'fill-in-blank': {
+                            // Sentences and answers
+                            const sentences = [];
+                            const rows = questionCard.querySelectorAll('.fillblank-sentence-row');
+                            rows.forEach(row => {
+                                const textInput = row.querySelector('input[type="text"]:nth-child(1)');
+                                const ansInput = row.querySelector('input[type="text"]:nth-child(2)');
+                                if (textInput && ansInput) {
+                                    sentences.push({
+                                        text: textInput.value,
+                                        answers: ansInput.value.split(',').map(a => a.trim()).filter(Boolean)
+                                    });
+                                }
+                            });
+                            question.sentences = sentences;
+                            // Extra word bank words
+                            const extraInput = questionCard.querySelector('.fillblank-extra');
+                            question.extraWords = extraInput ? extraInput.value.split(',').map(w => w.trim()).filter(Boolean) : [];
+                            break;
+                        }
+                        case 'image-fill-blank': {
+                            // Add extra word bank words
+                            const extraInput = questionCard.querySelector('.imagefillblank-extra');
+                            question.extraWords = extraInput ? extraInput.value.split(',').map(w => w.trim()).filter(Boolean) : [];
+                            // (Image-sentence pairs logic would go here)
+                            break;
+                        }
+                        case 'long-paragraph-fill-in-blank': {
+                            // Word bank, answers, extra
+                            const wordBankInput = questionCard.querySelector('.long-paragraph-wordbank');
+                            const answersInput = questionCard.querySelector('.long-paragraph-answers');
+                            const extraInput = questionCard.querySelector('.long-paragraph-extra');
+                            question.wordBank = wordBankInput ? wordBankInput.value.split(',').map(w => w.trim()).filter(Boolean) : [];
+                            question.answers = answersInput ? answersInput.value.split(',').map(w => w.trim()).filter(Boolean) : [];
+                            question.extraWords = extraInput ? extraInput.value.split(',').map(w => w.trim()).filter(Boolean) : [];
+                            break;
+                        }
+                    }
                 }
-                
+                // ... rest of question building logic ...
                 questions.push(question);
             });
-            
             formData.append('questions', JSON.stringify(questions));
-            
+            // If drag-and-drop, add top-level subtype
+            if (topLevelSubtype) {
+                formData.append('subtype', topLevelSubtype);
+            }
+            // Debug log
+            console.log('[DEBUG] Submitting assessment:');
+            console.log('questions:', questions);
+            for (let pair of formData.entries()) {
+                console.log('formData:', pair[0], pair[1]);
+            }
             try {
                 const assessmentId = this.dataset.assessmentId;
                 const url = assessmentId 
                     ? `/api/assessments/${assessmentId}`
                     : `/api/sections/${document.getElementById('sectionSelect').value}/assessments`;
-                
                 const response = await fetch(url, {
                     method: assessmentId ? 'PUT' : 'POST',
                     headers: {
@@ -678,7 +1168,6 @@
                     },
                     body: formData
                 });
-                
                 if (response.ok) {
                     alert(assessmentId ? 'Assessment updated successfully!' : 'Assessment created successfully!');
                     // Reload assessments but don't reset form if updating
@@ -698,12 +1187,15 @@
         });
 
         // Show/hide fields based on assessment type
-        document.getElementById('assessmentType').addEventListener('change', function() {
-            const isQuiz = this.value === 'quiz';
-            document.getElementById('descriptionField').style.display = isQuiz ? 'none' : 'block';
-            document.getElementById('dueDateField').style.display = isQuiz ? 'none' : 'block';
-            document.getElementById('questionsSection').style.display = isQuiz ? 'block' : 'none';
-        });
+        //document.getElementById('assessmentType').addEventListener('change', function() {
+        //    const isQuiz = this.value === 'quiz';
+        //    const descriptionField = document.getElementById('descriptionField');
+        //    if (descriptionField) descriptionField.style.display = isQuiz ? 'none' : 'block';
+        //    const dueDateField = document.getElementById('dueDateField');
+        //    if (dueDateField) dueDateField.style.display = isQuiz ? 'none' : 'block';
+        //    const questionsSection = document.getElementById('questionsSection');
+        //    if (questionsSection) questionsSection.style.display = isQuiz ? 'block' : 'none';
+        //});
 
         // Handle logout
         document.getElementById('logoutBtn').addEventListener('click', () => {
@@ -775,6 +1267,900 @@
                 console.error('Error deleting assessment:', error);
                 alert('Failed to delete assessment. Please try again.');
             }
+        }
+
+        function addMatchingPair(questionId) {
+            const matchingPairs = document.querySelector(`#${questionId} .matching-pairs`);
+            const newPair = document.createElement('div');
+            newPair.className = 'matching-pair';
+            newPair.innerHTML = `
+                <div class="row mb-2">
+                    <div class="col-md-5">
+                        <input type="text" class="form-control" name="expression_${questionId}_0" placeholder="Enter expression" required>
+                    </div>
+                    <div class="col-md-5">
+                        <input type="text" class="form-control" name="meaning_${questionId}_0" placeholder="Enter meaning" required>
+                    </div>
+                    <div class="col-md-2">
+                        <button type="button" class="btn btn-outline-danger" onclick="removeMatchingPair(this)">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </div>`;
+            matchingPairs.insertBefore(newPair, matchingPairs.lastElementChild);
+        }
+
+        function removeMatchingPair(button) {
+            const pair = button.closest('.matching-pair');
+            if (pair.querySelectorAll('input').length > 2) {
+                pair.remove();
+            }
+        }
+
+        function previewMatchingExercise(questionId) {
+            console.log(`Previewing matching exercise for question: ${questionId}`);
+            
+            // Get the question card
+            const questionCard = document.getElementById(questionId);
+            
+            // Get all expressions and meanings
+            const expressionInputs = questionCard.querySelectorAll('.matching-pair input[placeholder="Enter expression"]');
+            const meaningInputs = questionCard.querySelectorAll('.matching-pair input[placeholder="Enter meaning"]');
+            
+            // Check if we have pairs
+            if (expressionInputs.length === 0 || meaningInputs.length === 0) {
+                alert('Please add at least one matching pair before previewing.');
+                return;
+            }
+            
+            // Extract data
+            const expressions = Array.from(expressionInputs).map(input => input.value.trim()).filter(val => val !== '');
+            const meanings = Array.from(meaningInputs).map(input => input.value.trim()).filter(val => val !== '');
+            
+            // Make sure we have valid data
+            if (expressions.length === 0 || meanings.length === 0) {
+                alert('Please enter at least one expression and meaning before previewing.');
+                return;
+            }
+            
+            // Get the instructions
+            const instructions = questionCard.querySelector('textarea').value || 'Match the expressions with their meanings.';
+            
+            // Create a modal for preview
+            const modalId = `previewModal-${Date.now()}`;
+            
+            // Create shuffled versions of the meanings (for student view simulation)
+            const shuffledMeanings = [...meanings].sort(() => Math.random() - 0.5);
+            
+            // Create the HTML modal
+            const modalHtml = `
+            <div class="modal fade" id="${modalId}" tabindex="-1" aria-labelledby="${modalId}-label" aria-hidden="true">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header bg-primary text-white">
+                            <h5 class="modal-title" id="${modalId}-label">Matching Exercise Preview</h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="alert alert-info">
+                                <strong>Student View:</strong> This is how students will see your matching exercise.
+                            </div>
+                            
+                            <div class="card">
+                                <div class="card-header bg-primary text-white">
+                                    <h5 class="mb-0">Question 1</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="question-text mb-3">${instructions}</div>
+                                    
+                                    <div class="row mb-3">
+                                        <div class="col-md-6">
+                                            <h6 class="mb-3">Items</h6>
+                                            <div class="list-group matching-items-container">
+                                                ${expressions.map((expression, index) => `
+                                                    <div class="list-group-item d-flex align-items-center">
+                                                        <span class="me-2">${index + 1}.</span>
+                                                        <span>${expression}</span>
+                                                    </div>
+                                                `).join('')}
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="col-md-6">
+                                            <h6 class="mb-3">Matches</h6>
+                                            <div class="matching-options-container">
+                                                ${expressions.map((_, index) => `
+                                                    <div class="input-group">
+                                                        <span class="input-group-text">${index + 1}.</span>
+                                                        <select class="form-select">
+                                                            <option value="">Select a match</option>
+                                                            ${shuffledMeanings.map((meaning, mIndex) => `
+                                                                <option value="${mIndex}">${meaning}</option>
+                                                            `).join('')}
+                                                        </select>
+                                                    </div>
+                                                `).join('')}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="mt-4">
+                                <h6>Correct Matches:</h6>
+                                <table class="table table-bordered">
+                                    <thead>
+                                        <tr>
+                                            <th width="10%">#</th>
+                                            <th width="45%">Expression</th>
+                                            <th width="45%">Meaning</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${expressions.map((expression, index) => `
+                                            <tr>
+                                                <td>${index + 1}</td>
+                                                <td>${expression}</td>
+                                                <td>${meanings[index] || 'Not set'}</td>
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+            
+            // Add modal to the body
+            const modalDiv = document.createElement('div');
+            modalDiv.innerHTML = modalHtml;
+            document.body.appendChild(modalDiv);
+            
+            // Show the modal
+            const modal = new bootstrap.Modal(document.getElementById(modalId));
+            modal.show();
+            
+            // Add event listener to remove modal from DOM when hidden
+            document.getElementById(modalId).addEventListener('hidden.bs.modal', function() {
+                this.remove();
+            });
+        }
+
+        function bulkImportMatchingPairs(questionId) {
+            // Create a modal for bulk import
+            const modalId = `bulkImportModal-${Date.now()}`;
+            
+            const modalHtml = `
+            <div class="modal fade" id="${modalId}" tabindex="-1" aria-labelledby="${modalId}-label" aria-hidden="true">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="${modalId}-label">Bulk Import Matching Pairs</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="alert alert-info">
+                                <p><strong>Instructions:</strong> Paste your matching pairs in one of these formats:</p>
+                                <ul>
+                                    <li>One pair per line with expressions and meanings separated by tab, comma, or pipe (|).</li>
+                                    <li>Or in two columns copied from a spreadsheet.</li>
+                                </ul>
+                                <p>Example:</p>
+                                <pre>Weird!|That's strange.
+I hope so.|I want that to happen.
+Ooh, exciting!|That sounds fun.</pre>
+                            </div>
+                            <div class="form-group">
+                                <label for="bulkPairsInput" class="form-label">Paste your pairs below:</label>
+                                <textarea class="form-control" id="bulkPairsInput" rows="10" placeholder="Expression1|Meaning1&#10;Expression2|Meaning2&#10;Expression3|Meaning3"></textarea>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="button" class="btn btn-primary" id="importPairsBtn">Import Pairs</button>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+            
+            // Add modal to the body
+            const modalDiv = document.createElement('div');
+            modalDiv.innerHTML = modalHtml;
+            document.body.appendChild(modalDiv);
+            
+            // Show the modal
+            const modal = new bootstrap.Modal(document.getElementById(modalId));
+            modal.show();
+            
+            // Add event listener for the import button
+            document.getElementById('importPairsBtn').addEventListener('click', function() {
+                const bulkInput = document.getElementById('bulkPairsInput').value.trim();
+                if (!bulkInput) {
+                    alert('Please paste some content to import.');
+                    return;
+                }
+                
+                // First split by lines
+                const lines = bulkInput.split(/\r?\n/).filter(line => line.trim() !== '');
+                const pairs = [];
+                
+                lines.forEach(line => {
+                    // Try different delimiters
+                    let parts;
+                    if (line.includes('|')) {
+                        parts = line.split('|');
+                    } else if (line.includes('\t')) {
+                        parts = line.split('\t');
+                    } else if (line.includes(',')) {
+                        parts = line.split(',');
+                    } else {
+                        // If no delimiter is found, skip this line
+                        console.warn('No delimiter found in line:', line);
+                        return;
+                    }
+                    
+                    if (parts.length >= 2) {
+                        pairs.push({
+                            expression: parts[0].trim(),
+                            meaning: parts[1].trim()
+                        });
+                    }
+                });
+                
+                if (pairs.length === 0) {
+                    alert('No valid pairs found. Please check your input format.');
+                    return;
+                }
+                
+                // Clear existing pairs (except the first one if it's empty)
+                const matchingPairsContainer = document.querySelector(`#${questionId} .matching-pairs`);
+                const existingPairs = Array.from(matchingPairsContainer.querySelectorAll('.matching-pair'));
+                
+                // Keep only the first pair if it's empty
+                const firstPairExpressionInput = existingPairs[0]?.querySelector('input[placeholder="Enter expression"]');
+                const firstPairMeaningInput = existingPairs[0]?.querySelector('input[placeholder="Enter meaning"]');
+                const isFirstPairEmpty = firstPairExpressionInput && firstPairMeaningInput && 
+                                        !firstPairExpressionInput.value.trim() && 
+                                        !firstPairMeaningInput.value.trim();
+                
+                // Remove all existing pairs except potentially the first one
+                existingPairs.forEach((pair, index) => {
+                    if (index === 0 && isFirstPairEmpty) {
+                        // Keep the first pair if it's empty
+                        return;
+                    }
+                    pair.remove();
+                });
+                
+                // If we kept the first pair, update it with the first imported pair
+                if (isFirstPairEmpty && pairs.length > 0) {
+                    firstPairExpressionInput.value = pairs[0].expression;
+                    firstPairMeaningInput.value = pairs[0].meaning;
+                    pairs.shift(); // Remove the first pair since we've added it
+                }
+                
+                // Add the remaining pairs
+                pairs.forEach(pair => {
+                    const newPair = document.createElement('div');
+                    newPair.className = 'matching-pair';
+                    newPair.innerHTML = `
+                        <div class="row mb-2">
+                            <div class="col-md-5">
+                                <input type="text" class="form-control" name="expression_${questionId}_${pairs.length}" placeholder="Enter expression" value="${pair.expression}" required>
+                            </div>
+                            <div class="col-md-5">
+                                <input type="text" class="form-control" name="meaning_${questionId}_${pairs.length}" placeholder="Enter meaning" value="${pair.meaning}" required>
+                            </div>
+                            <div class="col-md-2">
+                                <button type="button" class="btn btn-outline-danger" onclick="removeMatchingPair(this)">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                        </div>`;
+                    matchingPairsContainer.appendChild(newPair);
+                });
+                
+                modal.hide();
+            });
+            
+            // Add event listener to remove modal from DOM when hidden
+            document.getElementById(modalId).addEventListener('hidden.bs.modal', function() {
+                this.remove();
+            });
+        }
+
+        window.toggleTfButton = function(btn) {
+            const states = ["", "T", "F"];
+            let idx = states.indexOf(btn.dataset.state || "");
+            idx = (idx + 1) % states.length;
+            btn.dataset.state = states[idx];
+            btn.textContent = states[idx] || "?";
+            btn.classList.toggle('btn-success', states[idx] === 'T');
+            btn.classList.toggle('btn-danger', states[idx] === 'F');
+            btn.classList.toggle('btn-outline-secondary', states[idx] === '');
+        };
+        window.addTfSentence = function(btn) {
+            const container = btn.closest('.card-body').querySelector('.true-false-sentences');
+            const row = document.createElement('div');
+            row.className = 'tf-sentence-row mb-2 d-flex align-items-center';
+            row.innerHTML = `<input type="text" class="form-control me-2" placeholder="Enter sentence" required style="max-width: 70%"><button type="button" class="btn btn-outline-secondary tf-toggle" data-state="" onclick="toggleTfButton(this)">?</button><button type="button" class="btn btn-outline-danger ms-2" onclick="removeTfSentence(this)"><i class="bi bi-trash"></i></button>`;
+            container.appendChild(row);
+        };
+        window.removeTfSentence = function(btn) {
+            btn.closest('.tf-sentence-row').remove();
+        };
+
+        function toggleResponseType(select) {
+            const questionCard = select.closest('.card');
+            const timeLimitInput = questionCard.querySelector('input[type="number"]');
+            const maxValue = select.value === 'video' ? 300 : 180; // 5 minutes for video, 3 minutes for audio
+            timeLimitInput.max = maxValue;
+            if (parseInt(timeLimitInput.value) > maxValue) {
+                timeLimitInput.value = maxValue;
+            }
+        }
+
+        window.toggleDragDropSubtypeFields = function(select) {
+            const cardBody = select.closest('.card-body');
+            if (!cardBody) return;
+            
+            const seqFields = cardBody.querySelector('.dragdrop-sequence-fields');
+            const fillFields = cardBody.querySelector('.dragdrop-fillblank-fields');
+            const imageFillFields = cardBody.querySelector('.dragdrop-image-fillblank-fields');
+            const matchingFields = cardBody.querySelector('.dragdrop-matching-fields');
+            const longParagraphFields = cardBody.querySelector('.dragdrop-long-paragraph-fields');
+            
+            // Helper to set required on all inputs in a section
+            function setRequired(section, required) {
+                if (!section) return;
+                section.querySelectorAll('input, textarea, select').forEach(input => {
+                    // Do not set required for audio file input or audio display name in sequence subtype
+                    if (input.classList.contains('sequence-audio') || input.classList.contains('sequence-audio-display-name')) {
+                        input.required = false;
+                    } else {
+                        input.required = required;
+                    }
+                });
+            }
+
+            // Hide all fields and remove required
+            if (seqFields) {
+                seqFields.style.display = 'none';
+                setRequired(seqFields, false);
+            }
+            if (fillFields) {
+                fillFields.style.display = 'none';
+                setRequired(fillFields, false);
+            }
+            if (imageFillFields) {
+                imageFillFields.style.display = 'none';
+                setRequired(imageFillFields, false);
+            }
+            if (matchingFields) {
+                matchingFields.style.display = 'none';
+                setRequired(matchingFields, false);
+            }
+            if (longParagraphFields) {
+                longParagraphFields.style.display = 'none';
+                setRequired(longParagraphFields, false);
+            }
+            
+            // Show the selected type and set required only for visible fields
+            switch (select.value) {
+                case 'sequence':
+                    if (seqFields) {
+                        seqFields.style.display = 'block';
+                        setRequired(seqFields, true);
+                    }
+                    break;
+                case 'fill-in-blank':
+                    if (fillFields) {
+                        fillFields.style.display = 'block';
+                        setRequired(fillFields, true);
+                    }
+                    break;
+                case 'image-fill-blank':
+                    if (imageFillFields) {
+                        imageFillFields.style.display = 'block';
+                        setRequired(imageFillFields, true);
+                    }
+                    break;
+                case 'long-paragraph-fill-in-blank':
+                    if (longParagraphFields) {
+                        longParagraphFields.style.display = 'block';
+                        setRequired(longParagraphFields, true);
+                    }
+                    break;
+                case 'matching':
+                    if (matchingFields) {
+                        matchingFields.style.display = 'block';
+                        setRequired(matchingFields, true);
+                    }
+                    break;
+            }
+        }
+
+        window.addFillBlankSentence = function(btn) {
+            const list = btn.closest('.fillblank-sentences-list') || btn.parentElement.querySelector('.fillblank-sentences-list');
+            const idx = list.children.length;
+            const row = document.createElement('div');
+            row.className = 'fillblank-sentence-row mb-2';
+            row.innerHTML = `
+                <input type="text" class="form-control d-inline-block me-2" style="width:60%" placeholder="Type sentence, use [BLANK] for blank(s)" required>
+                <input type="text" class="form-control d-inline-block me-2" style="width:30%" placeholder="Correct answer(s), comma-separated" required>
+                <button type="button" class="btn btn-outline-danger btn-sm" onclick="this.parentElement.remove()"><i class="bi bi-trash"></i></button>
+            `;
+            list.appendChild(row);
+        };
+
+        // Add modal HTML at the end of <body> if not already present
+        if (!document.getElementById('bulkImportFillBlankModal')) {
+            const modalHtml = `
+            <div class="modal fade" id="bulkImportFillBlankModal" tabindex="-1" aria-labelledby="bulkImportFillBlankModalLabel" aria-hidden="true">
+              <div class="modal-dialog">
+                <div class="modal-content">
+                  <div class="modal-header">
+                    <h5 class="modal-title" id="bulkImportFillBlankModalLabel">Bulk Import Sentences (JSON)</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                  </div>
+                  <div class="modal-body">
+                    <div class="mb-3">
+                      <label for="bulkFillBlankJson" class="form-label">Paste JSON array of sentences:</label>
+                      <textarea class="form-control" id="bulkFillBlankJson" rows="8" placeholder='[
+  { "text": "I am [BLANK] today.", "answers": ["happy"] },\n  { "text": "She is [BLANK] and [BLANK]", "answers": ["tired", "hungry"] }
+]'></textarea>
+                      <div class="form-text">Each item should have a <code>text</code> and <code>answers</code> array.</div>
+                    </div>
+                    <div id="bulkImportFillBlankError" class="text-danger mb-2"></div>
+                  </div>
+                  <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="importFillBlankBtn">Import</button>
+                  </div>
+                </div>
+              </div>
+            </div>`;
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+        }
+
+        // Handle import button click
+        if (!window._bulkImportFillBlankHandlerAdded) {
+            document.getElementById('importFillBlankBtn').addEventListener('click', function() {
+                const textarea = document.getElementById('bulkFillBlankJson');
+                const errorDiv = document.getElementById('bulkImportFillBlankError');
+                let data;
+                try {
+                    data = JSON.parse(textarea.value);
+                } catch (e) {
+                    errorDiv.textContent = 'Invalid JSON.';
+                    return;
+                }
+                if (!Array.isArray(data.questions)) {
+                    errorDiv.textContent = 'JSON must be an array.';
+                    return;
+                }
+                // Validate and add to UI
+                const fillFields = window._currentFillBlankFields;
+                const list = fillFields.querySelector('.fillblank-sentences-list');
+                list.innerHTML = '';
+                let valid = true;
+                data.questions.forEach(item => {
+                    if (!item.text || !Array.isArray(item.answers) || item.answers.length === 0) {
+                        valid = false;
+                    }
+                });
+                if (!valid) {
+                    errorDiv.textContent = 'Each item must have a text and a non-empty answers array.';
+                    return;
+                }
+                // Add to UI
+                data.questions.forEach(item => {
+                    const row = document.createElement('div');
+                    row.className = 'fillblank-sentence-row mb-2';
+                    row.innerHTML = `
+                        <input type="text" class="form-control d-inline-block me-2" style="width:60%" placeholder="Type sentence, use [BLANK] for blank(s)" required value="${item.text.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}">
+                        <input type="text" class="form-control d-inline-block me-2" style="width:30%" placeholder="Correct answer(s), comma-separated" required value="${item.answers.join(', ')}">
+                        <button type="button" class="btn btn-outline-danger btn-sm" onclick="this.parentElement.remove()"><i class="bi bi-trash"></i></button>
+                    `;
+                    list.appendChild(row);
+                });
+                // Hide modal
+                bootstrap.Modal.getInstance(document.getElementById('bulkImportFillBlankModal')).hide();
+            });
+            window._bulkImportFillBlankHandlerAdded = true;
+        }
+
+        window.showBulkImportFillBlankModal = function(btn) {
+            // Find the closest .dragdrop-fillblank-fields
+            const fillFields = btn.closest('.dragdrop-fillblank-fields');
+            // Store a reference for later
+            window._currentFillBlankFields = fillFields;
+            // Clear textarea and error
+            document.getElementById('bulkFillBlankJson').value = '';
+            document.getElementById('bulkImportFillBlankError').textContent = '';
+            // Show modal
+            const modal = new bootstrap.Modal(document.getElementById('bulkImportFillBlankModal'));
+            modal.show();
+        };
+
+        // Add modal HTML at the end of <body> if not already present
+        if (!document.getElementById('bulkImportWritingModal')) {
+            const modalHtml = `
+            <div class="modal fade" id="bulkImportWritingModal" tabindex="-1" aria-labelledby="bulkImportWritingModalLabel" aria-hidden="true">
+              <div class="modal-dialog">
+                <div class="modal-content">
+                  <div class="modal-header">
+                    <h5 class="modal-title" id="bulkImportWritingModalLabel">Bulk Import Writing Questions</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                  </div>
+                  <div class="modal-body">
+                    <div class="mb-3">
+                      <label for="bulkWritingInput" class="form-label">Paste questions and answers (one per line, separated by a pipe |):</label>
+                      <textarea class="form-control" id="bulkWritingInput" rows="8" placeholder="What is the capital of France? | Paris\nWho wrote Hamlet? | Shakespeare\n2 + 2 = ? | 4"></textarea>
+                      <div class="form-text">Each line: <code>Question | Answer</code></div>
+                    </div>
+                    <div id="bulkImportWritingError" class="text-danger mb-2"></div>
+                  </div>
+                  <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="importWritingBtn">Import</button>
+                  </div>
+                </div>
+              </div>
+            </div>`;
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+        }
+
+        // Add handler for import button
+        if (!window._bulkImportWritingHandlerAdded) {
+            document.getElementById('importWritingBtn').addEventListener('click', function() {
+                const textarea = document.getElementById('bulkWritingInput');
+                const errorDiv = document.getElementById('bulkImportWritingError');
+                const lines = textarea.value.split(/\r?\n/).filter(line => line.trim() !== '');
+                if (!lines.length) {
+                    errorDiv.textContent = 'Please enter at least one question.';
+                    return;
+                }
+                let valid = true;
+                const questions = lines.map(line => {
+                    const parts = line.split('|');
+                    if (parts.length < 2) { valid = false; }
+                    return {
+                        text: parts[0] ? parts[0].trim() : '',
+                        correctAnswer: parts[1] ? parts[1].trim() : ''
+                    };
+                });
+                if (!valid) {
+                    errorDiv.textContent = 'Each line must have a question and an answer separated by a pipe (|).';
+                    return;
+                }
+                // Add to UI
+                const questionsList = document.getElementById('questionsList');
+                questions.forEach(q => {
+                    const questionId = 'question_' + Date.now() + Math.floor(Math.random()*10000);
+                    let questionHtml = `
+                        <div class="card mb-3" id="${questionId}">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h6 class="mb-0">Writing Question</h6>
+                                <button type="button" class="btn btn-outline-danger btn-sm" onclick="removeQuestion('${questionId}')">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label class="form-label">Question</label>
+                                    <input type="text" class="form-control" value="${q.text.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Correct Answer</label>
+                                    <input type="text" class="form-control" value="${q.correctAnswer.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}" required>
+                                </div>
+                            </div>
+                        </div>`;
+                    questionsList.insertAdjacentHTML('beforeend', questionHtml);
+                });
+                // Hide modal
+                bootstrap.Modal.getInstance(document.getElementById('bulkImportWritingModal')).hide();
+            });
+            window._bulkImportWritingHandlerAdded = true;
+        }
+
+        window.showBulkImportWritingModal = function() {
+            document.getElementById('bulkWritingInput').value = '';
+            document.getElementById('bulkImportWritingError').textContent = '';
+            const modal = new bootstrap.Modal(document.getElementById('bulkImportWritingModal'));
+            modal.show();
+        };
+
+        async function handleBulkImport() {
+            const fileInput = document.getElementById('bulkImportFile');
+            const errorDiv = document.getElementById('bulkImportError');
+            errorDiv.style.display = 'none';
+            if (!fileInput.files.length) {
+                errorDiv.textContent = 'Please select a JSON file.';
+                errorDiv.style.display = '';
+                return;
+            }
+            const file = fileInput.files[0];
+            try {
+                const text = await file.text();
+                const data = JSON.parse(text);
+                if (!Array.isArray(data.questions)) {
+                    throw new Error('Invalid format: missing questions array.');
+                }
+                data.questions.forEach(q => {
+                    if (q.type !== 'multiple-choice' || !q.text || !Array.isArray(q.options) || typeof q.correctAnswer !== 'number') {
+                        throw new Error('Invalid question format.');
+                    }
+                    addMultipleChoiceQuestion(q.text, q.options, q.correctAnswer);
+                });
+                alert('Questions imported successfully!');
+            } catch (e) {
+                errorDiv.textContent = 'Import failed: ' + e.message;
+                errorDiv.style.display = '';
+            }
+        }
+
+        function addMultipleChoiceQuestion(text, options, correctIndex) {
+            // Generate a unique questionId
+            const questionId = 'question_' + Date.now() + Math.floor(Math.random() * 10000);
+            addQuestionWithId('multiple-choice', questionId);
+            const card = document.getElementById(questionId);
+            if (!card) return;
+            card.classList.add('question-card');
+            const textInput = card.querySelector('.card-body textarea');
+            if (textInput) textInput.value = text;
+            const choicesContainer = card.querySelector('.choices-container');
+            if (!choicesContainer) {
+                alert('Import failed: Could not find choices container in the question card.');
+                return;
+            }
+            let optionInputs = choicesContainer.querySelectorAll('input[type="text"]');
+            const addChoiceBtn = choicesContainer.querySelector('.btn-outline-primary');
+            let safety = 0;
+            while (optionInputs.length < options.length && safety < 10) {
+                if (addChoiceBtn) addChoiceBtn.click();
+                optionInputs = choicesContainer.querySelectorAll('input[type="text"]');
+                safety++;
+            }
+            options.forEach((opt, i) => {
+                if (optionInputs[i]) optionInputs[i].value = opt;
+            });
+            const correctInputs = choicesContainer.querySelectorAll('input[type="radio"]');
+            if (correctInputs[correctIndex]) correctInputs[correctIndex].checked = true;
+        }
+
+        // Helper to add a question with a specific ID
+        function addQuestionWithId(type, questionId) {
+            const questionsList = document.getElementById('questionsList');
+            let questionHtml = `
+                <div class="card mb-3" id="${questionId}">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0">${type.charAt(0).toUpperCase() + type.slice(1)} Question</h6>
+                        <button type="button" class="btn btn-outline-danger btn-sm" onclick="removeQuestion('${questionId}')">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                    <div class="card-body">`;
+            switch(type) {
+                case 'multiple-choice':
+                    questionHtml += `
+                        <div class="mb-3">
+                            <label class="form-label">Question Text</label>
+                            <textarea class="form-control" rows="2" required></textarea>
+                        </div>
+                        <div class="choices-container">
+                            <label class="form-label">Choices</label>
+                            <div class="mb-2">
+                                <div class="input-group">
+                                    <div class="input-group-text">
+                                        <input type="radio" name="correct_${questionId}" required>
+                                    </div>
+                                    <input type="text" class="form-control" placeholder="Choice 1" required>
+                                    <button type="button" class="btn btn-outline-danger" onclick="removeChoice(this)">
+                                        <i class="bi bi-dash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-outline-primary btn-sm" onclick="addChoice('${questionId}')">
+                                <i class="bi bi-plus"></i> Add Choice
+                            </button>
+                        </div>`;
+                    break;
+                // ... handle other types if needed ...
+            }
+            questionHtml += `</div></div>`;
+            questionsList.insertAdjacentHTML('beforeend', questionHtml);
+        }
+
+        function showPasteJsonModal() {
+            document.getElementById('pastedJson').value = '';
+            document.getElementById('pasteJsonError').textContent = '';
+            const modal = new bootstrap.Modal(document.getElementById('pasteJsonModal'));
+            modal.show();
+        }
+
+        function handlePasteJsonImport() {
+            const text = document.getElementById('pastedJson').value;
+            const errorDiv = document.getElementById('pasteJsonError');
+            errorDiv.textContent = '';
+            try {
+                const data = JSON.parse(text);
+                if (!Array.isArray(data.questions)) {
+                    throw new Error('Invalid format: missing questions array.');
+                }
+                data.questions.forEach(q => {
+                    if (q.type !== 'multiple-choice' || !q.text || !Array.isArray(q.options) || typeof q.correctAnswer !== 'number') {
+                        throw new Error('Invalid question format.');
+                    }
+                    addMultipleChoiceQuestion(q.text, q.options, q.correctAnswer);
+                });
+                bootstrap.Modal.getInstance(document.getElementById('pasteJsonModal')).hide();
+                alert('Questions imported successfully!');
+            } catch (e) {
+                errorDiv.textContent = 'Import failed: ' + e.message;
+            }
+        }
+
+        function showBulkImport() {
+            document.getElementById('bulkImportContainer').scrollIntoView({behavior: 'smooth'});
+            document.getElementById('bulkImportFile').focus();
+        }
+
+        function addImageFillBlankPair(button) {
+            const pairsList = button.closest('.dragdrop-image-fillblank-fields').querySelector('.image-fillblank-pairs-list');
+            const pairIndex = pairsList.children.length;
+            
+            const pairDiv = document.createElement('div');
+            pairDiv.className = 'card mb-3';
+            pairDiv.innerHTML = `
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="mb-0">Pair ${pairIndex + 1}</h6>
+                        <button type="button" class="btn btn-outline-danger btn-sm" onclick="this.closest('.card').remove()">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Image</label>
+                        <input type="file" class="form-control image-input" accept="image/*" required>
+                        <div class="image-preview mt-2" style="max-width: 200px;"></div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Sentence with Blank</label>
+                        <input type="text" class="form-control sentence-input" placeholder="e.g. The boy looks [BLANK]." required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Correct Answer</label>
+                        <input type="text" class="form-control answer-input" placeholder="e.g. happy" required>
+                    </div>
+                </div>
+            `;
+            
+            // Add image preview functionality
+            const imageInput = pairDiv.querySelector('.image-input');
+            const previewDiv = pairDiv.querySelector('.image-preview');
+            imageInput.addEventListener('change', function() {
+                if (this.files && this.files[0]) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        previewDiv.innerHTML = `<img src="${e.target.result}" class="img-fluid">`;
+                    };
+                    reader.readAsDataURL(this.files[0]);
+                }
+            });
+            
+            pairsList.appendChild(pairDiv);
+        }
+
+        function showBulkImportImageFillBlankModal(button) {
+            const modalHtml = `
+                <div class="modal fade" id="bulkImportImageFillBlankModal" tabindex="-1">
+                    <div class="modal-dialog">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">Bulk Import Image-Sentence Pairs</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <p>Enter your image-sentence pairs in JSON format:</p>
+                                <textarea class="form-control" rows="10" placeholder='[
+    {
+        "image": "path/to/image1.jpg",
+        "text": "The boy looks [BLANK].",
+        "answer": "happy"
+    },
+    {
+        "image": "path/to/image2.jpg",
+        "text": "The girl is [BLANK].",
+        "answer": "sad"
+    }
+]'></textarea>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                <button type="button" class="btn btn-primary" onclick="importImageFillBlankPairs(this)">Import</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Add modal to document
+            const modalDiv = document.createElement('div');
+            modalDiv.innerHTML = modalHtml;
+            document.body.appendChild(modalDiv);
+            
+            // Show modal
+            const modal = new bootstrap.Modal(modalDiv.querySelector('.modal'));
+            modal.show();
+            
+            // Remove modal from DOM after it's hidden
+            modalDiv.querySelector('.modal').addEventListener('hidden.bs.modal', function() {
+                modalDiv.remove();
+            });
+        }
+
+        function importImageFillBlankPairs(button) {
+            const modal = button.closest('.modal');
+            const textarea = modal.querySelector('textarea');
+            const pairsList = document.querySelector('.image-fillblank-pairs-list');
+            
+            try {
+                const pairs = JSON.parse(textarea.value);
+                if (!Array.isArray(pairs)) throw new Error('Input must be an array of pairs');
+                
+                // Clear existing pairs
+                pairsList.innerHTML = '';
+                
+                // Add each pair
+                pairs.forEach((pair, index) => {
+                    const pairDiv = document.createElement('div');
+                    pairDiv.className = 'card mb-3';
+                    pairDiv.innerHTML = `
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <h6 class="mb-0">Pair ${index + 1}</h6>
+                                <button type="button" class="btn btn-outline-danger btn-sm" onclick="this.closest('.card').remove()">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Image</label>
+                                <input type="text" class="form-control image-input" value="${pair.image}" required>
+                                <div class="image-preview mt-2" style="max-width: 200px;">
+                                    <img src="${pair.image}" class="img-fluid">
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Sentence with Blank</label>
+                                <input type="text" class="form-control sentence-input" value="${pair.text}" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Correct Answer</label>
+                                <input type="text" class="form-control answer-input" value="${pair.answer}" required>
+                            </div>
+                        </div>
+                    `;
+                    pairsList.appendChild(pairDiv);
+                });
+                
+                // Close modal
+                bootstrap.Modal.getInstance(modal).hide();
+            } catch (error) {
+                alert('Error importing pairs: ' + error.message);
+            }
+        }
+
+        // In the assessment details section
+        function displayAssessmentDetails(assessment) {
+            document.getElementById('assessmentDescription').textContent = assessment.description || 'No description provided';
+            document.getElementById('assessmentCriteria').textContent = assessment.criteria || 'No grading criteria provided';
+            document.getElementById('assessmentDueDate').textContent = assessment.dueDate ? new Date(assessment.dueDate).toLocaleString() : 'No due date set';
         }
     </script>
 </body>

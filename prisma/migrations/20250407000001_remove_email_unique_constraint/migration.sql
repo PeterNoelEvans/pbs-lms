@@ -1,0 +1,4 @@
+-- Migration intentionally left blank for SQLite compatibility.
+-- DROP INDEX IF EXISTS "User_email_key";
+-- ALTER TABLE "User" ALTER COLUMN "email" DROP NOT NULL;
+-- ALTER TABLE "User" ADD CONSTRAINT "User_nickname_key" UNIQUE ("nickname"); 

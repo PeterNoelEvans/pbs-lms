@@ -80,6 +80,7 @@
                     <a class="nav-link" href="/teacher/resources.html">Resources</a>
                     <a class="nav-link" href="/teacher/assessments">Assessments</a>
                     <a class="nav-link" href="/teacher/core-subjects.html">Core Subjects</a>
+                    <a class="nav-link" href="/teacher/progress.html"><i class="bi bi-graph-up"></i> Student Progress</a>
                     <button class="btn btn-danger mt-4" id="logoutBtn">Logout</button>
         </nav>
     </div>
@@ -376,21 +377,35 @@
             
             // Calculate total units and sections
             let unitCount = 0;
-            let sectionCount = 0;
             subjects.forEach(subject => {
                 const units = subject.units || [];
                 unitCount += units.length;
-                units.forEach(unit => {
-                    if (unit.parts) {
-                        unit.parts.forEach(part => {
-                            sectionCount += part.sections?.length || 0;
-                        });
-                    }
-                });
             });
             
             document.getElementById('topicCount').textContent = unitCount;
-            document.getElementById('assessmentCount').textContent = sectionCount;
+            
+            // Fetch actual assessment count instead of using section count
+            fetchAssessmentCount();
+        }
+        
+        // Add a function to get the actual assessment count
+        async function fetchAssessmentCount() {
+            try {
+                const response = await fetch('/api/teacher/assessments', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const assessments = await response.json();
+                    document.getElementById('assessmentCount').textContent = assessments.length;
+                } else {
+                    console.error('Failed to fetch assessments count');
+                }
+            } catch (error) {
+                console.error('Error fetching assessment count:', error);
+            }
         }
 
         // Handle logout

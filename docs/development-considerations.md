@@ -16,18 +16,6 @@
    - School/class organization
    - Public visitor access
 
-### Deployment Environment
-1. **Render.com Specifics**
-   - Free tier limitations
-   - Automatic HTTPS
-   - Environment variable management
-   - Build and deployment process
-
-2. **Database Considerations**
-   - SQLite on Render
-   - Connection pooling
-   - Data persistence
-   - Backup strategy
 
 ### Security Measures
 1. **Authentication**
@@ -93,6 +81,29 @@
    - Zero-downtime deployment
    - Rollback procedures
    - Monitoring setup
+
+## Media File Labeling and Robust Linking
+
+### Problem
+Previously, uploaded media files (audio, images, etc.) were renamed for uniqueness on the server, making it difficult to reliably link them to specific questions or UI elements—especially when multiple files were involved in a single assessment.
+
+### Solution
+A `label` field was added to the `MediaFile` model in the database. This field stores the original field name (e.g., `audio_0`, `image_1`) from the upload form, which is also referenced in the question data (e.g., `audioFileName`).
+
+- When uploading files, the frontend assigns a unique field name to each file input.
+- The backend saves this field name as the `label` for each uploaded file.
+- When rendering assessments, the frontend matches the question's `audioFileName` (or similar) to the `label` in `mediaFiles` to display the correct file.
+
+### Benefits
+- Supports multiple media files per assessment and per question.
+- Prevents mismatches and errors when rendering or grading.
+- Future-proofs the system for complex activities (e.g., drag-and-drop with multiple audio prompts).
+
+### Developer Best Practices
+- Always use unique and descriptive field names for file inputs in the frontend (e.g., `audio_0`, `audio_1`, `image_0`).
+- When saving files, ensure the backend stores the field name as `label` in the database.
+- When rendering, always match by `label`, not by file path or substring.
+- Document any new media field conventions in both backend and frontend code for clarity.
 
 ## Lessons Learned
 

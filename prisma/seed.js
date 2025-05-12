@@ -1,73 +1,138 @@
 const { PrismaClient } = require('@prisma/client');
+const bcrypt = require('bcrypt');
 const prisma = new PrismaClient();
 
 async function main() {
-    // Find Let's Find Out Book 1
-    const subject = await prisma.subject.findFirst({
-        where: {
+    // Create users
+    const admin = await prisma.user.upsert({
+        where: { nickname: 'admin' },
+        update: {},
+        create: {
+            name: 'Admin User',
+            email: 'admin@example.com',
+            password: await bcrypt.hash('adminpass', 10),
+            role: 'ADMIN',
+            nickname: 'admin'
+        }
+    });
+    const teacher = await prisma.user.upsert({
+        where: { nickname: 'teacher' },
+        update: {},
+        create: {
+            name: 'Teacher User',
+            email: 'teacher@example.com',
+            password: await bcrypt.hash('teacherpass', 10),
+            role: 'TEACHER',
+            nickname: 'teacher'
+        }
+    });
+    const student = await prisma.user.upsert({
+        where: { nickname: 'student' },
+        update: {},
+        create: {
+            name: 'Student User',
+            email: 'student@example.com',
+            password: await bcrypt.hash('studentpass', 10),
+            role: 'STUDENT',
+            nickname: 'student',
+            yearLevel: 7,
+            class: 'M1/1'
+        }
+    });
+
+    // Create core subject
+    const coreSubject = await prisma.coreSubject.upsert({
+        where: { name: 'English' },
+        update: {},
+        create: {
+            name: 'English',
+            description: 'English Language'
+        }
+    });
+
+    // Create subject
+    const subject = await prisma.subject.upsert({
+        where: { name_coreSubjectId_yearLevel: {
             name: "Let's Find Out Book 1",
+            coreSubjectId: coreSubject.id,
             yearLevel: 7
+        }},
+        update: {},
+        create: {
+            name: "Let's Find Out Book 1",
+            description: 'English for M1',
+            yearLevel: 7,
+            coreSubject: { connect: { id: coreSubject.id } },
+            teachers: { create: { teacherId: teacher.id } }
         }
     });
 
-    if (!subject) {
-        console.log("Subject not found");
-        return;
-    }
-
-    // First, get all topics for this subject
-    const existingTopics = await prisma.topic.findMany({
-        where: { subjectId: subject.id },
-        include: { resources: true }
+    // Create unit, part, section
+    const unit = await prisma.unit.create({
+        data: {
+            name: 'Unit 1',
+            description: 'All About Me',
+            order: 1,
+            subject: { connect: { id: subject.id } }
+        }
+    });
+    const part = await prisma.part.create({
+        data: {
+            name: 'Lesson 1',
+            description: 'Introductions',
+            order: 1,
+            unit: { connect: { id: unit.id } }
+        }
+    });
+    const section = await prisma.section.create({
+        data: {
+            name: 'Section 1',
+            description: 'Matching Expressions',
+            order: 1,
+            part: { connect: { id: part.id } }
+        }
     });
 
-    // Delete resources first
-    for (const topic of existingTopics) {
-        if (topic.resources.length > 0) {
-            await prisma.resource.deleteMany({
-                where: { topicId: topic.id }
-            });
-        }
-    }
-
-    // Then delete topics
-    await prisma.topic.deleteMany({
-        where: { subjectId: subject.id }
-    });
-
-    // Create topics based on actual textbook structure
-    const topics = [
-        {
-            name: "Unit 1 All About Me",
-            description: "Read what the boy says and look around the room to see what you can find out.",
-            order: 1
-        },
-        {
-            name: "Unit 2 Lost and Found",
-            description: "Learning about lost items and how to find them",
-            order: 2
-        },
-        {
-            name: "Unit 3 – The Legend of the Lake Monster",
-            description: "Exploring stories and legends",
-            order: 3
-        }
-    ];
-
-    for (const topic of topics) {
-        await prisma.topic.create({
-            data: {
-                name: topic.name,
-                description: topic.description,
-                order: topic.order,
-                subject: {
-                    connect: { id: subject.id }
+    // Create assessment (matching type)
+    const assessment = await prisma.assessment.create({
+        data: {
+            title: 'Expressions Quiz',
+            type: 'quiz',
+            questions: [
+                {
+                    type: 'matching',
+                    text: 'Match the expressions with their meanings.',
+                    pairs: [
+                        { expression: 'Finally!', meaning: 'It took a long time, but it happened.' },
+                        { expression: 'Weird!', meaning: 'That is strange or unusual!' },
+                        { expression: 'I hope so.', meaning: 'I want that to happen.' }
+                    ]
                 }
-            }
-        });
-    }
+            ],
+            section: { connect: { id: section.id } },
+            createdBy: { connect: { id: teacher.id } }
+        }
+    });
 
-    console.log("Topics created successfully with correct textbook structure");
+    // Enroll student in subject
+    await prisma.studentCourse.create({
+        data: {
+            studentId: student.id,
+            subjectId: subject.id
+        }
+    });
+
+    // Create a sample assessment submission
+    await prisma.assessmentSubmission.create({
+        data: {
+            answers: { 0: { matching: { 0: 0, 1: 1, 2: 2 } } },
+            score: 100,
+            assessment: { connect: { id: assessment.id } },
+            student: { connect: { id: student.id } }
+        }
+    });
+
+    console.log('Seed data created successfully!');
 }
 
 main()

@@ -62,8 +62,8 @@ app.post('/api/login', async (req, res) => {
     try {
         const { email, password } = req.body;
 
-        // Find user using Prisma
-        const user = await prisma.user.findUnique({
+        // Find all users with this email using findMany instead of findUnique
+        const users = await prisma.user.findMany({
             where: { email },
             select: {
                 id: true,
@@ -77,16 +77,25 @@ app.post('/api/login', async (req, res) => {
             }
         });
 
-        if (!user) {
+        if (users.length === 0) {
             return res.status(400).json({ 
                 success: false, 
                 error: 'Invalid email or password' 
             });
         }
 
-        // Validate password
-        const isValidPassword = await bcrypt.compare(password, user.password);
-        if (!isValidPassword) {
+        // If multiple users found with the same email, check passwords for each
+        let authenticatedUser = null;
+
+        for (const user of users) {
+            const isValidPassword = await bcrypt.compare(password, user.password);
+            if (isValidPassword) {
+                authenticatedUser = user;
+                break;
+            }
+        }
+
+        if (!authenticatedUser) {
             return res.status(400).json({ 
                 success: false, 
                 error: 'Invalid email or password' 
@@ -94,17 +103,17 @@ app.post('/api/login', async (req, res) => {
         }
 
         // If class is M1/1 but year level is 1, update it to 7
-        if (user.class === 'M1/1' && user.yearLevel === 1) {
+        if (authenticatedUser.class === 'M1/1' && authenticatedUser.yearLevel === 1) {
             await prisma.user.update({
-                where: { id: user.id },
+                where: { id: authenticatedUser.id },
                 data: { yearLevel: 7 }
             });
-            user.yearLevel = 7;
+            authenticatedUser.yearLevel = 7;
         }
 
         // Generate token
         const token = jwt.sign(
-            { userId: user.id },
+            { userId: authenticatedUser.id },
             process.env.JWT_SECRET || 'your-secret-key',
             { expiresIn: '24h' }
         );
@@ -113,13 +122,13 @@ app.post('/api/login', async (req, res) => {
             success: true,
             token,
             user: {
-                id: user.id,
-                name: user.name,
-                email: user.email,
-                role: user.role.toUpperCase(),
-                class: user.class,
-                yearLevel: user.yearLevel,
-                nickname: user.nickname
+                id: authenticatedUser.id,
+                name: authenticatedUser.name,
+                email: authenticatedUser.email,
+                role: authenticatedUser.role.toUpperCase(),
+                class: authenticatedUser.class,
+                yearLevel: authenticatedUser.yearLevel,
+                nickname: authenticatedUser.nickname
             }
         });
     } catch (error) {
@@ -222,16 +231,49 @@ app.post('/api/register', async (req, res) => {
     try {
         const { name, nickname, email, password, role, year, class: studentClass } = req.body;
 
-        // Check if user already exists
-        const existingUser = await prisma.user.findUnique({
-            where: { email }
-        });
-
-        if (existingUser) {
-            return res.status(400).json({ 
-                success: false, 
-                error: 'Email already registered' 
+        // Check if nickname is already used (if provided)
+        if (nickname) {
+            const existingUser = await prisma.user.findFirst({
+                where: { nickname }
             });
+
+            if (existingUser) {
+                return res.status(400).json({ 
+                    success: false, 
+                    error: 'Nickname already in use. Please choose a different nickname.' 
+                });
+            }
+        }
+
+        // For teachers/admins, ensure email is unique
+        if (role.toUpperCase() !== 'STUDENT') {
+            const existingUser = await prisma.user.findFirst({
+                where: { email }
+            });
+
+            if (existingUser) {
+                return res.status(400).json({ 
+                    success: false, 
+                    error: 'Email already in use. Please use a different email address.' 
+                });
+            }
+        } else {
+            // For students, ensure no teacher/admin has this email
+            const existingNonStudent = await prisma.user.findFirst({
+                where: { 
+                    email,
+                    role: {
+                        not: 'STUDENT'
+                    }
+                }
+            });
+
+            if (existingNonStudent) {
+                return res.status(400).json({ 
+                    success: false, 
+                    error: 'This email is already registered to a teacher or administrator. Please use a different email address.' 
+                });
+            }
         }
 
         // Hash password
@@ -690,6 +732,52 @@ app.get('/api/subjects/:subjectId/resources', auth, async (req, res) => {
             return res.status(404).json({ error: 'Subject not found' });
         }
 
+        // Check if topics exist, if not, create them based on units
+        if (subject.topics.length === 0 && subject.units.length > 0) {
+            console.log('No topics found. Creating topics based on units...');
+            const topicPromises = subject.units.map(async (unit) => {
+                return prisma.topic.create({
+                    data: {
+                        name: unit.name,
+                        description: unit.description,
+                        order: unit.order,
+                        subject: {
+                            connect: { id: subjectId }
+                        }
+                    }
+                });
+            });
+            
+            await Promise.all(topicPromises);
+            
+            // Reload the subject with the newly created topics
+            const updatedSubject = await prisma.subject.findUnique({
+                where: { id: subjectId },
+                include: {
+                    units: {
+                        include: {
+                            parts: {
+                                include: {
+                                    sections: true
+                                }
+                            }
+                        }
+                    },
+                    topics: {
+                        include: {
+                            resources: {
+                                include: {
+                                    createdBy: true
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            
+            subject.topics = updatedSubject.topics;
+        }
+
         // Create a map of unit names to their structure
         const unitMap = {};
         subject.units.forEach(unit => {
@@ -699,19 +787,31 @@ app.get('/api/subjects/:subjectId/resources', auth, async (req, res) => {
             };
         });
 
-        // Map resources to their units
+        // Map resources to their units, parts, and sections
         const resources = [];
-        subject.topics.forEach(topic => {
+        for (const topic of subject.topics) {
             const unitInfo = unitMap[topic.name];
             if (unitInfo) {
-                topic.resources.forEach(resource => {
+                for (const resource of topic.resources) {
+                    // Fetch linked assessments for this resource
+                    const resourceWithAssessments = await prisma.resource.findUnique({
+                        where: { id: resource.id },
+                        include: { assessments: true }
+                    });
                     resources.push({
                         ...resource,
-                        unitId: unitInfo.unitId
-                    });
+                        unitId: resource.unitId,
+                        partId: resource.partId,
+                        sectionId: resource.sectionId,
+                        assessments: resourceWithAssessments.assessments.map(a => ({
+                            id: a.id,
+                            title: a.title,
+                            type: a.type
+                        }))
                 });
             }
-        });
+            }
+        }
 
         console.log('Found resources:', resources); // Debug log
         res.json(resources);
@@ -726,6 +826,10 @@ app.post('/api/resources', auth, upload.single('file'), async (req, res) => {
     try {
         const { title, description, type, url, subjectId, unitId, partId, sectionId } = req.body;
         
+        if (!unitId) {
+            return res.status(400).json({ error: 'unitId is required to create a resource.' });
+        }
+
         // First, get the unit name
         const unit = await prisma.unit.findUnique({
             where: { id: unitId }
@@ -773,7 +877,10 @@ app.post('/api/resources', auth, upload.single('file'), async (req, res) => {
                 topic: {
                     connect: { id: topic.id }
                 },
-                createdBy: { connect: { id: req.user.userId } }
+                createdBy: { connect: { id: req.user.userId } },
+                unit: unitId ? { connect: { id: unitId } } : undefined,
+                part: partId ? { connect: { id: partId } } : undefined,
+                section: sectionId ? { connect: { id: sectionId } } : undefined
             }
         });
 
@@ -1592,7 +1699,23 @@ app.get('/api/topics/:topicId/resources', auth, async (req, res) => {
             return res.status(404).json({ error: 'Topic not found' });
         }
 
-        res.json(topic.resources);
+        // For each resource, include its linked assessments
+        const resourcesWithAssessments = await Promise.all(topic.resources.map(async resource => {
+            const resourceWithAssessments = await prisma.resource.findUnique({
+                where: { id: resource.id },
+                include: { assessments: true }
+            });
+            return {
+                ...resource,
+                assessments: resourceWithAssessments.assessments.map(a => ({
+                    id: a.id,
+                    title: a.title,
+                    type: a.type
+                }))
+            };
+        }));
+
+        res.json(resourcesWithAssessments);
     } catch (error) {
         console.error('Error fetching topic resources:', error);
         res.status(500).json({ error: 'Failed to fetch topic resources' });
@@ -1693,7 +1816,12 @@ app.get('/api/assessments/:assessmentId', auth, async (req, res) => {
             return res.status(404).json({ error: 'Assessment not found' });
         }
 
-        res.json(assessment);
+        // Add subjectName, unitName, partName, sectionName to the response if available
+        const subjectName = assessment.section?.part?.unit?.subject?.name || null;
+        const unitName = assessment.section?.part?.unit?.name || null;
+        const partName = assessment.section?.part?.name || null;
+        const sectionName = assessment.section?.name || null;
+        res.json({ ...assessment, subjectName, unitName, partName, sectionName });
     } catch (error) {
         console.error('Error fetching assessment:', error);
         res.status(500).json({ error: 'Failed to fetch assessment' });
@@ -1723,10 +1851,14 @@ app.get('/api/assessments/:assessmentId/submissions', auth, async (req, res) => 
 });
 
 // Create/Save an assessment
-app.post('/api/sections/:sectionId/assessments', auth, upload.array('mediaFiles'), async (req, res) => {
+app.post('/api/sections/:sectionId/assessments', auth, upload.any(), async (req, res) => {
     try {
         const { sectionId } = req.params;
-        const { title, description, type, questions, dueDate } = req.body;
+        const { title, description, type, questions, dueDate, maxAttempts, category, topicId, weeklyScheduleId, criteria } = req.body;
+
+        if (!sectionId) {
+            return res.status(400).json({ error: 'sectionId is required to create an assessment.' });
+        }
 
         // Validate required fields
         if (!title || !type) {
@@ -1742,19 +1874,21 @@ app.post('/api/sections/:sectionId/assessments', auth, upload.array('mediaFiles'
             return res.status(404).json({ error: 'Section not found' });
         }
 
-        // Handle file uploads if any
+        // Handle file uploads if any (accept any field name)
         const mediaFiles = req.files ? req.files.map(file => ({
-            filename: file.filename,
-            path: `/uploads/resources/${file.filename}`,
-            type: file.mimetype
+            filePath: `/uploads/resources/${file.filename}`,
+            type: file.mimetype,
+            label: file.fieldname
         })) : [];
 
-        // Create the assessment
+        // Create the assessment with topic and weekly schedule links if provided
         const assessment = await prisma.assessment.create({
             data: {
                 title,
                 description,
                 type,
+                category,
+                criteria,
                 questions: questions ? JSON.parse(questions) : [],
                 dueDate: dueDate ? new Date(dueDate) : null,
                 section: {
@@ -1765,11 +1899,20 @@ app.post('/api/sections/:sectionId/assessments', auth, upload.array('mediaFiles'
                 },
                 mediaFiles: {
                     create: mediaFiles
-                }
+                },
+                maxAttempts: maxAttempts ? parseInt(maxAttempts) : null,
+                topic: topicId ? {
+                    connect: { id: topicId }
+                } : undefined,
+                weeklySchedule: weeklyScheduleId ? {
+                    connect: { id: weeklyScheduleId }
+                } : undefined
             },
             include: {
                 mediaFiles: true,
-                section: true
+                section: true,
+                topic: true,
+                weeklySchedule: true
             }
         });
 
@@ -1780,43 +1923,11 @@ app.post('/api/sections/:sectionId/assessments', auth, upload.array('mediaFiles'
     }
 });
 
-// Submit an assessment
-app.post('/api/assessments/:assessmentId/submit', auth, async (req, res) => {
-    try {
-        const { assessmentId } = req.params;
-        const { answers, score } = req.body;
-
-        // Validate submission
-        if (!answers) {
-            return res.status(400).json({ error: 'Answers are required' });
-        }
-
-        // Create the submission
-        const submission = await prisma.assessmentSubmission.create({
-            data: {
-                answers,
-                score,
-                assessment: {
-                    connect: { id: assessmentId }
-                },
-                student: {
-                    connect: { id: req.user.userId }
-                }
-            }
-        });
-
-        res.json(submission);
-    } catch (error) {
-        console.error('Error submitting assessment:', error);
-        res.status(500).json({ error: 'Failed to submit assessment' });
-    }
-});
-
 // Update an assessment
-app.put('/api/assessments/:assessmentId', auth, upload.array('mediaFiles'), async (req, res) => {
+app.put('/api/assessments/:assessmentId', auth, upload.any(), async (req, res) => {
     try {
         const { assessmentId } = req.params;
-        const { title, description, type, questions, dueDate } = req.body;
+        const { title, description, type, questions, dueDate, maxAttempts, category, topicId, weeklyScheduleId, criteria } = req.body;
 
         // Validate required fields
         if (!title || !type) {
@@ -1832,29 +1943,44 @@ app.put('/api/assessments/:assessmentId', auth, upload.array('mediaFiles'), asyn
             return res.status(404).json({ error: 'Assessment not found' });
         }
 
-        // Handle file uploads if any
+        // Handle file uploads if any (accept any field name)
         const mediaFiles = req.files ? req.files.map(file => ({
-            filename: file.filename,
-            path: `/uploads/resources/${file.filename}`,
-            type: file.mimetype
+            filePath: `/uploads/resources/${file.filename}`,
+            type: file.mimetype,
+            label: file.fieldname
         })) : [];
 
-        // Update the assessment
+        // Update the assessment with topic and weekly schedule links if provided
         const assessment = await prisma.assessment.update({
             where: { id: assessmentId },
             data: {
                 title,
                 description,
                 type,
+                category,
+                criteria,
                 questions: questions ? JSON.parse(questions) : undefined,
                 dueDate: dueDate ? new Date(dueDate) : null,
                 mediaFiles: mediaFiles.length > 0 ? {
                     create: mediaFiles
+                } : undefined,
+                maxAttempts: maxAttempts ? parseInt(maxAttempts) : null,
+                topic: topicId ? {
+                    connect: { id: topicId }
+                } : topicId === null ? {
+                    disconnect: true
+                } : undefined,
+                weeklySchedule: weeklyScheduleId ? {
+                    connect: { id: weeklyScheduleId }
+                } : weeklyScheduleId === null ? {
+                    disconnect: true
                 } : undefined
             },
             include: {
                 mediaFiles: true,
-                section: true
+                section: true,
+                topic: true,
+                weeklySchedule: true
             }
         });
 
@@ -1865,13 +1991,11 @@ app.put('/api/assessments/:assessmentId', auth, upload.array('mediaFiles'), asyn
     }
 });
 
-// Get all assessments for a teacher
+// Get all assessments for a teacher (now shows all assessments for all teachers)
 app.get('/api/teacher/assessments', auth, async (req, res) => {
     try {
         const assessments = await prisma.assessment.findMany({
-            where: {
-                userId: req.user.userId
-            },
+            // Removed userId filter so all assessments are shown
             include: {
                 section: {
                     include: {
@@ -1905,21 +2029,61 @@ app.delete('/api/assessments/:assessmentId', auth, async (req, res) => {
     try {
         const { assessmentId } = req.params;
 
-        // Check if assessment exists and belongs to the user
+        // Check if assessment exists
         const assessment = await prisma.assessment.findUnique({
             where: { id: assessmentId },
-            select: { userId: true }
+            include: {
+                mediaFiles: true,
+                submissions: true
+            }
         });
 
         if (!assessment) {
             return res.status(404).json({ error: 'Assessment not found' });
         }
 
-        if (assessment.userId !== req.user.userId) {
-            return res.status(403).json({ error: 'Not authorized to delete this assessment' });
+        // First, remove all resource connections (many-to-many relationship)
+        await prisma.assessment.update({
+            where: { id: assessmentId },
+            data: {
+                resources: {
+                    set: [] // This removes all resource connections without deleting the resources
+                }
+            }
+        });
+
+        // Delete all related assessment submissions
+        if (assessment.submissions && assessment.submissions.length > 0) {
+            await prisma.assessmentSubmission.deleteMany({
+                where: { assessmentId }
+            });
         }
 
-        // Delete the assessment
+        // Delete all related media files
+        if (assessment.mediaFiles && assessment.mediaFiles.length > 0) {
+            await prisma.mediaFile.deleteMany({
+                where: { 
+                    id: { 
+                        in: assessment.mediaFiles.map(file => file.id)
+                    }
+                }
+            });
+        }
+
+        // Remove topic and weekly schedule connections
+        await prisma.assessment.update({
+            where: { id: assessmentId },
+            data: {
+                topic: {
+                    disconnect: true
+                },
+                weeklySchedule: {
+                    disconnect: true
+                }
+            }
+        });
+
+        // Finally delete the assessment itself
         await prisma.assessment.delete({
             where: { id: assessmentId }
         });
@@ -1927,7 +2091,491 @@ app.delete('/api/assessments/:assessmentId', auth, async (req, res) => {
         res.json({ success: true, message: 'Assessment deleted successfully' });
     } catch (error) {
         console.error('Error deleting assessment:', error);
-        res.status(500).json({ error: 'Failed to delete assessment' });
+        res.status(500).json({ error: 'Failed to delete assessment', details: error.message });
+    }
+});
+
+// Delete a part
+app.delete('/api/parts/:partId', auth, async (req, res) => {
+    try {
+        const { partId } = req.params;
+        
+        // First, get all sections for this part
+        const sections = await prisma.section.findMany({
+            where: { partId },
+            include: {
+                assessments: true
+            }
+        });
+
+        // For each section
+        for (const section of sections) {
+            // Delete all assessments first
+            await prisma.assessment.deleteMany({
+                where: { sectionId: section.id }
+            });
+            
+            // Remove resource connections (many-to-many relationship)
+            await prisma.section.update({
+                where: { id: section.id },
+                data: {
+                    resources: {
+                        set: [] // This removes all resource connections without deleting the resources
+                    }
+                }
+            });
+        }
+
+        // Now delete all sections
+        await prisma.section.deleteMany({
+            where: { partId }
+        });
+        
+        // Finally delete the part
+        await prisma.part.delete({
+            where: { id: partId }
+        });
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Error deleting part:', error);
+        res.status(500).json({ error: 'Failed to delete part' });
+    }
+});
+
+// Get all assessments linked to a resource
+app.get('/api/resources/:resourceId/assessments', auth, async (req, res) => {
+    try {
+        const { resourceId } = req.params;
+        const resource = await prisma.resource.findUnique({
+            where: { id: resourceId },
+            include: { assessments: true }
+        });
+        if (!resource) return res.status(404).json({ error: 'Resource not found' });
+        res.json(resource.assessments);
+    } catch (error) {
+        console.error('Error fetching resource assessments:', error);
+        res.status(500).json({ error: 'Failed to fetch resource assessments' });
+    }
+});
+
+// Link/unlink assessments to a resource
+app.post('/api/resources/:resourceId/assessments', auth, async (req, res) => {
+    try {
+        const { resourceId } = req.params;
+        const { assessmentIds } = req.body;
+        if (!Array.isArray(assessmentIds)) return res.status(400).json({ error: 'assessmentIds must be an array' });
+        const resource = await prisma.resource.update({
+            where: { id: resourceId },
+            data: { assessments: { set: assessmentIds.map(id => ({ id })) } },
+            include: { assessments: true }
+        });
+        res.json(resource.assessments);
+    } catch (error) {
+        console.error('Error updating resource assessments:', error);
+        res.status(500).json({ error: 'Failed to update resource assessments' });
+    }
+});
+
+// Submit an assessment (non-drag-and-drop)
+app.post('/api/assessments/:assessmentId/submit', auth, async (req, res) => {
+    try {
+        const { assessmentId } = req.params;
+        let { answers, score } = req.body;
+        const studentId = req.user.userId;
+
+        console.log('[SUBMIT] assessmentId:', assessmentId);
+        console.log('[SUBMIT] studentId:', studentId);
+        console.log('[SUBMIT] answers:', answers);
+        console.log('[SUBMIT] score:', score);
+
+        // Check if assessment exists
+        const assessment = await prisma.assessment.findUnique({
+            where: { id: assessmentId }
+        });
+        if (!assessment) {
+            return res.status(404).json({ error: 'Assessment not found' });
+        }
+
+        // Enforce maxAttempts
+        if (assessment.maxAttempts) {
+            const submissionCount = await prisma.assessmentSubmission.count({
+                where: {
+                    assessmentId,
+                    studentId
+                }
+            });
+            if (submissionCount >= assessment.maxAttempts) {
+                return res.status(403).json({ error: `You have reached the maximum number of attempts (${assessment.maxAttempts}) for this assessment.` });
+            }
+        }
+
+        // Auto-grade for matching, multiple-choice, and drag-and-drop
+        let calculatedScore = null;
+        if (score === undefined || score === null) {
+            if (assessment.type === 'matching' && Array.isArray(assessment.questions)) {
+                // Only grade first question for matching
+                const q = assessment.questions[0];
+                if (q && q.pairs && answers && answers[0]) {
+                    let correct = 0;
+                    let total = q.pairs.length;
+                    for (let i = 0; i < total; i++) {
+                        const correctIndex = i;
+                        const userIndex = answers[0][`option-${i}`] ? parseInt(answers[0][`option-${i}`].replace('match-', '')) : null;
+                        if (userIndex === correctIndex) correct++;
+                    }
+                    calculatedScore = Math.round((correct / total) * 100);
+                }
+            } else if (assessment.type === 'quiz' && Array.isArray(assessment.questions)) {
+                // Multiple choice quiz
+                let correct = 0;
+                let total = assessment.questions.length;
+                for (let i = 0; i < total; i++) {
+                    const q = assessment.questions[i];
+                    if (q && typeof q.correctAnswerIndex === 'number' && answers && answers[i] !== undefined) {
+                        if (parseInt(answers[i]) === q.correctAnswerIndex) correct++;
+                    }
+                }
+                calculatedScore = Math.round((correct / total) * 100);
+            } else if (assessment.type === 'drag-and-drop' && Array.isArray(assessment.questions)) {
+                // Support all subtypes: sequence, fill-in-blank, image-fill-in-blank, long-paragraph-fill-in-blank
+                const q = assessment.questions[0];
+                let correct = 0;
+                let total = 0;
+                if (q && q.subtype) {
+                    if (q.subtype === 'sequence' && Array.isArray(answers[0])) {
+                        // Use correctSequence if present, otherwise correct
+                        const correctArr = Array.isArray(q.correctSequence) ? q.correctSequence : q.correct;
+                        total = correctArr.length;
+                        for (let i = 0; i < total; i++) {
+                            if (answers[0][i] === correctArr[i]) correct++;
+                        }
+                    } else if ((q.subtype === 'fill-in-blank' || q.subtype === 'long-paragraph-fill-in-blank') && Array.isArray(q.correct) && answers[0] && answers[0].dragAndDrop) {
+                        total = q.correct.length;
+                        for (let i = 0; i < total; i++) {
+                            if (answers[0].dragAndDrop[i] === q.correct[i]) correct++;
+                        }
+                    } else if (q.subtype === 'image-fill-in-blank' && Array.isArray(q.pairs) && answers[0]) {
+                        total = q.pairs.length;
+                        for (let i = 0; i < total; i++) {
+                            if (answers[0][`option-${i}`] === `match-${i}`) correct++;
+                        }
+                    }
+                }
+                if (total > 0) {
+                    calculatedScore = Math.round((correct / total) * 100);
+                }
+            }
+        }
+        if (calculatedScore !== null) score = calculatedScore;
+
+        // Upsert submission (create new or update latest)
+        const submission = await prisma.assessmentSubmission.create({
+            data: {
+                assessmentId,
+                studentId,
+                answers,
+                score: typeof score === 'number' ? score : null,
+                submittedAt: new Date()
+            }
+        });
+        res.json({ success: true, submission, score, timeTaken: req.body.timeTaken });
+    } catch (error) {
+        console.error('[SUBMIT ERROR]', error);
+        res.status(500).json({ error: 'Failed to submit assessment', details: error.message });
+    }
+});
+
+// Submit a speaking assessment
+app.post('/api/assessments/:assessmentId/submit-speaking', auth, upload.single('audio'), async (req, res) => {
+    try {
+        const { assessmentId } = req.params;
+        const studentId = req.user.userId;
+        if (!req.file) {
+            return res.status(400).json({ error: 'No audio file uploaded' });
+        }
+        // Check if assessment exists
+        const assessment = await prisma.assessment.findUnique({ where: { id: assessmentId } });
+        if (!assessment) {
+            return res.status(404).json({ error: 'Assessment not found' });
+        }
+        // Save the audio file as a mediaFile
+        console.log('[SPEAKING SUBMIT] assessmentId:', assessmentId);
+        console.log('[SPEAKING SUBMIT] studentId:', studentId);
+        console.log('[SPEAKING SUBMIT] file:', req.file);
+        const mediaFile = await prisma.mediaFile.create({
+            data: {
+                filePath: `/uploads/resources/${req.file.filename}`,
+                type: req.file.mimetype,
+                label: 'speaking_response',
+                assessment: { connect: { id: assessmentId } }
+            }
+        });
+        // Create an assessment submission referencing the audio file
+        const submission = await prisma.assessmentSubmission.create({
+            data: {
+                assessmentId,
+                studentId,
+                answers: { audioFile: mediaFile.filePath },
+                score: null,
+                submittedAt: new Date()
+            }
+        });
+        res.json({ success: true, submission });
+    } catch (error) {
+        console.error('[SUBMIT SPEAKING ERROR]', error);
+        console.error('[SUBMIT SPEAKING ERROR STACK]', error.stack);
+        res.status(500).json({ error: 'Failed to submit speaking assessment', details: error.message });
+    }
+});
+
+// Enhanced: Get all assessments for a student's enrolled subjects with progress data
+app.get('/api/student/assessments', auth, async (req, res) => {
+    try {
+        // Get student's enrolled subjects
+        const user = await prisma.user.findUnique({
+            where: { id: req.user.userId },
+            include: {
+                studentCourses: {
+                    include: {
+                        subject: {
+                            include: {
+                                units: {
+                                    include: {
+                                        parts: {
+                                            include: {
+                                                sections: {
+                                                    include: {
+                                                        assessments: true
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        if (!user || !user.studentCourses) {
+            return res.json({ assessments: [] });
+        }
+
+        let assessments = [];
+        for (const course of user.studentCourses) {
+            const subject = course.subject;
+            if (!subject || !subject.units) continue;
+            for (const unit of subject.units) {
+                if (!unit.parts) continue;
+                for (const part of unit.parts) {
+                    if (!part.sections) continue;
+                    for (const section of part.sections) {
+                        if (section.assessments && section.assessments.length > 0) {
+                            for (const assessment of section.assessments) {
+                                // Get all submissions for this student and assessment
+                                const submissions = await prisma.assessmentSubmission.findMany({
+                                    where: {
+                                        assessmentId: assessment.id,
+                                        studentId: req.user.userId
+                                    },
+                                    orderBy: { submittedAt: 'desc' }
+                                });
+                                const attempts = submissions.length;
+                                const bestScore = submissions.length > 0 ? Math.max(...submissions.map(s => s.score || 0)) : null;
+                                const lastScore = submissions.length > 0 ? submissions[0].score : null;
+                                const lastAttempt = submissions.length > 0 ? submissions[0].submittedAt : null;
+                                let status = 'Not Started';
+                                if (attempts > 0 && bestScore === 100) status = 'Completed';
+                                else if (attempts > 0) status = 'In Progress';
+                                assessments.push({
+                                    id: assessment.id,
+                                    title: assessment.title || assessment.name,
+                                    description: assessment.description || '',
+                                    attempts,
+                                    maxAttempts: assessment.maxAttempts || '-',
+                                    bestScore,
+                                    lastScore,
+                                    lastAttempt,
+                                    status,
+                                    subjectName: subject.name || null,
+                                    unitName: unit.name || null,
+                                    partName: part.name || null,
+                                    sectionName: section.name || null
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        res.json({ assessments });
+    } catch (error) {
+        console.error('Error fetching student progress:', error);
+        res.status(500).json({ error: 'Failed to fetch student progress' });
+    }
+});
+
+// New: Teacher progress endpoint
+app.get('/api/teacher/progress', auth, async (req, res) => {
+    try {
+        const classFilter = req.query.class;
+        const teacher = await prisma.user.findUnique({
+            where: { id: req.user.userId },
+            include: {
+                subjectTeacher: {
+                    include: {
+                        subject: {
+                            include: {
+                                studentCourses: {
+                                    include: {
+                                        student: true
+                                    }
+                                },
+                                units: {
+                                    include: {
+                                        parts: {
+                                            include: {
+                                                sections: {
+                                                    include: {
+                                                        assessments: true
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        if (!teacher || !teacher.subjectTeacher) {
+            return res.json({ progress: [] });
+        }
+        let progress = [];
+        for (const subjT of teacher.subjectTeacher) {
+            const subject = subjT.subject;
+            if (!subject || !subject.units) continue;
+            // Get all students in this subject
+            const students = (subject.studentCourses || []).map(sc => sc.student).filter(Boolean);
+            for (const unit of subject.units) {
+                if (!unit.parts) continue;
+                for (const part of unit.parts) {
+                    if (!part.sections) continue;
+                    for (const section of part.sections) {
+                        if (section.assessments && section.assessments.length > 0) {
+                            for (const assessment of section.assessments) {
+                                for (const student of students) {
+                                    if (classFilter && student.class !== classFilter) continue;
+                                    // Get all submissions for this student and assessment
+                                    const submissions = await prisma.assessmentSubmission.findMany({
+                                        where: {
+                                            assessmentId: assessment.id,
+                                            studentId: student.id
+                                        },
+                                        orderBy: { submittedAt: 'desc' }
+                                    });
+                                    const attempts = submissions.length;
+                                    const bestScore = submissions.length > 0 ? Math.max(...submissions.map(s => s.score || 0)) : null;
+                                    const lastScore = submissions.length > 0 ? submissions[0].score : null;
+                                    const lastAttempt = submissions.length > 0 ? submissions[0].submittedAt : null;
+                                    let status = 'Not Started';
+                                    if (attempts > 0 && bestScore === 100) status = 'Completed';
+                                    else if (attempts > 0) status = 'In Progress';
+                                    progress.push({
+                                        studentName: student.name,
+                                        studentNickname: student.nickname,
+                                        studentClass: student.class,
+                                        assessmentTitle: assessment.title || assessment.name,
+                                        attempts,
+                                        maxAttempts: assessment.maxAttempts || '-',
+                                        bestScore,
+                                        lastScore,
+                                        lastAttempt,
+                                        status
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        res.json({ progress });
+    } catch (error) {
+        console.error('Error fetching teacher progress:', error);
+        res.status(500).json({ error: 'Failed to fetch teacher progress' });
+    }
+});
+
+// Endpoint to get all classes for teacher's students
+app.get('/api/teacher/classes', auth, async (req, res) => {
+    try {
+        const teacher = await prisma.user.findUnique({
+            where: { id: req.user.userId },
+            include: {
+                subjectTeacher: {
+                    include: {
+                        subject: {
+                            include: {
+                                studentCourses: {
+                                    include: { student: true }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        if (!teacher || !teacher.subjectTeacher) return res.json({ classes: [] });
+        const classSet = new Set();
+        for (const subjT of teacher.subjectTeacher) {
+            const subject = subjT.subject;
+            if (!subject || !subject.studentCourses) continue;
+            for (const sc of subject.studentCourses) {
+                if (sc.student && sc.student.class) classSet.add(sc.student.class);
+            }
+        }
+        res.json({ classes: Array.from(classSet).sort() });
+    } catch (error) {
+        console.error('Error fetching teacher classes:', error);
+        res.status(500).json({ error: 'Failed to fetch classes' });
+    }
+});
+
+// Endpoint for writing assignment submission (long/short answer)
+app.post('/api/assessments/:assessmentId/submit-writing', auth, upload.single('file'), async (req, res) => {
+    try {
+        const { assessmentId } = req.params;
+        const studentId = req.user.userId;
+        let { text } = req.body;
+        let filePath = null;
+        if (req.file) {
+            filePath = `/uploads/resources/${req.file.filename}`;
+        }
+        // Save submission
+        const submission = await prisma.assessmentSubmission.create({
+            data: {
+                assessmentId,
+                studentId,
+                answers: { 
+                    text: text || null, 
+                    file: filePath,
+                    fileType: req.file ? req.file.mimetype : null,
+                    fileName: req.file ? req.file.originalname : null
+                },
+                score: null,
+                submittedAt: new Date()
+            }
+        });
+        res.json({ success: true, submission });
+    } catch (error) {
+        console.error('Error submitting writing assignment:', error);
+        res.status(500).json({ success: false, error: 'Failed to submit writing assignment' });
     }
 });
 

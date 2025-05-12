@@ -13,10 +13,10 @@ datasource db {
 model User {
   id                String              @id @default(uuid())
   name              String
-  email             String              @unique
+  email             String
   password          String
   role              String              // ADMIN, TEACHER, STUDENT
-  nickname          String?
+  nickname          String?             @unique
   yearLevel         Int?
   class             String?
   active            Boolean             @default(true)
@@ -35,6 +35,7 @@ model User {
   children      User[]    @relation("ParentChild")
   parentId      String?   
   parent        User?     @relation("ParentChild", fields: [parentId], references: [id])
+  assessmentSubmissions AssessmentSubmission[]
 }
 
 model CoreSubject {
@@ -98,9 +99,19 @@ model Resource {
   content     String?  // For HTML content
   filePath    String?  // For uploaded files
   thumbnail   String?  // For video thumbnails or poster previews
-  duration    Int?     // For video/audio duration in seconds
+  duration    Int?     // For audio/video duration in seconds
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  // NEW FIELDS
+  unit        Unit?    @relation(fields: [unitId], references: [id])
+  unitId      String?
+  part        Part?    @relation(fields: [partId], references: [id])
+  partId      String?
+  section     Section?   @relation("ResourceSection", fields: [sectionId], references: [id])
+  sectionId   String?
+  sections    Section[]  @relation("ResourceSections")
+
   topic       Topic    @relation(fields: [topicId], references: [id])
   topicId     String
   createdBy   User     @relation("resourceCreator", fields: [userId], references: [id])
@@ -108,8 +119,8 @@ model Resource {
   usageCount  Int      @default(0)
   usedBy      ResourceUsage[]
   metadata    Json?    // For additional metadata like video quality, file size, etc.
-  sections    Section[]
   weeklySchedules WeeklySchedule[]
+  assessments Assessment[] @relation("ResourceAssessments")
 }
 
 model ResourceUsage {
@@ -132,6 +143,7 @@ model Unit {
   parts       Part[]
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+  resources   Resource[]
 }
 
 model Part {
@@ -144,6 +156,7 @@ model Part {
   sections    Section[]
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+  resources   Resource[]
 }
 
 model Section {
@@ -154,7 +167,8 @@ model Section {
   part        Part         @relation(fields: [partId], references: [id])
   partId      String
   assessments Assessment[]
-  resources   Resource[]
+  resources   Resource[] @relation("ResourceSection")
+  resourcesMany Resource[] @relation("ResourceSections")
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 }
@@ -162,9 +176,11 @@ model Section {
 model Assessment {
   id          String    @id @default(uuid())
   title       String
-  type        String    // 'quiz' or 'assignment'
+  description String?
+  type        String   // 'quiz', 'matching', etc.
+  category    String?  // e.g., 'Grammar', 'Listening', 'Speaking', etc.
+  criteria    String?  // Grading criteria/rubric for manually graded assessments
   questions   Json?     // For quizzes
-  description String?   // For assignments
   dueDate     DateTime? // For assignments
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
@@ -177,6 +193,9 @@ model Assessment {
   topicId     String?
   weeklySchedule WeeklySchedule? @relation(fields: [weeklyScheduleId], references: [id])
   weeklyScheduleId String?
+  submissions AssessmentSubmission[]
+  maxAttempts Int? // Maximum allowed attempts for this assessment (null = unlimited)
+  resources   Resource[] @relation("ResourceAssessments")
 }
 
 model MediaFile {
@@ -185,6 +204,7 @@ model MediaFile {
   url           String?    // For external media
   filePath      String?    // For uploaded files
   duration      Int?       // For audio/video duration in seconds
+  label         String?    // NEW: original field name or label
   assessment    Assessment @relation(fields: [assessmentId], references: [id])
   assessmentId  String
   createdAt     DateTime   @default(now())
@@ -260,4 +280,17 @@ model SubjectTeacher {
     updatedAt     DateTime  @updatedAt
 
     @@unique([subjectId, teacherId])
+}
+
+model AssessmentSubmission {
+  id           String   @id @default(uuid())
+  answers      Json
+  score        Float?
+  submittedAt  DateTime @default(now())
+  assessment   Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  assessmentId String
+  student      User      @relation(fields: [studentId], references: [id])
+  studentId    String
+  attempts     Int?     // Total number of attempts
+  totalTime    Int?     // Accumulative time in seconds
 } 

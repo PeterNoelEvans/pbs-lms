@@ -99,9 +99,22 @@
                 <div class="form-floating">
                     <select class="form-select" id="year" name="year">
                         <option value="">Select Year Level</option>
-                        <option value="1">M1 (Secondary 1)</option>
-                        <option value="2">M2 (Secondary 2)</option>
-                        <option value="3">M3 (Secondary 3)</option>
+                        <optgroup label="Primary School">
+                            <option value="1">P1 (Primary 1)</option>
+                            <option value="2">P2 (Primary 2)</option>
+                            <option value="3">P3 (Primary 3)</option>
+                            <option value="4">P4 (Primary 4)</option>
+                            <option value="5">P5 (Primary 5)</option>
+                            <option value="6">P6 (Primary 6)</option>
+                        </optgroup>
+                        <optgroup label="Secondary School">
+                            <option value="7">M1 (Secondary 1)</option>
+                            <option value="8">M2 (Secondary 2)</option>
+                            <option value="9">M3 (Secondary 3)</option>
+                            <option value="10">M4 (Secondary 4)</option>
+                            <option value="11">M5 (Secondary 5)</option>
+                            <option value="12">M6 (Secondary 6)</option>
+                        </optgroup>
                     </select>
                     <label for="year">Year Level</label>
                 </div>
@@ -141,19 +154,34 @@
 
         // Class options based on year level
         const classOptions = {
-            1: ['M1/1', 'M1/2', 'M1/3', 'M1/4', 'M1/5'],
-            2: ['M2/1', 'M2/2', 'M2/3', 'M2/4', 'M2/5'],
-            3: ['M3/1', 'M3/2', 'M3/3', 'M3/4', 'M3/5']
+            // Primary School
+            1: ['P1/1', 'P1/2', 'P1/3', 'P1/4', 'P1/5'],
+            2: ['P2/1', 'P2/2', 'P2/3', 'P2/4', 'P2/5'],
+            3: ['P3/1', 'P3/2', 'P3/3', 'P3/4', 'P3/5'],
+            4: ['P4/1', 'P4/2', 'P4/3', 'P4/4', 'P4/5'],
+            5: ['P5/1', 'P5/2', 'P5/3', 'P5/4', 'P5/5'],
+            6: ['P6/1', 'P6/2', 'P6/3', 'P6/4', 'P6/5'],
+            // Secondary School
+            7: ['M1/1', 'M1/2', 'M1/3', 'M1/4', 'M1/5', 'M1/6'],
+            8: ['M2/1', 'M2/2', 'M2/3', 'M2/4', 'M2/5', 'M2/6'],
+            9: ['M3/1', 'M3/2', 'M3/3', 'M3/4', 'M3/5', 'M3/6'],
+            10: ['M4/1', 'M4/2', 'M4/3', 'M4/4', 'M4/5', 'M4/6'],
+            11: ['M5/1', 'M5/2', 'M5/3', 'M5/4', 'M5/5', 'M5/6'],
+            12: ['M6/1', 'M6/2', 'M6/3', 'M6/4', 'M6/5', 'M6/6']
         };
 
         // Update class options when year is selected
         document.getElementById('year').addEventListener('change', function() {
-            const year = this.value;
+            const year = parseInt(this.value);
             const classSelect = document.getElementById('class');
             classSelect.innerHTML = '<option value="">Select Class</option>';
             
             if (year) {
-                classOptions[year].forEach(cls => {
+                const prefix = year <= 6 ? 'P' : 'M';
+                const yearNum = year <= 6 ? year : year - 6;
+                const classes = classOptions[year] || [];
+                
+                classes.forEach(cls => {
                     const option = document.createElement('option');
                     option.value = cls;
                     option.textContent = cls;
@@ -194,6 +222,8 @@
                 if (response.ok) {
                     if (data.token) {
                         localStorage.setItem('token', data.token);
+                        localStorage.setItem('userRole', data.user.role.toUpperCase());
+                        localStorage.setItem('userName', data.user.name);
                         // Redirect based on role
                         window.location.href = formData.role === 'teacher' ? '/teacher/dashboard' : '/student/dashboard';
                     } else {

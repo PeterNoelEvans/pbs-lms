@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grade Assessment</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .media-preview { max-width: 300px; max-height: 60px; }
+        .criteria-box { background: #f8f9fa; border-left: 4px solid #0d6efd; padding: 1rem; margin-bottom: 1.5rem; }
+        .score-input { width: 80px; }
+        .table-sticky th { position: sticky; top: 0; background: #fff; z-index: 2; }
+    </style>
+</head>
+<body class="bg-light">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="/teacher/dashboard.html">Teacher Portal</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/teacher/dashboard.html">Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/teacher/resources.html">Resources</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/teacher/subjects.html">Subjects</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/teacher/assessments.html">Assessments</a>
+                    </li>
+                </ul>
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <button class="btn btn-outline-light" onclick="logout()">Logout</button>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+    <div class="container mt-4">
+        <h1>Grade Assessment</h1>
+        <div id="criteriaBox"></div>
+        <div class="table-responsive">
+            <table class="table table-bordered table-sticky align-middle" id="gradingTable">
+                <thead class="table-light">
+                    <tr>
+                        <th>#</th>
+                        <th>Student Name</th>
+                        <th>Nickname</th>
+                        <th>Status</th>
+                        <th>Media</th>
+                        <th>Score</th>
+                        <th>Save</th>
+                    </tr>
+                </thead>
+                <tbody id="gradingTableBody">
+                    <!-- Rows will be loaded here -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const token = localStorage.getItem('token');
+        const urlParams = new URLSearchParams(window.location.search);
+        const assessmentId = urlParams.get('assessmentId') || urlParams.get('id');
+        if (!token) window.location.href = '/login';
+        if (!assessmentId) {
+            document.body.innerHTML = '<div class="container mt-5"><div class="alert alert-danger">No assessment selected.</div></div>';
+            throw new Error('No assessmentId');
+        }
+        document.addEventListener('DOMContentLoaded', loadGradingData);
+        async function loadGradingData() {
+            try {
+                const res = await fetch(`/api/assessments/${assessmentId}/all-submissions`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) throw new Error('Failed to load grading data');
+                const data = await res.json();
+                renderCriteria(data.criteria);
+                renderTable(data.students);
+            } catch (err) {
+                document.getElementById('gradingTableBody').innerHTML = `<tr><td colspan="7"><div class="alert alert-danger">${err.message}</div></td></tr>`;
+            }
+        }
+        function renderCriteria(criteria) {
+            const box = document.getElementById('criteriaBox');
+            if (criteria) {
+                box.innerHTML = `<div class="criteria-box"><strong>Evaluation Criteria:</strong><br>${criteria.replace(/\n/g, '<br>')}</div>`;
+            } else {
+                box.innerHTML = '';
+            }
+        }
+        function renderTable(students) {
+            const tbody = document.getElementById('gradingTableBody');
+            if (!students.length) {
+                tbody.innerHTML = '<tr><td colspan="7">No students found.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = students.map((s, i) => `
+                <tr>
+                    <td>${i + 1}</td>
+                    <td>${s.name || ''}</td>
+                    <td>${s.nickname || ''}</td>
+                    <td>${s.submitted ? '<span class="badge bg-success">Submitted</span>' : '<span class="badge bg-secondary">Not Submitted</span>'}</td>
+                    <td>
+                        ${s.mediaFile ?
+                            (s.mediaFile.type.startsWith('audio') ?
+                                `<audio controls class="media-preview"><source src="${s.mediaFile.url}" type="${s.mediaFile.type}"></audio>` :
+                                `<video controls class="media-preview"><source src="${s.mediaFile.url}" type="${s.mediaFile.type}"></video>`
+                            ) :
+                            '<span class="text-muted">No file</span>'
+                        }
+                    </td>
+                    <td>
+                        <input type="number" class="form-control score-input" min="0" max="100" step="1" value="${s.score !== null && s.score !== undefined ? s.score : ''}" id="score-${s.studentId}" ${s.submitted ? '' : 'disabled'}>
+                    </td>
+                    <td>
+                        <button class="btn btn-primary btn-sm" onclick="saveScore('${s.studentId}')" ${s.submitted ? '' : 'disabled'}>Save</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+        async function saveScore(studentId) {
+            const input = document.getElementById('score-' + studentId);
+            const score = parseFloat(input.value);
+            if (isNaN(score) || score < 0 || score > 100) {
+                input.classList.add('is-invalid');
+                return;
+            } else {
+                input.classList.remove('is-invalid');
+            }
+            try {
+                const res = await fetch(`/api/assessments/${assessmentId}/grade`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ studentId, score })
+                });
+                if (!res.ok) throw new Error('Failed to save score');
+                input.classList.add('is-valid');
+                setTimeout(() => input.classList.remove('is-valid'), 1500);
+            } catch (err) {
+                input.classList.add('is-invalid');
+                alert('Failed to save score: ' + err.message);
+            }
+        }
+        function logout() {
+            localStorage.removeItem('token');
+            window.location.href = '/login';
+        }
+    </script>
+</body>
+</html> 

@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Progress - Student Portal</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css">
+    <style>
+        body { background: #f8f9fa; }
+        .progress-table th, .progress-table td { vertical-align: middle; }
+        .status-completed { color: #28a745; font-weight: bold; }
+        .status-inprogress { color: #ffc107; font-weight: bold; }
+        .status-notstarted { color: #dc3545; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <h1 class="mb-4">My Progress</h1>
+        <div id="studentInfo" class="mb-3"></div>
+        <button id="downloadCsvBtn" class="btn btn-success mb-3"><i class="bi bi-download"></i> Download CSV</button>
+        <div class="card">
+            <div class="card-body">
+                <table class="table table-bordered progress-table">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Assessment</th>
+                            <th>Attempts</th>
+                            <th>Best Score</th>
+                            <th>Last Score</th>
+                            <th>Last Attempt</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="progressTableBody">
+                        <!-- Progress rows will be inserted here by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <a href="/student/dashboard" class="btn btn-secondary mt-4"><i class="bi bi-arrow-left"></i> Back to Dashboard</a>
+    </div>
+    <script>
+    // Fetch and render student info and progress data from API
+    const tbody = document.getElementById('progressTableBody');
+    const studentInfoDiv = document.getElementById('studentInfo');
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center">Loading...</td></tr>';
+    let progressRows = [];
+    // Fetch student info
+    fetch('/api/user/info', {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (!data.user) return;
+        const user = data.user;
+        // Show name and class
+        studentInfoDiv.innerHTML = `<strong>Name:</strong> ${user.name} &nbsp; <strong>Class:</strong> ${user.class || '-'}<br>`;
+        // Show subject and unit if available (first subject/unit)
+        let subject = user.subjects && user.subjects.length > 0 ? user.subjects[0].name : '-';
+        let unit = (user.subjects && user.subjects.length > 0 && user.subjects[0].units && user.subjects[0].units.length > 0) ? user.subjects[0].units[0].name : '-';
+        studentInfoDiv.innerHTML += `<strong>Subject:</strong> ${subject} &nbsp; <strong>Unit:</strong> ${unit}`;
+    });
+    // Fetch progress data
+    fetch('/api/student/assessments', {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+    })
+    .then(res => res.json())
+    .then(data => {
+        tbody.innerHTML = '';
+        if (!data.assessments || data.assessments.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center">No progress data found.</td></tr>';
+            return;
+        }
+        progressRows = data.assessments.map(row => {
+            const maxAttempts = (row.maxAttempts === '-' || row.maxAttempts === null || row.maxAttempts === undefined) ? '∞' : row.maxAttempts;
+            const attempts = (row.attempts || 0) + '/' + maxAttempts;
+            const bestScore = (row.bestScore === null || row.bestScore === undefined) ? 'N/A' : row.bestScore + '%';
+            const lastScore = (row.lastScore === null || row.lastScore === undefined) ? 'N/A' : row.lastScore + '%';
+            const lastAttempt = row.lastAttempt ? new Date(row.lastAttempt).toLocaleDateString() : '-';
+            const status = row.status || 'Not Started';
+            return {
+                Assessment: row.title || row.name || '-',
+                Attempts: attempts,
+                'Best Score': bestScore,
+                'Last Score': lastScore,
+                'Last Attempt': lastAttempt,
+                Status: status
+            };
+        });
+        progressRows.forEach(row => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${row.Assessment}</td>
+                <td>${row.Attempts}</td>
+                <td>${row['Best Score']}</td>
+                <td>${row['Last Score']}</td>
+                <td>${row['Last Attempt']}</td>
+                <td class="status-${row.Status.replace(/ /g, '').toLowerCase()}">${row.Status}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    })
+    .catch(err => {
+        tbody.innerHTML = '<tr><td colspan="6" class="text-danger text-center">Failed to load progress data.</td></tr>';
+        console.error(err);
+    });
+    // CSV Download
+    document.getElementById('downloadCsvBtn').onclick = function() {
+        if (!progressRows.length) return;
+        const headers = Object.keys(progressRows[0]);
+        const csv = [headers.join(',')].concat(progressRows.map(row => headers.map(h => '"' + (row[h] || '') + '"').join(','))).join('\n');
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'progress.csv';
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+    </script>
+</body>
+</html> 

@@ -239,6 +239,14 @@ git checkout -b teacher-resources
 4. Advanced analytics
 5. Integration capabilities
 
+## Resource-Assessment Linking Feature
+
+- Resources can now be linked to multiple assessments (quizzes or assignments).
+- Assessments can also be linked to multiple resources.
+- This is implemented as a many-to-many relationship in the database.
+- On the student resources page, each resource card displays buttons for all linked assessments, allowing direct access to related quizzes or assignments.
+- Linking/unlinking is currently managed via Prisma Studio or can be added to the admin UI.
+
 ## Notes
 - Keep existing card-based interface
 - Focus on simple navigation
