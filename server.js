@@ -2579,6 +2579,38 @@ app.post('/api/assessments/:assessmentId/submit-writing', auth, upload.single('f
     }
 });
 
+// Delete a section by ID
+app.delete('/api/sections/:sectionId', auth, async (req, res) => {
+    try {
+        const { sectionId } = req.params;
+
+        // Delete all assessments for this section
+        await prisma.assessment.deleteMany({
+            where: { sectionId }
+        });
+
+        // Remove resource connections (many-to-many relationship)
+        await prisma.section.update({
+            where: { id: sectionId },
+            data: {
+                resources: {
+                    set: []
+                }
+            }
+        });
+
+        // Delete the section itself
+        await prisma.section.delete({
+            where: { id: sectionId }
+        });
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Error deleting section:', error);
+        res.status(500).json({ error: 'Failed to delete section' });
+    }
+});
+
 // Start server
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);

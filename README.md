@@ -55,20 +55,94 @@ Note: For technical details about portfolio paths and directory structure, pleas
 
 For example, if your username is "Peter42", your portfolio structure will be:
 ```
-/portfolios/
-  /P4-2/
-    /Peter/
-      /images/
-        Peter42.png (or Peter42.jpg)
-      Peter.html
+portfolio/
+└── class4/
+    └── Peter42/
+        ├── images/
+        │   └── Peter42.png
+        └── index.html
 ```
 
-### Important Notes for Students
-- You can change your portfolio visibility at any time through the dashboard
-- You can always see your own portfolio, regardless of its visibility setting
-- You can see other students' portfolios only if they are set to public
-- All portfolios are private by default when created
-- Your portfolio and images folders are created automatically upon registration
+## Documentation
+
+For detailed information about different aspects of the system, please refer to the following documentation:
+
+1. [Assessment Types and Subtypes](docs/assessment-types.md) - Comprehensive guide to all assessment types and their subtypes
+2. [Teacher's Guide](docs/teachers_guide.md) - Guide for teachers using the platform
+3. [Registration System](docs/registration.md) - Details about the registration process
+4. [Resource Management](docs/resource-management.md) - How to manage teaching resources
+5. [Deployment Guide](docs/deployment/guide.md) - Instructions for deploying the application
+
+## Support
+If you have any issues:
+1. Make sure you're using the correct username and password
+2. Check that your portfolio path matches exactly
+3. Try logging out and logging back in
+4. Contact the administrator if problems persist
+
+## Security Notes
+- Keep your password secure
+- Don't share your login credentials
+- Log out when you're done
+- Use the dashboard to manage your portfolio visibility
+
+## Password Reset Instructions
+If you forget your password, follow these steps to reset it:
+
+1. Go to the login page
+2. Click on "Forgot Password" link
+3. Enter your email address
+4. Check your email for the reset link (during development, the reset token will be shown in the console)
+5. Click the reset link or go to `/reset-password.html?token=YOUR_TOKEN`
+6. Enter your new password and confirm it
+7. After successful reset, you'll be redirected to the login page
+8. Log in with your new password
+
+Note: Reset links expire after 1 hour for security reasons. If your link expires, simply request a new one.
+
+### Features
+
+#### Portfolio Management
+- Create and manage student portfolios
+- Set portfolio privacy (public/private)
+- Upload and manage avatar images
+- Parent access to child portfolios
+
+#### Code Showcase
+- Upload and display coding project videos
+- Share static code images
+- Direct file linking from portfolio pages
+- Supports various video formats (MP4, WebM)
+
+#### Getting Started
+1. Register for an account
+2. Set up your portfolio
+3. Upload your avatar image
+4. Add your coding projects:
+   - Create a videos/ folder in your portfolio directory
+   - Add your project videos and code images
+   - Link them in your portfolio HTML file
+
+#### File Organization
+Each student's portfolio should have the following structure:
+```
+portfolio/
+└── class4/
+    └── Peter42/
+        ├── images/
+        │   └── Peter42.png
+        ├── videos/
+        │   ├── project1.mp4
+        │   └── project2.webm
+        └── index.html
+```
+
+## Private vs Public Portfolios
+- Private portfolios are only visible to:
+  1. The student who owns the portfolio
+  2. The student's parents
+  3. Teachers/administrators
+- Public portfolios are visible to everyone
 
 ## For Parents
 

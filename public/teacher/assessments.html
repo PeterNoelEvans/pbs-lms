@@ -111,16 +111,25 @@
 
                             <div class="mb-3">
                                 <label for="type" class="form-label">Type</label>
-                                <select class="form-select" id="type" name="type" required>
+                                <select class="form-select" id="type" name="type" required onchange="handleTypeChange(); updateQuestionOptions();">
                                     <option value="multiple-choice">Multiple Choice</option>
                                     <option value="true-false">True/False</option>
                                     <option value="matching">Matching</option>
-                                    <option value="drag-drop">Drag and Drop</option>
+                                    <option value="drag-and-drop">Drag and Drop</option>
                                     <option value="writing">Writing</option>
                                     <option value="writing-long">Writing (Long)</option>
                                     <option value="speaking">Speaking</option>
                                     <option value="assignment">Assignment</option>
                                     <option value="listening">Listening Comprehension</option>
+                                </select>
+                            </div>
+                            <div class="mb-3" id="subtypeContainer" style="display:none;">
+                                <label for="subtype" class="form-label">Subtype</label>
+                                <select class="form-select" id="subtype" name="subtype" onchange="updateQuestionOptions();">
+                                    <option value="sequence">Sequence (with Audio & Word Bank)</option>
+                                    <option value="fill-in-blank">Fill-in-the-Blank</option>
+                                    <option value="image-fill-blank">Image Fill-in-the-Blank</option>
+                                    <option value="long-paragraph-fill-in-blank">Long Paragraph Fill-in-the-Blank</option>
                                 </select>
                             </div>
 
@@ -133,7 +142,7 @@
                                 <label for="description" class="form-label">Description</label>
                                 <textarea class="form-control" id="description" rows="3"></textarea>
                             </div>
-                            <div class="mb-3">
+                            <div class="mb-3" id="criteriaContainer">
                                 <label for="criteria" class="form-label">Grading Criteria</label>
                                 <textarea class="form-control" id="criteria" rows="3" placeholder="Enter grading criteria or rubric for this assessment"></textarea>
                             </div>
@@ -150,20 +159,7 @@
                             <div id="questionsSection">
                                 <div class="d-flex justify-content-between align-items-center mb-3">
                                     <h5>Questions</h5>
-                                    <div class="btn-group" id="questionButtonsContainer">
-                                        <button type="button" class="btn btn-outline-primary" onclick="addQuestion('multiple-choice')">
-                                            <i class="bi bi-list-check"></i> Add Multiple Choice
-                                        </button>
-                                        <button type="button" class="btn btn-outline-secondary" id="bulkImportBtn" style="display:none;" onclick="showBulkImport()">
-                                            <i class="bi bi-upload"></i> Bulk Import
-                                        </button>
-                                        <button type="button" class="btn btn-outline-primary" onclick="addQuestion('listening')">
-                                            <i class="bi bi-headphones"></i> Add Listening
-                                        </button>
-                                        <button type="button" class="btn btn-outline-primary" onclick="addQuestion('speaking')">
-                                            <i class="bi bi-mic"></i> Add Speaking
-                                        </button>
-                                    </div>
+                                    <div class="btn-group" id="questionButtonsContainer"></div>
                                 </div>
                                 <div id="questionsList" class="mb-4"></div>
                             </div>
@@ -255,10 +251,14 @@
             if (subjectId) {
                 loadUnits(subjectId);
                 document.getElementById('unitSelect').disabled = false;
+                // Load assessments filtered by subject
+                loadExistingAssessments(subjectId);
             } else {
                 document.getElementById('unitSelect').disabled = true;
                 document.getElementById('partSelect').disabled = true;
                 document.getElementById('sectionSelect').disabled = true;
+                // Load all assessments when no subject is selected
+                loadExistingAssessments();
             }
         });
 
@@ -415,10 +415,13 @@
                 return;
             }
             switch(type) {
-                case 'quiz':
+                case 'multiple-choice':
                     buttonsContainer.innerHTML = `
                         <button type="button" class="btn btn-outline-primary" onclick="addQuestion('multiple-choice')">
                             <i class="bi bi-list-check"></i> Add Multiple Choice
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary ms-2" onclick="showBulkImport()">
+                            <i class="bi bi-upload"></i> Bulk Import Questions
                         </button>`;
                     break;
                 case 'listening':
@@ -464,19 +467,19 @@
                     buttonsContainer.innerHTML = '';
             }
             console.log('[updateQuestionOptions] questionButtonsContainer updated for type:', type, 'at', new Date());
-            // Show/hide Bulk Import button for quiz
+            // Show/hide Bulk Import for multiple-choice
             const bulkImportBtn = document.getElementById('bulkImportBtn');
             if (bulkImportBtn) {
-                bulkImportBtn.style.display = (type === 'quiz') ? '' : 'none';
+                bulkImportBtn.style.display = (type === 'multiple-choice') ? '' : 'none';
             }
             const bulkImportContainer = document.getElementById('bulkImportContainer');
             if (bulkImportContainer) {
-                bulkImportContainer.style.display = (type === 'quiz') ? '' : 'none';
+                bulkImportContainer.style.display = (type === 'multiple-choice') ? '' : 'none';
             }
             // Always set questionsSection display at the end
             const questionsSection = document.getElementById('questionsSection');
             if (questionsSection) {
-                const showQuestions = ['quiz', 'drag-and-drop', 'matching', 'true-false', 'mixed'].includes(type);
+                const showQuestions = ['multiple-choice', 'drag-and-drop', 'matching', 'true-false', 'mixed'].includes(type);
                 questionsSection.style.display = showQuestions ? 'block' : 'none';
                 console.log('[updateQuestionOptions] questionsSection display set to', showQuestions ? 'block' : 'none', 'at', new Date());
             }
@@ -623,15 +626,6 @@
 
                 case 'drag-and-drop':
                     questionHtml += `
-                        <div class="mb-3">
-                            <label class="form-label">Subtype</label>
-                            <select class="form-select dragdrop-subtype-select" onchange="window.toggleDragDropSubtypeFields(this)">
-                                <option value="sequence">Sequence (with Audio & Word Bank)</option>
-                                <option value="fill-in-blank">Fill-in-the-Blank</option>
-                                <option value="image-fill-blank">Image Fill-in-the-Blank</option>
-                                <option value="long-paragraph-fill-in-blank">Long Paragraph Fill-in-the-Blank</option>
-                            </select>
-                        </div>
                         <div class="dragdrop-sequence-fields" style="display:none;">
                             <label class="form-label">Audio File (optional)</label>
                             <input type="file" class="form-control sequence-audio" accept="audio/*">
@@ -835,6 +829,32 @@
                     }
                 }
             }
+            // NEW: Show correct fields for drag-and-drop subtype immediately after adding
+            if (type === 'drag-and-drop') {
+                const subtype = document.getElementById('subtype').value;
+                const cardBody = card.querySelector('.card-body');
+                // Hide all fields first
+                cardBody.querySelectorAll('.dragdrop-sequence-fields, .dragdrop-fillblank-fields, .dragdrop-image-fillblank-fields, .dragdrop-matching-fields, .dragdrop-long-paragraph-fields')
+                    .forEach(el => el.style.display = 'none');
+                // Show only the selected subtype's fields
+                switch (subtype) {
+                    case 'sequence':
+                        cardBody.querySelector('.dragdrop-sequence-fields').style.display = 'block';
+                        break;
+                    case 'fill-in-blank':
+                        cardBody.querySelector('.dragdrop-fillblank-fields').style.display = 'block';
+                        break;
+                    case 'image-fill-blank':
+                        cardBody.querySelector('.dragdrop-image-fillblank-fields').style.display = 'block';
+                        break;
+                    case 'long-paragraph-fill-in-blank':
+                        cardBody.querySelector('.dragdrop-long-paragraph-fields').style.display = 'block';
+                        break;
+                    case 'matching':
+                        cardBody.querySelector('.dragdrop-matching-fields').style.display = 'block';
+                        break;
+                }
+            }
         }
 
         function removeQuestion(questionId) {
@@ -905,9 +925,15 @@
         }
 
         // Load existing assessments when page loads
-        async function loadExistingAssessments() {
+        async function loadExistingAssessments(subjectId = null) {
             try {
-                const response = await fetch('/api/teacher/assessments', {
+                let url = '/api/teacher/assessments';
+                // Add subject filter parameter if provided
+                if (subjectId) {
+                    url += `?subjectId=${subjectId}`;
+                }
+                
+                const response = await fetch(url, {
                     headers: {
                         'Authorization': `Bearer ${token}`
                     }
@@ -920,8 +946,38 @@
                 const assessments = await response.json();
                 const container = document.getElementById('existingAssessments');
                 container.innerHTML = ''; // Clear existing content
+                
+                // If filtering by subject, add a header
+                if (subjectId) {
+                    const subjectName = document.getElementById('subjectSelect').selectedOptions[0]?.text || "Selected subject";
+                    container.innerHTML = `
+                        <div class="alert alert-info mb-3">
+                            <i class="bi bi-filter"></i> Showing assessments for: ${subjectName}
+                            <button type="button" class="btn btn-sm btn-outline-primary float-end" onclick="loadExistingAssessments()">
+                                Show All
+                            </button>
+                        </div>
+                    `;
+                }
+                
+                // If no assessments after filtering
+                if (assessments.length === 0) {
+                    container.innerHTML += `
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            ${subjectId ? 'No assessments found for this subject.' : 'No assessments found.'}
+                        </div>
+                    `;
+                    return;
+                }
 
-                assessments.forEach(assessment => {
+                // Filter assessments by subject if subjectId is provided
+                const filteredAssessments = subjectId 
+                    ? assessments.filter(assessment => 
+                        assessment.section?.part?.unit?.subject?.id === subjectId)
+                    : assessments;
+                
+                filteredAssessments.forEach(assessment => {
                     const card = document.createElement('div');
                     card.className = 'card mb-3';
                     
@@ -953,30 +1009,34 @@
                     const manualTypes = ['speaking', 'assignment', 'writing', 'writing-long'];
                     const showGradeBtn = manualTypes.includes((assessment.type || '').toLowerCase());
                     
-                    card.innerHTML = `
-                        <div class="card-body">
-                            <h6 class="card-title">${assessment.title}</h6>
-                            <p class="card-text small">
-                                ${assessment.section.part.unit.subject.name} > 
-                                ${assessment.section.part.unit.name} > 
-                                ${assessment.section.part.name} > 
-                                ${assessment.section.name}
-                            </p>
-                            <p class="card-text small">
-                                Questions: ${questionDisplay}
-                            </p>
-                            <div class="btn-group">
-                                <button class="btn btn-sm btn-primary" onclick="editAssessment('${assessment.id}')">
-                                    <i class="bi bi-pencil"></i> Edit
-                                </button>
-                                <button class="btn btn-sm btn-danger" onclick="deleteAssessment('${assessment.id}')">
-                                    <i class="bi bi-trash"></i> Delete
-                                </button>
-                                ${showGradeBtn ? `<a href="/teacher/grade-assessment.html?assessmentId=${assessment.id}" class="btn btn-success btn-sm ms-2"><i class="bi bi-clipboard-check"></i> Grade</a>` : ''}
+                    try {
+                        card.innerHTML = `
+                            <div class="card-body">
+                                <h6 class="card-title">${assessment.title}</h6>
+                                <p class="card-text small">
+                                    ${assessment.section.part.unit.subject.name} > 
+                                    ${assessment.section.part.unit.name} > 
+                                    ${assessment.section.part.name} > 
+                                    ${assessment.section.name}
+                                </p>
+                                <p class="card-text small">
+                                    Questions: ${questionDisplay}
+                                </p>
+                                <div class="btn-group">
+                                    <button class="btn btn-sm btn-primary" onclick="editAssessment('${assessment.id}')">
+                                        <i class="bi bi-pencil"></i> Edit
+                                    </button>
+                                    <button class="btn btn-sm btn-danger" onclick="deleteAssessment('${assessment.id}')">
+                                        <i class="bi bi-trash"></i> Delete
+                                    </button>
+                                    ${showGradeBtn ? `<a href="/teacher/grade-assessment.html?assessmentId=${assessment.id}" class="btn btn-success btn-sm ms-2"><i class="bi bi-clipboard-check"></i> Grade</a>` : ''}
+                                </div>
                             </div>
-                        </div>
-                    `;
-                    container.appendChild(card);
+                        `;
+                        container.appendChild(card);
+                    } catch (e) {
+                        console.error('Error rendering assessment card:', e, assessment);
+                    }
                 });
             } catch (error) {
                 console.error('Error loading assessments:', error);
@@ -1188,7 +1248,7 @@
 
         // Show/hide fields based on assessment type
         //document.getElementById('assessmentType').addEventListener('change', function() {
-        //    const isQuiz = this.value === 'quiz';
+        //    const isQuiz = this.value === 'multiple-choice';
         //    const descriptionField = document.getElementById('descriptionField');
         //    if (descriptionField) descriptionField.style.display = isQuiz ? 'none' : 'block';
         //    const dueDateField = document.getElementById('dueDateField');
@@ -2162,6 +2222,28 @@ Ooh, exciting!|That sounds fun.</pre>
             document.getElementById('assessmentCriteria').textContent = assessment.criteria || 'No grading criteria provided';
             document.getElementById('assessmentDueDate').textContent = assessment.dueDate ? new Date(assessment.dueDate).toLocaleString() : 'No due date set';
         }
+
+        function handleTypeChange() {
+            const type = document.getElementById('type').value;
+            const subtypeContainer = document.getElementById('subtypeContainer');
+            const criteriaContainer = document.getElementById('criteriaContainer');
+            // Show subtype only for drag-and-drop
+            if (type === 'drag-and-drop') {
+                subtypeContainer.style.display = '';
+            } else {
+                subtypeContainer.style.display = 'none';
+            }
+            // Hide grading criteria for auto-graded types
+            const autoGradedTypes = ['matching', 'drag-and-drop', 'true-false', 'multiple-choice', 'listening'];
+            if (autoGradedTypes.includes(type)) {
+                criteriaContainer.style.display = 'none';
+            } else {
+                criteriaContainer.style.display = '';
+            }
+        }
+        document.getElementById('type').addEventListener('change', handleTypeChange);
+        // Call on page load
+        handleTypeChange();
     </script>
 </body>
 </html>

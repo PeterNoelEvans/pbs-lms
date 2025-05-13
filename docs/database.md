@@ -1,5 +1,55 @@
 # Database Documentation
 
+## Prisma Schema Reference
+
+This documentation is aligned with the actual data model defined in `prisma/schema.prisma`. For every feature or change, always reference the relevant Prisma models and fields. Key models for assessment and course structure include:
+
+- `User`
+- `CoreSubject`
+- `Subject`
+- `Unit`
+- `Part`
+- `Section`
+- `Assessment`
+- `AssessmentSubmission`
+- `Resource`
+- `MediaFile`
+- `StudentProgress`
+- `StudentCourse`
+
+**Example: Assessment Model (from prisma/schema.prisma):**
+```prisma
+model Assessment {
+  id          String    @id @default(uuid())
+  title       String
+  description String?
+  type        String   // 'quiz', 'matching', etc.
+  category    String?  // e.g., 'Grammar', 'Listening', 'Speaking', etc.
+  criteria    String?  // Grading criteria/rubric for manually graded assessments
+  questions   Json?     // For quizzes
+  dueDate     DateTime? // For assignments
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  section     Section   @relation(fields: [sectionId], references: [id])
+  sectionId   String
+  createdBy   User      @relation(fields: [userId], references: [id])
+  userId      String
+  mediaFiles  MediaFile[] // For audio questions and other media
+  topic       Topic?    @relation("TopicAssessments", fields: [topicId], references: [id])
+  topicId     String?
+  weeklySchedule WeeklySchedule? @relation(fields: [weeklyScheduleId], references: [id])
+  weeklyScheduleId String?
+  submissions AssessmentSubmission[]
+  maxAttempts Int? // Maximum allowed attempts for this assessment (null = unlimited)
+  resources   Resource[] @relation("ResourceAssessments")
+}
+```
+
+**For all future changes:**
+- Always check and reference the relevant Prisma models/fields before making or requesting changes.
+- Document the affected models/fields in change requests and feature docs.
+- Ensure frontend, backend, and database are kept in sync with the schema.
+
 ## Overview
 The database manages users, subjects, topics, resources, weekly planning, assessments, and student progress across multiple subjects. It supports a comprehensive educational resource system with assessment capabilities for all subjects.
 
