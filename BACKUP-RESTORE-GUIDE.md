@@ -12,11 +12,13 @@ This guide explains how to use the backup and restore scripts to preserve and re
 
 These scripts specifically back up files listed in your `.gitignore` that contain important data:
 
-- Database files (*.db, *.sqlite, *.sqlite3)
+- Database files (*.db, *.sqlite, *.sqlite3) **with their full directory structure**
 - Environment files (.env*)
 - Password files (PBS_passwords.txt, Phumdham-pswds.txt)
 - Portfolio data in "portfolios/data temp/"
 - Any other files specified in the backup patterns
+
+The scripts will search your entire project directory recursively to find these files, so database files will be found no matter where they are located in your project.
 
 ## Backup Instructions
 
@@ -25,6 +27,7 @@ These scripts specifically back up files listed in your `.gitignore` that contai
 1. Place `backup-ignored-files.bat` in the root of your project directory
 2. Double-click the file or run it from Command Prompt
 3. The script will create a timestamped backup in a `backups` folder
+4. At the end of the backup, the script will display a list of database files that were backed up
 
 ### Using the Bash Script
 
@@ -32,6 +35,11 @@ These scripts specifically back up files listed in your `.gitignore` that contai
 2. Make it executable: `chmod +x backup-ignored-files.sh`
 3. Run it: `./backup-ignored-files.sh`
 4. The script will create a timestamped backup in a `backups` folder
+5. At the end of the backup, the script will display a list of database files that were backed up
+
+## Checking Backup Contents
+
+Each backup contains a `backup-manifest.txt` file that lists all files included in the backup. You can view this file after extracting the backup ZIP to verify that all expected files were properly backed up.
 
 ## Restore Instructions
 
@@ -51,7 +59,7 @@ These scripts specifically back up files listed in your `.gitignore` that contai
 
 3. The script will:
    - Extract the backup
-   - Restore all files to their original locations
+   - Restore all files to their original locations, maintaining the directory structure
    - Clean up temporary files
 
 ## Transfer Process (Complete Steps)
@@ -59,10 +67,11 @@ These scripts specifically back up files listed in your `.gitignore` that contai
 1. **On the original computer:**
    - Run `backup-ignored-files.bat` to create a backup
    - Locate the created backup ZIP file in the `backups` folder
+   - Verify the list of database files shown at the end of the backup process
 
 2. **Transfer files to the new computer:**
    - Copy or clone your Git repository to the new computer
-   - Copy these three files to the new computer:
+   - Copy these files to the new computer:
      - `backup-ignored-files.bat` (for future backups)
      - `restore-backup.bat` (for restoration)
      - The backup ZIP file from your `backups` folder
@@ -76,7 +85,7 @@ These scripts specifically back up files listed in your `.gitignore` that contai
    - Follow the prompts to restore your data
 
 4. **After restoration:**
-   - Your database and configuration files should be restored
+   - Your database and configuration files should be restored to their original locations
    - Start your application normally
    - Verify everything works as expected
 
@@ -96,8 +105,13 @@ These scripts specifically back up files listed in your `.gitignore` that contai
    - The backup ZIP may be corrupted or have an unexpected structure
    - Try creating a new backup on the original system
 
-4. **Application still doesn't work after restore**
-   - Check if the database files were properly restored
+4. **"WARNING: No database files found"**
+   - If you see this warning during backup, check if your database files exist
+   - Make sure they have the expected extensions (.db, .sqlite, or .sqlite3)
+   - You may need to modify the script if your database uses a different extension
+
+5. **Application still doesn't work after restore**
+   - Check if the database files were properly restored by looking in the expected directories
    - Verify that environment files (.env) contain the correct configuration
    - Ensure all paths in the configuration files match the new system
 
