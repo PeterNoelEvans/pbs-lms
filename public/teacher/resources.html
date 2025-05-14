@@ -230,6 +230,7 @@
                                 <option value="audio">Audio</option>
                                 <option value="image">Image</option>
                                 <option value="link">External Link</option>
+                                <option value="image-with-audio">Image with Audio</option>
                             </select>
                         </div>
                         <div id="urlInput" class="mb-3" style="display: none;">
@@ -241,6 +242,13 @@
                             <input type="file" class="form-control" id="resourceFile">
                             <small class="form-text text-muted">
                                 Supported formats: PDF, Word, Text, MP3, WAV, MP4, WebM, JPG, PNG, GIF
+                            </small>
+                        </div>
+                        <div id="audioFileInput" class="mb-3" style="display: none;">
+                            <label for="audioFile" class="form-label">Audio File</label>
+                            <input type="file" class="form-control" id="audioFile" accept=".mp3,.wav">
+                            <small class="form-text text-muted">
+                                Supported formats: MP3, WAV
                             </small>
                         </div>
                     </form>
@@ -457,6 +465,7 @@
             const safeType = String(resource.type || '');
             const safeUrl = String(resource.url || '');
             const safeFilePath = String(resource.filePath || '');
+            const safeAudioPath = String(resource.audioPath || '');
             const hasLinkedAssessments = resource.assessments && resource.assessments.length > 0;
             const linkBtnClass = hasLinkedAssessments ? 'btn-success' : 'btn-secondary';
             return `
@@ -485,7 +494,7 @@
                     ` : ''}
                     ${safeFilePath ? `
                         <div class="mt-2">
-                            ${safeType === 'image' ? `
+                            ${safeType === 'image' || safeType === 'image-with-audio' ? `
                                 <img src="${safeFilePath}" class="img-fluid mb-2" style="max-height: 200px;">
                             ` : ''}
                             ${safeType === 'audio' ? `
@@ -500,6 +509,12 @@
                                     Your browser does not support the video element.
                                 </video>
                             ` : ''}
+                            ${safeType === 'image-with-audio' && safeAudioPath ? `
+                                <audio controls class="w-100 mt-2">
+                                    <source src="${safeAudioPath}" type="audio/mpeg">
+                                    Your browser does not support the audio element.
+                                </audio>
+                            ` : ''}
                             <a href="${safeFilePath}" target="_blank" class="btn btn-sm btn-primary">
                                 ${safeType === 'document' ? 'View Document' : 'Download File'}
                             </a>
@@ -513,13 +528,21 @@
         document.getElementById('resourceType').addEventListener('change', function(e) {
             const urlInput = document.getElementById('urlInput');
             const fileInput = document.getElementById('fileInput');
+            const audioFileInput = document.getElementById('audioFileInput');
             
             if (e.target.value === 'link') {
                 urlInput.style.display = 'block';
                 fileInput.style.display = 'none';
+                audioFileInput.style.display = 'none';
+            } else if (e.target.value === 'image-with-audio') {
+                urlInput.style.display = 'none';
+                fileInput.style.display = 'block';
+                audioFileInput.style.display = 'block';
+                document.getElementById('resourceFile').accept = '.jpg,.jpeg,.png,.gif';
             } else {
                 urlInput.style.display = 'none';
                 fileInput.style.display = 'block';
+                audioFileInput.style.display = 'none';
                 
                 // Update file input accept attribute based on type
                 const acceptMap = {
@@ -562,6 +585,17 @@
                 // Handle file or URL based on resource type
                 if (document.getElementById('resourceType').value === 'link') {
                     formData.append('url', document.getElementById('resourceUrl').value);
+                } else if (document.getElementById('resourceType').value === 'image-with-audio') {
+                    const fileInput = document.getElementById('resourceFile');
+                    const audioInput = document.getElementById('audioFile');
+                    
+                    if (fileInput.files.length > 0) {
+                        formData.append('file', fileInput.files[0]);
+                    }
+                    
+                    if (audioInput.files.length > 0) {
+                        formData.append('audioFile', audioInput.files[0]);
+                    }
                 } else {
                     const fileInput = document.getElementById('resourceFile');
                     if (fileInput.files.length > 0) {
@@ -631,16 +665,16 @@
             document.getElementById('linkAssessmentsResourceTitle').textContent = resourceTitle;
             
             try {
-                console.log('Fetching teacher assessments...');
-                // Load all assessments for the teacher
-                const assessmentsResponse = await fetch('/api/teacher/assessments', {
+                console.log('Fetching subject assessments...');
+                // Load assessments for the current subject only
+                const assessmentsResponse = await fetch(`/api/subjects/${currentSubjectId}/assessments`, {
                     headers: {
                         'Authorization': `Bearer ${token}`
                     }
                 });
-                console.log('Teacher assessments response:', assessmentsResponse);
+                console.log('Subject assessments response:', assessmentsResponse);
                 const assessments = await assessmentsResponse.json();
-                console.log('Teacher assessments:', assessments);
+                console.log('Subject assessments:', assessments);
 
                 console.log('Fetching linked assessments...');
                 // Load currently linked assessments

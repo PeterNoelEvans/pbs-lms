@@ -798,18 +798,26 @@ app.get('/api/subjects/:subjectId/resources', auth, async (req, res) => {
                         where: { id: resource.id },
                         include: { assessments: true }
                     });
+                    
+                    // Extract audioPath from metadata if it exists
+                    let audioPath = null;
+                    if (resource.metadata && typeof resource.metadata === 'object' && resource.metadata.audioPath) {
+                        audioPath = resource.metadata.audioPath;
+                    }
+                    
                     resources.push({
                         ...resource,
                         unitId: resource.unitId,
                         partId: resource.partId,
                         sectionId: resource.sectionId,
+                        audioPath: audioPath,
                         assessments: resourceWithAssessments.assessments.map(a => ({
                             id: a.id,
                             title: a.title,
                             type: a.type
                         }))
-                });
-            }
+                    });
+                }
             }
         }
 
@@ -822,7 +830,10 @@ app.get('/api/subjects/:subjectId/resources', auth, async (req, res) => {
 });
 
 // Add a new resource
-app.post('/api/resources', auth, upload.single('file'), async (req, res) => {
+app.post('/api/resources', auth, upload.fields([
+    { name: 'file', maxCount: 1 },
+    { name: 'audioFile', maxCount: 1 }
+]), async (req, res) => {
     try {
         const { title, description, type, url, subjectId, unitId, partId, sectionId } = req.body;
         
@@ -862,10 +873,23 @@ app.post('/api/resources', auth, upload.single('file'), async (req, res) => {
 
         // Handle file path for uploaded resources
         let filePath = null;
-        if (req.file) {
-            filePath = `/uploads/resources/${req.file.filename}`;
+        let audioPath = null;
+        
+        if (req.files && req.files.file && req.files.file.length > 0) {
+            filePath = `/uploads/resources/${req.files.file[0].filename}`;
         } else if (type === 'link' && url) {
             filePath = url;
+        }
+        
+        // Handle audio file for image-with-audio type
+        if (type === 'image-with-audio' && req.files && req.files.audioFile && req.files.audioFile.length > 0) {
+            audioPath = `/uploads/resources/${req.files.audioFile[0].filename}`;
+        }
+        
+        // Prepare metadata object
+        let metadata = {};
+        if (audioPath) {
+            metadata.audioPath = audioPath;
         }
         
         const resource = await prisma.resource.create({
@@ -880,7 +904,8 @@ app.post('/api/resources', auth, upload.single('file'), async (req, res) => {
                 createdBy: { connect: { id: req.user.userId } },
                 unit: unitId ? { connect: { id: unitId } } : undefined,
                 part: partId ? { connect: { id: partId } } : undefined,
-                section: sectionId ? { connect: { id: sectionId } } : undefined
+                section: sectionId ? { connect: { id: sectionId } } : undefined,
+                metadata: Object.keys(metadata).length > 0 ? metadata : undefined
             }
         });
 
@@ -1705,8 +1730,16 @@ app.get('/api/topics/:topicId/resources', auth, async (req, res) => {
                 where: { id: resource.id },
                 include: { assessments: true }
             });
+            
+            // Extract audioPath from metadata if it exists
+            let audioPath = null;
+            if (resource.metadata && typeof resource.metadata === 'object' && resource.metadata.audioPath) {
+                audioPath = resource.metadata.audioPath;
+            }
+            
             return {
                 ...resource,
+                audioPath: audioPath,
                 assessments: resourceWithAssessments.assessments.map(a => ({
                     id: a.id,
                     title: a.title,
@@ -1816,11 +1849,59 @@ app.get('/api/assessments/:assessmentId', auth, async (req, res) => {
             return res.status(404).json({ error: 'Assessment not found' });
         }
 
+        // Process matching type assessments to ensure pairs data is properly formatted
+        if (assessment.type === 'matching' && assessment.questions) {
+            let questions = assessment.questions;
+            
+            // Ensure questions is an array
+            if (!Array.isArray(questions)) {
+                if (typeof questions === 'string') {
+                    try {
+                        questions = JSON.parse(questions);
+                    } catch (e) {
+                        console.error('Error parsing questions string:', e);
+                        questions = [{ type: 'matching' }];
+                    }
+                } else {
+                    questions = [questions];
+                }
+            }
+            
+            // Process each question to extract matching pairs
+            questions = questions.map(question => {
+                if (question.type === 'matching') {
+                    // If pairs is available, use it directly
+                    if (question.pairs && Array.isArray(question.pairs)) {
+                        console.log(`Assessment has ${question.pairs.length} matching pairs`);
+                    }
+                    // If no pairs but expressions and meanings are available, create pairs
+                    else if (!question.pairs && question.expressions && question.meanings && 
+                             Array.isArray(question.expressions) && Array.isArray(question.meanings)) {
+                        question.pairs = [];
+                        for (let i = 0; i < Math.min(question.expressions.length, question.meanings.length); i++) {
+                            if (question.expressions[i] && question.meanings[i]) {
+                                question.pairs.push({
+                                    expression: question.expressions[i],
+                                    meaning: question.meanings[i]
+                                });
+                            }
+                        }
+                        console.log(`Created ${question.pairs.length} pairs from expressions and meanings`);
+                    }
+                }
+                return question;
+            });
+            
+            // Update assessment with processed questions
+            assessment.questions = questions;
+        }
+
         // Add subjectName, unitName, partName, sectionName to the response if available
         const subjectName = assessment.section?.part?.unit?.subject?.name || null;
         const unitName = assessment.section?.part?.unit?.name || null;
         const partName = assessment.section?.part?.name || null;
         const sectionName = assessment.section?.name || null;
+        
         res.json({ ...assessment, subjectName, unitName, partName, sectionName });
     } catch (error) {
         console.error('Error fetching assessment:', error);
@@ -1861,8 +1942,12 @@ app.post('/api/sections/:sectionId/assessments', auth, upload.any(), async (req,
         }
 
         // Validate required fields
-        if (!title || !type) {
-            return res.status(400).json({ error: 'Title and type are required' });
+        if (!title || !title.trim()) {
+            return res.status(400).json({ error: 'Title is required' });
+        }
+
+        if (!type) {
+            return res.status(400).json({ error: 'Assessment type is required' });
         }
 
         // Check if section exists
@@ -1881,15 +1966,55 @@ app.post('/api/sections/:sectionId/assessments', auth, upload.any(), async (req,
             label: file.fieldname
         })) : [];
 
-        // Create the assessment with topic and weekly schedule links if provided
+        // Parse and prepare questions
+        let parsedQuestions = [];
+        if (questions) {
+            try {
+                parsedQuestions = JSON.parse(questions);
+                
+                // Special handling for matching questions
+                if (type === 'matching' && Array.isArray(parsedQuestions)) {
+                    parsedQuestions = parsedQuestions.map(question => {
+                        if (question.type === 'matching') {
+                            console.log('Processing matching question:', JSON.stringify(question));
+                            
+                            // Ensure pairs is available and properly structured
+                            if (question.pairs && Array.isArray(question.pairs)) {
+                                console.log(`Found ${question.pairs.length} pairs in question`);
+                            }
+                            // If no pairs but expressions and meanings exist, create pairs
+                            else if (question.expressions && question.meanings &&
+                                    Array.isArray(question.expressions) && Array.isArray(question.meanings)) {
+                                question.pairs = [];
+                                for (let i = 0; i < Math.min(question.expressions.length, question.meanings.length); i++) {
+                                    if (question.expressions[i] && question.meanings[i]) {
+                                        question.pairs.push({
+                                            expression: question.expressions[i],
+                                            meaning: question.meanings[i]
+                                        });
+                                    }
+                                }
+                                console.log(`Created ${question.pairs.length} pairs from expressions and meanings`);
+                            }
+                        }
+                        return question;
+                    });
+                }
+            } catch (error) {
+                console.error('Error parsing questions:', error);
+                return res.status(400).json({ error: 'Invalid questions format' });
+            }
+        }
+
+        // Create the assessment
         const assessment = await prisma.assessment.create({
             data: {
-                title,
+                title: title.trim(),
                 description,
                 type,
                 category,
-                criteria,
-                questions: questions ? JSON.parse(questions) : [],
+                criteria, // Ensure criteria is included
+                questions: parsedQuestions,
                 dueDate: dueDate ? new Date(dueDate) : null,
                 section: {
                     connect: { id: sectionId }
@@ -1930,8 +2055,12 @@ app.put('/api/assessments/:assessmentId', auth, upload.any(), async (req, res) =
         const { title, description, type, questions, dueDate, maxAttempts, category, topicId, weeklyScheduleId, criteria } = req.body;
 
         // Validate required fields
-        if (!title || !type) {
-            return res.status(400).json({ error: 'Title and type are required' });
+        if (!title || !title.trim()) {
+            return res.status(400).json({ error: 'Title is required' });
+        }
+
+        if (!type) {
+            return res.status(400).json({ error: 'Assessment type is required' });
         }
 
         // Check if assessment exists
@@ -1950,16 +2079,56 @@ app.put('/api/assessments/:assessmentId', auth, upload.any(), async (req, res) =
             label: file.fieldname
         })) : [];
 
-        // Update the assessment with topic and weekly schedule links if provided
+        // Parse and prepare questions
+        let parsedQuestions;
+        if (questions) {
+            try {
+                parsedQuestions = JSON.parse(questions);
+                
+                // Special handling for matching questions
+                if (type === 'matching' && Array.isArray(parsedQuestions)) {
+                    parsedQuestions = parsedQuestions.map(question => {
+                        if (question.type === 'matching') {
+                            console.log('Processing matching question for update:', JSON.stringify(question));
+                            
+                            // Ensure pairs is available and properly structured
+                            if (question.pairs && Array.isArray(question.pairs)) {
+                                console.log(`Found ${question.pairs.length} pairs in question for update`);
+                            }
+                            // If no pairs but expressions and meanings exist, create pairs
+                            else if (question.expressions && question.meanings &&
+                                    Array.isArray(question.expressions) && Array.isArray(question.meanings)) {
+                                question.pairs = [];
+                                for (let i = 0; i < Math.min(question.expressions.length, question.meanings.length); i++) {
+                                    if (question.expressions[i] && question.meanings[i]) {
+                                        question.pairs.push({
+                                            expression: question.expressions[i],
+                                            meaning: question.meanings[i]
+                                        });
+                                    }
+                                }
+                                console.log(`Created ${question.pairs.length} pairs from expressions and meanings for update`);
+                            }
+                        }
+                        return question;
+                    });
+                }
+            } catch (error) {
+                console.error('Error parsing questions:', error);
+                return res.status(400).json({ error: 'Invalid questions format' });
+            }
+        }
+
+        // Update the assessment
         const assessment = await prisma.assessment.update({
             where: { id: assessmentId },
             data: {
-                title,
+                title: title.trim(),
                 description,
                 type,
                 category,
-                criteria,
-                questions: questions ? JSON.parse(questions) : undefined,
+                criteria, // Ensure criteria is included
+                questions: parsedQuestions,
                 dueDate: dueDate ? new Date(dueDate) : null,
                 mediaFiles: mediaFiles.length > 0 ? {
                     create: mediaFiles
@@ -2021,6 +2190,51 @@ app.get('/api/teacher/assessments', auth, async (req, res) => {
     } catch (error) {
         console.error('Error fetching teacher assessments:', error);
         res.status(500).json({ error: 'Failed to fetch assessments' });
+    }
+});
+
+// Get all assessments for a specific subject
+app.get('/api/subjects/:subjectId/assessments', auth, async (req, res) => {
+    try {
+        const { subjectId } = req.params;
+        
+        // Find all assessments that belong to this subject
+        // We need to go through the section -> part -> unit -> subject relationship
+        const assessments = await prisma.assessment.findMany({
+            where: {
+                section: {
+                    part: {
+                        unit: {
+                            subjectId: subjectId
+                        }
+                    }
+                }
+            },
+            include: {
+                section: {
+                    include: {
+                        part: {
+                            include: {
+                                unit: {
+                                    include: {
+                                        subject: true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                mediaFiles: true
+            },
+            orderBy: {
+                createdAt: 'desc'
+            }
+        });
+
+        res.json(assessments);
+    } catch (error) {
+        console.error('Error fetching subject assessments:', error);
+        res.status(500).json({ error: 'Failed to fetch subject assessments', details: error.message });
     }
 });
 
@@ -2554,9 +2768,50 @@ app.post('/api/assessments/:assessmentId/submit-writing', auth, upload.single('f
         const studentId = req.user.userId;
         let { text } = req.body;
         let filePath = null;
+        
+        // Verify the assessment exists
+        const assessment = await prisma.assessment.findUnique({
+            where: { id: assessmentId }
+        });
+        
+        if (!assessment) {
+            return res.status(404).json({ 
+                success: false, 
+                error: 'Assessment not found' 
+            });
+        }
+        
         if (req.file) {
+            // Validate file type - accept a wider range of document types
+            const validMimeTypes = [
+                'application/pdf', 
+                'application/msword', 
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                'text/plain',
+                'text/markdown',
+                'image/jpeg',
+                'image/png',
+                'image/gif'
+            ];
+            
+            if (!validMimeTypes.includes(req.file.mimetype)) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Invalid file type. Please upload a document, text, or image file.'
+                });
+            }
+            
             filePath = `/uploads/resources/${req.file.filename}`;
         }
+        
+        // Ensure either text or file is provided
+        if (!text && !filePath) {
+            return res.status(400).json({
+                success: false,
+                error: 'Either text or a file must be submitted'
+            });
+        }
+        
         // Save submission
         const submission = await prisma.assessmentSubmission.create({
             data: {
@@ -2566,16 +2821,26 @@ app.post('/api/assessments/:assessmentId/submit-writing', auth, upload.single('f
                     text: text || null, 
                     file: filePath,
                     fileType: req.file ? req.file.mimetype : null,
-                    fileName: req.file ? req.file.originalname : null
+                    fileName: req.file ? req.file.originalname : null,
+                    submittedAt: new Date().toISOString() // Add submission timestamp
                 },
                 score: null,
                 submittedAt: new Date()
             }
         });
-        res.json({ success: true, submission });
+        
+        // Return the created submission with a success status
+        res.json({ 
+            success: true, 
+            submission,
+            status: 'Submitted'  // Explicitly return the status
+        });
     } catch (error) {
         console.error('Error submitting writing assignment:', error);
-        res.status(500).json({ success: false, error: 'Failed to submit writing assignment' });
+        res.status(500).json({ 
+            success: false, 
+            error: 'Failed to submit writing assignment. ' + error.message 
+        });
     }
 });
 
@@ -2614,5 +2879,42 @@ app.delete('/api/sections/:sectionId', auth, async (req, res) => {
 // Start server
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
+});
+
+// Get a single resource by ID
+app.get('/api/resources/:resourceId', auth, async (req, res) => {
+    try {
+        const { resourceId } = req.params;
+        
+        const resource = await prisma.resource.findUnique({
+            where: { id: resourceId },
+            include: {
+                createdBy: true,
+                assessments: true
+            }
+        });
+
+        if (!resource) {
+            return res.status(404).json({ error: 'Resource not found' });
+        }
+        
+        // Extract audioPath from metadata if it exists
+        let audioPath = null;
+        if (resource.metadata && typeof resource.metadata === 'object' && resource.metadata.audioPath) {
+            audioPath = resource.metadata.audioPath;
+        }
+        
+        // Format the response
+        const formattedResource = {
+            ...resource,
+            audioPath: audioPath,
+            filePath: resource.url  // For consistency with other endpoints
+        };
+        
+        res.json(formattedResource);
+    } catch (error) {
+        console.error('Error fetching resource:', error);
+        res.status(500).json({ error: 'Failed to fetch resource' });
+    }
 });
 

@@ -107,7 +107,7 @@
             background-color: #f8f9fa;
         }
         .draggable-item {
-            padding: 6px 12px;
+            padding: 8px 12px;
             background-color: #e7f3ff;
             border: 1px solid #b8daff;
             border-radius: 4px;
@@ -123,44 +123,87 @@
             cursor: grabbing;
         }
         .drop-target {
-            display: inline-block;
-            width: 120px;
-            height: 30px;
-            border: 2px dashed #ced4da;
-            border-radius: 4px;
-            margin: 0 5px;
-            vertical-align: middle;
-            background-color: #f8f9fa;
+            display: inline-block !important;
+            width: 120px !important;
+            height: 35px !important;
+            border: 2px dashed #ced4da !important;
+            border-radius: 4px !important;
+            margin: 0 5px !important;
+            vertical-align: middle !important;
+            background-color: #f8f9fa !important;
             transition: all 0.2s;
         }
         .drop-target.highlight {
-            border-color: #0d6efd;
-            background-color: #e7f3ff;
+            border-color: #0d6efd !important;
+            background-color: #e7f3ff !important;
         }
         .drop-target.filled {
-            border-style: solid;
-            border-color: #6c757d;
-            background-color: #e9ecef;
-            text-align: center;
-            line-height: 30px;
-            padding: 0 5px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
+            border-style: solid !important;
+            border-color: #6c757d !important;
+            background-color: #e9ecef !important;
+            text-align: center !important;
+            line-height: 35px !important;
+            padding: 0 5px !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+            white-space: nowrap !important;
+            font-weight: 500 !important;
         }
         .drop-target.correct {
-            border-color: #28a745;
-            background-color: #d4edda;
+            border-color: #28a745 !important;
+            background-color: #d4edda !important;
         }
         .drop-target.incorrect {
-            border-color: #dc3545;
-            background-color: #f8d7da;
+            border-color: #dc3545 !important;
+            background-color: #f8d7da !important;
         }
         .sentence-container {
-            line-height: 2.5;
-            margin-bottom: 15px;
-            font-size: 1.1rem;
+            line-height: 2.5 !important;
+            margin-bottom: 15px !important;
+            font-size: 1.1rem !important;
         }
+        
+        /* New styles for paragraph container */
+        .paragraph-container {
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .paragraph-container .sentence-container {
+            font-size: 1.25rem !important;
+            line-height: 2.2 !important;
+        }
+        
+        /* Long paragraph specific styles to fix formatting */
+        .long-paragraph-container {
+            margin-top: 20px;
+        }
+        
+        /* Fix the actual drop zones */
+        [id^="target-"] {
+            display: inline-block !important;
+            min-width: 120px !important;
+            height: 35px !important;
+            border: 2px dashed #ced4da !important;
+            border-radius: 4px !important;
+            margin: 0 5px !important;
+            vertical-align: middle !important;
+            background-color: #f8f9fa !important;
+        }
+        
+        /* Word bank items */
+        #dragDropContainer .draggable-item {
+            display: inline-block;
+            padding: 8px 12px;
+            margin: 5px;
+            background-color: #e7f3ff;
+            border: 1px solid #b8daff;
+            border-radius: 4px;
+            cursor: grab;
+        }
+        
         /* Image matching styles */
         .images-container {
             display: grid;
@@ -303,6 +346,39 @@
         .draggable-item.dragging {
             opacity: 0.5;
         }
+        
+        .recording-dot.pulsing {
+            animation: pulse 1s infinite;
+        }
+        
+        /* Matching assessment styles */
+        .matching-row {
+            margin-bottom: 1rem;
+        }
+        
+        .matching-row .card {
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+        }
+        
+        .matching-row select.is-valid,
+        .matching-row select.is-invalid {
+            padding-right: calc(1.5em + .75rem);
+            background-position: right calc(.375em + .1875rem) center;
+            background-size: calc(.75em + .375rem) calc(.75em + .375rem);
+        }
+        
+        .matching-row select.is-valid {
+            border-color: #28a745;
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 8 8'%3e%3cpath fill='%2328a745' d='M2.3 6.73L.6 4.53c-.4-1.04.46-1.4 1.1-.8l1.1 1.4 3.4-3.8c.6-.63 1.6-.27 1.2.7l-4 4.6c-.43.5-.8.4-1.1.1z'/%3e%3c/svg%3e");
+            background-repeat: no-repeat;
+        }
+        
+        .matching-row select.is-invalid {
+            border-color: #dc3545;
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%23dc3545' viewBox='0 0 12 12'%3e%3ccircle cx='6' cy='6' r='4.5'/%3e%3cpath stroke-linejoin='round' d='M5.8 3.6h.4L6 6.5z'/%3e%3ccircle cx='6' cy='8.2' r='.6' fill='%23dc3545' stroke='none'/%3e%3c/svg%3e");
+            background-repeat: no-repeat;
+        }
     </style>
 </head>
 <body class="bg-light">
@@ -334,32 +410,147 @@
     </nav>
 
     <div class="container mt-4">
+        <!-- Debug information - hidden by default, visible with ?debug=true parameter -->
+        <div class="alert alert-info mb-3" id="debugInfo" style="font-family: monospace; font-size: 13px; display: none;">
+            Loading debug info...
+        </div>
+        
+        <!-- Debug buttons only shown when debug=true -->
+        <div id="debugButtons" style="display: none;" class="mb-3">
+            <button id="refreshPage" class="btn btn-sm btn-secondary">Refresh Page</button>
+        </div>
+        
         <div id="loader" class="text-center my-4 d-none">
             <div class="spinner-border text-primary" role="status">
                 <span class="visually-hidden">Loading...</span>
             </div>
-            <p class="mt-2">Loading assessment...</p>
+            <p>Loading assessment...</p>
         </div>
-        <div id="assessmentContent">
-            <div id="questionContainer"></div>
+        
+        <!-- Add debugging info -->
+        <div class="mb-3 text-muted small">
+            <p id="debugAssessmentId">Assessment ID: Loading...</p>
+        </div>
+        
+        <div id="assessmentContainer" style="display: none;">
+            <!-- Assessment content will be loaded here -->
         </div>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         const token = localStorage.getItem('token');
-        const urlParams = new URLSearchParams(window.location.search);
-        const assessmentId = urlParams.get('id');
         let assessment = null;
-        let userAnswers = {};
+        let answers = [];
         let currentQuestionIndex = 0;
-        
-        // Add global timer/attempts variables
         let attemptCount = 0;
-        let maxAttempts = null;
-        let totalTime = 0;
-        let attemptStartTime = null;
-        let timerInterval = null;
+        let submissionData = [];
+        let startTime = null;
+        let assessmentId = null;
+        
+        // Global userAnswers object to store all answers
+        window.userAnswers = [];
+        
+        // Allow drop on drop targets
+        function allowDrop(event) {
+            event.preventDefault();
+        }
+        
+        // Handle drag event
+        function drag(event) {
+            event.dataTransfer.setData("text", event.target.id);
+            event.target.classList.add('dragging');
+        }
+        
+        // Handle drop event
+        function drop(event) {
+            event.preventDefault();
+            const data = event.dataTransfer.getData("text");
+            const draggedItem = document.getElementById(data);
+            
+            if (draggedItem && event.target.classList.contains('drop-target')) {
+                // Clear any existing content
+                event.target.innerHTML = '';
+                // Add the dragged text to the drop target
+                event.target.textContent = draggedItem.textContent;
+                
+                // Update styling for the filled drop target
+                event.target.classList.add('filled');
+                event.target.style.border = '2px solid #6c757d';
+                event.target.style.backgroundColor = '#e9ecef';
+                event.target.style.color = '#212529';
+                event.target.style.padding = '5px 10px';
+                event.target.style.textAlign = 'center';
+                event.target.style.fontWeight = '500';
+                
+                // Hide the original draggable item
+                draggedItem.style.display = 'none';
+                
+                // Update the corresponding hidden inputs
+                const index = event.target.dataset.index;
+                const questionId = assessment.questions && assessment.questions.length > 0 ? assessment.questions[0].id : Date.now();
+                
+                // Find and update hidden input fields but make sure they don't have 'required' attribute
+                const meaningInput = document.querySelector(`input[name="meaning_question_${questionId}_${index}"]`);
+                if (meaningInput) {
+                    meaningInput.value = draggedItem.textContent;
+                    meaningInput.removeAttribute('required');
+                }
+                
+                // Store the answer in userAnswers
+                if (!window.userAnswers[0]) window.userAnswers[0] = {};
+                if (!window.userAnswers[0].dropTargets) window.userAnswers[0].dropTargets = {};
+                window.userAnswers[0].dropTargets[index] = {
+                    text: draggedItem.textContent,
+                    correct: draggedItem.textContent === event.target.dataset.correctAnswer
+                };
+            }
+        }
+        
+        // Simple debug utility
+        function showDebugInfo() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const debug = urlParams.get('debug');
+            if (debug === 'true') {
+                const debugDiv = document.getElementById('debugInfo');
+                debugDiv.style.display = 'block';
+                
+                // Also show debug buttons
+                const debugButtons = document.getElementById('debugButtons');
+                if (debugButtons) {
+                    debugButtons.style.display = 'block';
+                    
+                    // Add event listener for refresh button
+                    const refreshButton = document.getElementById('refreshPage');
+                    if (refreshButton) {
+                        refreshButton.addEventListener('click', function() {
+                            location.reload();
+                        });
+                    }
+                }
+                
+                assessmentId = urlParams.get('id');
+                debugDiv.innerHTML = `
+                    <strong>Debug Information:</strong><br>
+                    URL ID Parameter: ${assessmentId || 'None'}<br>
+                    Current URL: ${window.location.href}<br>
+                `;
+                
+                // Listen for assessment load event to update with more info
+                document.addEventListener('assessment-loaded', (e) => {
+                    const assessment = e.detail;
+                    debugDiv.innerHTML += `<br>
+                        <strong>Loaded Assessment:</strong><br>
+                        Loaded Assessment ID: ${assessment.id}<br>
+                        Title: ${assessment.title}<br>
+                        Type: ${assessment.type}
+                    `;
+                });
+            }
+        }
+        
+        // Call showDebugInfo immediately
+        showDebugInfo();
         
         // Check authentication
         if (!token) {
@@ -368,11 +559,21 @@
         
         document.addEventListener('DOMContentLoaded', loadAssessment);
         
+        // Function to load the assessment data
         async function loadAssessment() {
             try {
                 showLoader();
                 
                 // Fetch assessment data
+                const urlParams = new URLSearchParams(window.location.search);
+                const assessmentId = urlParams.get('id');
+                
+                // Update debug info with URL parameters
+                document.getElementById('debugInfo').innerHTML = `
+                    URL ID Parameter: ${assessmentId || 'None'}<br>
+                    Current URL: ${window.location.href}
+                `;
+                
                 const response = await fetch(`/api/assessments/${assessmentId}`, {
                     headers: {
                         'Authorization': `Bearer ${token}`
@@ -381,102 +582,131 @@
                 const data = await response.json();
                 if (!response.ok) throw new Error('Failed to load assessment');
                 assessment = data;
+                // Make assessment data globally available for the emergency fix
+                window.assessment = assessment;
                 console.log('[DEBUG] Assessment loaded:', assessment);
-                if (assessment) {
-                    console.log('[DEBUG] Assessment.type:', assessment.type);
-                    console.log('[DEBUG] Assessment.subtype:', assessment.subtype);
-                    console.log('[DEBUG] Assessment.questions:', assessment.questions);
-                    if (assessment.questions && assessment.questions[0]) {
-                        console.log('[DEBUG] First question:', assessment.questions[0]);
-                        console.log('[DEBUG] First question.subtype:', assessment.questions[0].subtype);
-                    }
+                
+                // Add detailed API response debugging
+                console.log('[API DEBUG] ==================== API RESPONSE START ====================');
+                console.log('[API DEBUG] Raw assessment object:', JSON.stringify(assessment));
+                console.log('[API DEBUG] First level keys:', Object.keys(assessment));
+                if (assessment.questions && assessment.questions.length > 0) {
+                    console.log('[API DEBUG] First question:', JSON.stringify(assessment.questions[0]));
+                    console.log('[API DEBUG] Question keys:', Object.keys(assessment.questions[0]));
                 }
-
-                // Fetch previous submission attempts
-                const subRes = await fetch(`/api/assessments/${assessmentId}/submissions`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                if (subRes.ok) {
-                    const submissions = await subRes.json();
-                    if (Array.isArray(submissions) && submissions.length > 0) {
-                        // Use the latest submission's attempts value
-                        attemptCount = submissions[0].attempts || 0;
-                    } else {
-                        attemptCount = 0;
-                    }
+                console.log('[API DEBUG] ==================== API RESPONSE END ====================');
+                
+                // Create containers IMMEDIATELY after assessment data is loaded to ensure they exist
+                const container = document.getElementById('assessmentContainer');
+                container.style.display = 'block';
+                
+                // If this is a drag-and-drop assessment, immediately create the containers
+                // This ensures they exist before any emergency fix scripts try to access them
+                if (assessment.type === 'drag-and-drop') {
+                    console.log('Creating drag-and-drop containers early');
+                    
+                    // Only create a container placeholder without duplicating titles and descriptions
+                    // We will fill it properly in renderAssessment
+                    container.innerHTML = `
+                        <div id="dragDropAssessmentCard">
+                            <!-- Assessment card will be rendered here -->
+                            <div class="text-center">
+                                <div class="spinner-border text-primary" role="status"></div>
+                                <p>Loading assessment...</p>
+                            </div>
+                        </div>
+                    `;
+                    
+                    // Dispatch an event for the emergency fix script to detect
+                    setTimeout(() => {
+                        document.dispatchEvent(new CustomEvent('assessment-loaded', {
+                            detail: assessment
+                        }));
+                    }, 100);
                 } else {
-                    attemptCount = 0;
+                    // For non-drag-drop, dispatch the event immediately
+                    document.dispatchEvent(new CustomEvent('assessment-loaded', {
+                        detail: assessment
+                    }));
                 }
                 
-                // If assessment type is not set, detect based on properties
-                if (!assessment.type) {
-                    if (assessment.questions) {
-                        assessment.type = 'quiz';
-                    } else if (assessment.assignment) {
-                        assessment.type = 'assignment';
-                    } else if (assessment.pairs && Array.isArray(assessment.pairs)) {
-                        assessment.type = 'matching';
-                        
-                        // Convert pairs to questions format for consistency
-                        assessment.questions = [{
-                            type: 'matching',
-                            text: assessment.description || 'Match the following items',
-                            pairs: assessment.pairs,
-                            options: assessment.pairs.map(pair => pair.expression || pair.item),
-                            matches: assessment.pairs.map(pair => pair.meaning || pair.match)
-                        }];
+                // Update debug info with assessment details
+                document.getElementById('debugInfo').innerHTML += `<br><br>
+                    Loaded Assessment ID: ${assessment.id}<br>
+                    Title: ${assessment.title}<br>
+                    Type: ${assessment.type}
+                `;
+                
+                if (assessment) {
+                    // Display the assessment ID for debugging
+                    document.getElementById('debugAssessmentId').textContent = `Assessment ID: ${assessmentId}`;
+                    
+                    if (!assessmentId) {
+                        showError('No assessment ID provided');
+                        return;
+                    }
+                    
+                    // Load submission data to check attempts
+                    await fetchSubmissionData();
+                    
+                    // Check if user has reached max attempts
+                    if (assessment.maxAttempts && submissionData.length >= assessment.maxAttempts) {
+                        showMaxAttemptsReached();
+                        return;
+                    }
+                    
+                    // Don't call renderAssessment immediately for drag-and-drop type
+                    // Instead wait a moment to ensure containers are in the DOM
+                    if (assessment.type === 'drag-and-drop') {
+                        setTimeout(renderAssessment, 300); // Delay to ensure containers are ready
                     } else {
-                        assessment.type = 'unknown';
+                        renderAssessment();
                     }
                 }
-                
-                // Handle old structure where pairs is at the root level
-                if (assessment.type === 'matching' && assessment.pairs && !assessment.questions) {
-                    assessment.questions = [{
-                        type: 'matching',
-                        text: assessment.description || 'Match the following items',
-                        pairs: assessment.pairs,
-                        options: assessment.pairs.map(pair => pair.expression || pair.item),
-                        matches: assessment.pairs.map(pair => pair.meaning || pair.match)
-                    }];
-                }
-                
-                // If we have a single question object instead of an array
-                if (assessment.questions && !Array.isArray(assessment.questions)) {
-                    if (typeof assessment.questions === 'object') {
-                        assessment.questions = [assessment.questions];
-                    } else if (typeof assessment.questions === 'string') {
-                        try {
-                            const parsed = JSON.parse(assessment.questions);
-                            assessment.questions = Array.isArray(parsed) ? parsed : [parsed];
-                        } catch (e) {
-                            console.error('Error parsing questions:', e);
-                            assessment.questions = [];
-                        }
-                    }
-                }
-                
-                hideLoader();
-                renderAssessment();
-                
             } catch (error) {
                 console.error('Error loading assessment:', error);
-                document.getElementById('assessmentContent').innerHTML = `
-                    <div class="alert alert-danger">
-                        <i class="bi bi-exclamation-triangle me-2"></i>
-                        Failed to load assessment. Please try again later.
-                    </div>
-                    <a href="/student/assessments" class="btn btn-primary">
-                        <i class="bi bi-arrow-left me-2"></i>Back to Assessments
-                    </a>
-                `;
+                showError(`Error loading assessment: ${error.message}`);
+            } finally {
                 hideLoader();
             }
         }
         
+        // Add the missing fetchSubmissionData function
+        async function fetchSubmissionData() {
+            try {
+                const urlParams = new URLSearchParams(window.location.search);
+                const assessmentId = urlParams.get('id');
+                
+                if (!assessmentId) return;
+                
+                const response = await fetch(`/api/assessments/${assessmentId}/submissions`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (response.ok) {
+                    submissionData = await response.json();
+                    if (Array.isArray(submissionData) && submissionData.length > 0) {
+                        attemptCount = submissionData.length;
+                    }
+                    console.log('Submission data loaded:', submissionData);
+                }
+            } catch (error) {
+                console.error('Error loading submission data:', error);
+                // Continue without submission data
+                submissionData = [];
+                attemptCount = 0;
+            }
+        }
+        
+        // Function to render the assessment
         function renderAssessment() {
-            const container = document.getElementById('assessmentContent');
-            const type = (assessment.type || '').toLowerCase();
+            // Get container and ensure it's visible
+            const container = document.getElementById('assessmentContainer');
+            container.style.display = 'block';
+            
+            // Set up attempts information
             let attemptsHtml = '';
             if (assessment.maxAttempts) {
                 attemptsHtml = `<div id="attemptsInfo" class="mb-2"><strong>Attempts:</strong> <span id="attemptCount">${attemptCount}</span> / ${assessment.maxAttempts}</div>`;
@@ -485,882 +715,238 @@
                 attemptsHtml = `<div id="attemptsInfo" class="mb-2"><strong>Attempts:</strong> <span id="attemptCount">${attemptCount}</span> / Unlimited</div>`;
                 maxAttempts = null;
             }
-            // --- Writing assignments: no timer, show instructions and correct input fields ---
-            if (type === 'writing-long' || type === 'writing') {
-                container.innerHTML = `${attemptsHtml}`;
-                const mainDiv = document.createElement('div');
-                mainDiv.className = 'writing-assignment-container';
-                mainDiv.innerHTML = `
-                    <h2>${assessment.title || 'Writing Assignment'}</h2>
-                    <p class="mb-3">${assessment.description || ''}</p>
-                    ${assessment.criteria ? `
-                        <div class="card mb-4">
-                            <div class="card-header">
-                                <h5 class="mb-0">Grading Criteria</h5>
-                            </div>
-                            <div class="card-body">
-                                <p class="mb-0">${assessment.criteria}</p>
-                            </div>
-                        </div>
-                    ` : ''}
-                `;
-                const form = document.createElement('form');
-                form.className = 'writing-form';
-                let inputGroup = '';
-                if (type === 'writing-long') {
-                    inputGroup = `
-                        <div class="mb-3">
-                            <label for="writingFile" class="form-label">Upload your answer (document or image):</label>
-                            <input type="file" accept=".doc,.docx,.pdf,.txt,.md,.jpg,.jpeg,.png" class="form-control" id="writingFile" name="writingFile" required>
-                            <div class="form-text">Supported file types: Word (.doc, .docx), PDF, text files (.txt, .md), and images.</div>
-                        </div>
-                        <div class="mb-3">
-                            <label for="writingText" class="form-label">Additional comments (optional):</label>
-                            <textarea class="form-control" id="writingText" name="writingText" rows="3"></textarea>
-                        </div>
-                    `;
-                } else if (type === 'writing') {
-                    inputGroup = `
-                        <div class="mb-3">
-                            <label for="writingText" class="form-label">Type your answer (optional):</label>
-                            <textarea class="form-control" id="writingText" name="writingText" rows="3"></textarea>
-                        </div>
-                        <div class="mb-3">
-                            <label for="writingFile" class="form-label">Or upload a file (optional):</label>
-                            <input type="file" accept=".doc,.docx,.pdf,.txt,.md,.jpg,.jpeg,.png" class="form-control" id="writingFile" name="writingFile">
-                            <div class="form-text">Supported file types: Word (.doc, .docx), PDF, text files (.txt, .md), and images.</div>
-                        </div>
-                    `;
-                }
-                form.innerHTML = inputGroup + `
-                    <button type="submit" class="btn btn-primary">Submit</button>
-                `;
-                form.onsubmit = async function(e) {
-                    e.preventDefault();
-                    const formData = new FormData();
-                    if (type === 'writing-long') {
-                        const file = form.writingFile.files[0];
-                        if (!file) {
-                            alert('Please upload a file with your answer.');
-                            return;
-                        }
-                        formData.append('file', file);
-                        if (form.writingText && form.writingText.value) {
-                            formData.append('text', form.writingText.value);
-                        }
-                    } else if (type === 'writing') {
-                        if (form.writingText && form.writingText.value) {
-                            formData.append('text', form.writingText.value);
-                        }
-                        if (form.writingFile && form.writingFile.files[0]) {
-                            formData.append('file', form.writingFile.files[0]);
-                        }
-                        
-                        if (!form.writingText.value && (!form.writingFile.files || !form.writingFile.files[0])) {
-                            alert('Please either type your answer or upload a file.');
-                            return;
-                        }
-                    }
-                    // Submit to backend
-                    const res = await fetch(`/api/assessments/${assessment.id}/submit-writing`, {
-                        method: 'POST',
-                        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-                        body: formData
-                    });
-                    const result = await res.json();
-                    if (result.success) {
-                        alert('Submission successful!');
-                        // Once submitted, fetch submission data to update the attempts counter
-                        await fetchSubmissionData();
-                        window.location.reload();
-                    } else {
-                        alert('Submission failed: ' + (result.error || 'Unknown error'));
-                    }
-                };
-                mainDiv.appendChild(form);
-                container.appendChild(mainDiv);
-                return;
-            }
-            // ... existing code ...
-        }
-        
-        function renderQuiz(container, attemptsHtml, timerHtml) {
-            // Get questions from either questions field or the first question in questions array
-            let questions = [];
             
-            if (assessment.questions) {
-                if (Array.isArray(assessment.questions)) {
-                    // If questions is already an array
-                    questions = assessment.questions;
-                } else if (typeof assessment.questions === 'string') {
-                    // If questions is a JSON string
-                    try {
-                        questions = JSON.parse(assessment.questions);
-                        if (!Array.isArray(questions)) {
-                            questions = [questions];
-                        }
-                    } catch (error) {
-                        console.error('Error parsing questions:', error);
-                        questions = [];
-                    }
-                } else if (typeof assessment.questions === 'object') {
-                    // If questions is a single object, wrap in array
-                    questions = [assessment.questions];
-                }
-            }
-            
-            // Add a default type if not present on questions
-            questions.forEach(question => {
-                if (!question.type) {
-                    // Try to determine type from structure
-                    if (question.options && Array.isArray(question.options)) {
-                        question.type = 'multiple-choice';
-                    } else if (question.pairs && Array.isArray(question.pairs)) {
-                        question.type = 'matching';
-                    } else {
-                        question.type = 'text'; // Default type
-                    }
-                }
-                
-                // Ensure the options field exists for matching type questions
-                if (question.type === 'matching' && !question.options && question.pairs) {
-                    question.options = question.pairs.map(pair => pair.expression);
-                    question.matches = question.pairs.map(pair => pair.meaning);
-                }
-            });
-            
-            if (!questions || questions.length === 0) {
-                container.innerHTML = `
-                    <div class="alert alert-info">
-                        <i class="bi bi-info-circle me-2"></i>
-                        This quiz has no questions yet.
-                    </div>
-                    <a href="/student/assessments" class="btn btn-primary">
-                        <i class="bi bi-arrow-left me-2"></i>Back to Assessments
-                    </a>
-                `;
-                return;
-            }
-            
-            // Create navigation pills
-            let navPills = '';
-            for (let i = 0; i < questions.length; i++) {
-                navPills += `
-                    <li class="nav-item">
-                        <button class="nav-link ${i === currentQuestionIndex ? 'active' : ''}" 
-                                onclick="navigateToQuestion(${i})">${i + 1}</button>
-                    </li>
-                `;
-            }
-            
-            // Get current question
-            const question = questions[currentQuestionIndex];
-            console.log('Rendering question:', question);
-            
-            container.innerHTML = `
-                <div class="row">
-                    <div class="col-md-8">
-                        <h1>${assessment.title}</h1>
-                        <p class="text-muted">${assessment.description || ''}</p>
-                        <div class="quiz-container">
-                            ${attemptsHtml}
-                            ${timerHtml}
-                            <div class="question-title">
-                                Question ${currentQuestionIndex + 1} of ${questions.length}
-                            </div>
-                            <div id="questionContainer"></div>
-                            <div id="submitError" class="alert alert-danger mt-3 d-none"></div>
-                            <div class="quiz-footer">
-                                <button class="btn btn-outline-primary" ${currentQuestionIndex === 0 ? 'disabled' : ''} onclick="previousQuestion()">
-                                    <i class="bi bi-chevron-left me-2"></i>Previous
-                                </button>
-                                ${currentQuestionIndex === questions.length - 1 ? 
-                                    `<button class="btn btn-success" id="submitBtn" onclick="submitAssessment()">
-                                        <i class="bi bi-check2 me-2"></i>Submit Quiz
-                                    </button>` : 
-                                    `<button class="btn btn-outline-primary" onclick="nextQuestion()">
-                                        Next<i class="bi bi-chevron-right ms-2"></i>
-                                    </button>`}
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="card mb-3">
-                            <div class="card-header">
-                                <h5 class="mb-0">Question Navigation</h5>
-                            </div>
-                            <div class="card-body">
-                                <ul class="nav nav-pills flex-wrap">
-                                    ${navPills}
-                                </ul>
-                            </div>
-                        </div>
-                        <div class="card">
-                            <div class="card-header">
-                                <h5 class="mb-0">Quiz Info</h5>
-                            </div>
-                            <div class="card-body">
-                                <div><strong>Total Questions:</strong> ${questions.length}</div>
-                                <div><strong>Subject:</strong> ${assessment.subjectName || 'Not specified'}</div>
-                                <div><strong>Unit:</strong> ${assessment.unitName || 'Not specified'}</div>
-                                <div><strong>Part:</strong> ${assessment.partName || 'Not specified'}</div>
-                                <div><strong>Section:</strong> ${assessment.sectionName || 'Not specified'}</div>
-                                <div><strong>Due Date:</strong> ${assessment.dueDate ? new Date(assessment.dueDate).toLocaleDateString() : 'No due date'}</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-            // Now render the question into the container
-            renderQuestion(question, currentQuestionIndex);
-            startAttemptTimer();
-        }
-        
-        function renderQuestion(question, index) {
-            // Get container element
-            const questionContainer = document.getElementById('questionContainer');
-            questionContainer.innerHTML = ''; // Clear previous question
-            
-            // Create a div for the current question
-            const questionDiv = document.createElement('div');
-            questionDiv.className = 'question-container';
-            
-            // Add the question title with number
-            const titleDiv = document.createElement('div');
-            titleDiv.className = 'question-title';
-            titleDiv.innerText = `Question ${index + 1}`;
-            questionDiv.appendChild(titleDiv);
-            
-            // Add the question text
-            const textDiv = document.createElement('div');
-            textDiv.className = 'question-text';
-            textDiv.innerText = question.text;
-            questionDiv.appendChild(textDiv);
-            
-            // Add question type specific elements
-            switch(question.type) {
-                case 'multiple-choice':
-                    renderMultipleChoiceQuestion(question, questionDiv);
-                    break;
-                case 'text':
-                    renderTextQuestion(question, questionDiv);
-                    break;
-                case 'matching':
-                    renderMatchingQuestion(question, questionDiv);
-                    break;
-                case 'drag-and-drop':
-                    renderDragAndDropQuestion(question, questionDiv);
-                    break;
-                case 'image-matching':
-                    renderImageMatchingQuestion(question, questionDiv);
-                    break;
-                case 'true-false':
-                    renderTrueFalseQuestion(question, questionDiv);
-                    break;
-                case 'writing':
-                    renderWritingQuestion(question, questionDiv, index);
-                    break;
-                case 'speaking':
-                    const speakingQuestion = question;
-                    const timeLimit = speakingQuestion.timeLimit || 60;
-                    const isVideo = speakingQuestion.responseType === 'video';
-                    
-                    let html = `
-                        <div class="card mb-4">
-                            <div class="card-body">
-                                <h5 class="card-title">Speaking Question</h5>
-                                <p class="card-text">${speakingQuestion.prompt}</p>
-                                <div class="mb-3">
-                                    <label class="form-label">Evaluation Criteria:</label>
-                                    <p class="text-muted">${speakingQuestion.evaluationCriteria}</p>
-                                </div>
-                                <div class="mb-3">
-                                    <label class="form-label">Time Limit: ${timeLimit} seconds</label>
-                                    <div class="progress mb-2">
-                                        <div class="progress-bar" role="progressbar" style="width: 0%"></div>
-                                    </div>
-                                </div>
-                                <div class="mb-3">
-                                    <div class="d-flex gap-2 mb-2">
-                                        <button class="btn btn-primary" onclick="startRecording(${index}, ${isVideo})" id="recordBtn${index}">
-                                            <i class="fas fa-microphone"></i> Start Recording
-                                        </button>
-                                        <button class="btn btn-danger" onclick="stopRecording(${index})" id="stopBtn${index}" style="display: none;">
-                                            <i class="fas fa-stop"></i> Stop Recording
-                                        </button>
-                                        <button class="btn btn-secondary" onclick="uploadMedia(${index})" id="uploadBtn${index}" style="display: none;">
-                                            <i class="fas fa-upload"></i> Upload ${isVideo ? 'Video' : 'Audio'}
-                                        </button>
-                                    </div>
-                                    <div id="mediaPreview${index}" class="mt-2"></div>
-                                    <div id="recordingStatus${index}" class="text-muted mt-2"></div>
-                                </div>
-                            </div>
-                        </div>`;
-                    return html;
-                default:
-                    textDiv.innerText = 'Unsupported question type: ' + question.type;
-            }
-            
-            // Add the question to the container
-            questionContainer.appendChild(questionDiv);
-        }
-        
-        function renderTextQuestion(question, questionDiv) {
-            // Create input group
-            const inputGroup = document.createElement('div');
-            inputGroup.className = 'input-group';
-            
-            // Create text input
-            const input = document.createElement('input');
-            input.type = 'text';
-            input.className = 'form-control';
-            input.placeholder = 'Enter your answer here...';
-            
-            // Set value if already answered
-            if (userAnswers[currentQuestionIndex] && userAnswers[currentQuestionIndex].text) {
-                input.value = userAnswers[currentQuestionIndex].text;
-            }
-            
-            // Add input event handler
-            input.addEventListener('input', function() {
-                updateTextAnswer(this.value);
-            });
-            
-            inputGroup.appendChild(input);
-            questionDiv.appendChild(inputGroup);
-        }
-        
-        function updateTextAnswer(text) {
-            // Initialize if not exists
-            if (!userAnswers[currentQuestionIndex]) {
-                userAnswers[currentQuestionIndex] = {};
-            }
-            
-            // Save the text answer
-            userAnswers[currentQuestionIndex].text = text;
-            console.log('Updated answer:', userAnswers);
-        }
-        
-        function renderMatchingQuestion(question, questionDiv) {
-            // Add instructions
-            const instructionsDiv = document.createElement('div');
-            instructionsDiv.className = 'question-instructions';
-            instructionsDiv.textContent = 'Match each item on the left with its corresponding answer on the right.';
-            questionDiv.appendChild(instructionsDiv);
-            
-            // Create matching container
-            const matchingContainer = document.createElement('div');
-            matchingContainer.className = 'matching-container';
-            
-            // Prepare pairs with unique IDs
-            const pairs = question.pairs.map((pair, idx) => ({
-                ...pair,
-                id: pair.id || `option-${idx}`,
-                matchId: pair.matchId || `match-${idx}`
-            }));
-            const options = pairs.map(p => ({ id: p.id, text: p.expression }));
-            const matches = pairs.map(p => ({ id: p.matchId, text: p.meaning }));
-            
-            // Shuffle matches for the dropdown
-            const shuffledMatches = [...matches].sort(() => Math.random() - 0.5);
-            
-            // Create each matching item
-            options.forEach((option, optionIndex) => {
-                const matchingItem = document.createElement('div');
-                matchingItem.className = 'matching-item';
-                
-                // Left side - expression
-                const expressionDiv = document.createElement('div');
-                expressionDiv.className = 'matching-expression';
-                expressionDiv.textContent = option.text;
-                matchingItem.appendChild(expressionDiv);
-                
-                // Right side - dropdown
-                const selectDiv = document.createElement('div');
-                selectDiv.className = 'matching-select';
-                
-                const select = document.createElement('select');
-                select.className = 'form-select';
-                select.dataset.optionId = option.id;
-                
-                // Add default empty option
-                const defaultOption = document.createElement('option');
-                defaultOption.value = '';
-                defaultOption.textContent = '-- Select a match --';
-                select.appendChild(defaultOption);
-                
-                // Add all possible matches
-                shuffledMatches.forEach(match => {
-                    const matchOption = document.createElement('option');
-                    matchOption.value = match.id;
-                    matchOption.textContent = match.text;
-                    select.appendChild(matchOption);
-                });
-                
-                // Set selected value if already answered
-                if (userAnswers[currentQuestionIndex] &&
-                    userAnswers[currentIndex].matching[option.id] !== undefined) {
-                    select.value = userAnswers[currentQuestionIndex].matching[option.id];
-                }
-                
-                // Add change handler
-                select.addEventListener('change', function() {
-                    updateMatchingAnswer(option.id, this.value !== '' ? this.value : null);
-                });
-                
-                selectDiv.appendChild(select);
-                matchingItem.appendChild(selectDiv);
-                
-                matchingContainer.appendChild(matchingItem);
-            });
-            
-            questionDiv.appendChild(matchingContainer);
-        }
-        
-        function updateMatchingAnswer(optionId, matchId) {
-            // Initialize if not exists
-            if (!userAnswers[currentQuestionIndex]) {
-                userAnswers[currentQuestionIndex] = {};
-            }
-            if (!userAnswers[currentQuestionIndex].matching) {
-                userAnswers[currentQuestionIndex].matching = {};
-            }
-            // Save the matching value by ID
-            userAnswers[currentQuestionIndex].matching[optionId] = matchId;
-            console.log('Updated matching answer:', userAnswers);
-        }
-        
-        function renderAssignment(container) {
-            container.innerHTML = `
-                <h1>${assessment.title}</h1>
-                <p class="text-muted">${assessment.description || ''}</p>
-                
-                <div class="card mb-4">
-                    <div class="card-header">
-                        <h5 class="mb-0">Assignment Details</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="mb-3">
-                            ${assessment.description || 'No description provided.'}
-                        </div>
-                        
-                        ${assessment.dueDate ? `
-                            <div class="alert alert-info">
-                                <i class="bi bi-calendar-event me-2"></i>
-                                Due Date: ${new Date(assessment.dueDate).toLocaleDateString()}
-                            </div>
-                        ` : ''}
-                        
-                        <div class="form-group mt-4">
-                            <label for="assignmentResponse" class="form-label">Your Response:</label>
-                            <textarea class="form-control" id="assignmentResponse" rows="6" 
-                                      placeholder="Type your response here..."></textarea>
-                        </div>
-                        <div class="form-group mt-3">
-                            <label for="assignmentFile" class="form-label">Attach File (optional):</label>
-                            <input type="file" class="form-control" id="assignmentFile">
-                        </div>
-                        <div class="form-group mt-3">
-                            <label for="assignmentImage" class="form-label">Upload a Photo of Your Work (optional):</label>
-                            <input type="file" class="form-control" id="assignmentImage" accept="image/*">
-                            <div id="assignmentImagePreview" class="mt-2"></div>
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="d-flex justify-content-between">
-                    <a href="/student/assessments" class="btn btn-outline-secondary">
-                        <i class="bi bi-arrow-left me-2"></i>Back to Assessments
-                    </a>
-                    <button class="btn btn-success" onclick="submitAssignment()">
-                        <i class="bi bi-check2 me-2"></i>Submit Assignment
-                    </button>
-                </div>
-            `;
-            // Add image preview handler
-            const imageInput = document.getElementById('assignmentImage');
-            const previewDiv = document.getElementById('assignmentImagePreview');
-            imageInput.addEventListener('change', function() {
-                previewDiv.innerHTML = '';
-                if (this.files && this.files[0]) {
-                    const img = document.createElement('img');
-                    img.src = URL.createObjectURL(this.files[0]);
-                    img.style.maxWidth = '200px';
-                    img.style.maxHeight = '200px';
-                    img.className = 'img-thumbnail';
-                    previewDiv.appendChild(img);
-                }
-            });
-        }
-        
-        function renderSpeakingAssessment(container) {
-            container.innerHTML = `
-                <h1>${assessment.title}</h1>
-                <p class="text-muted">${assessment.description || ''}</p>
-                <div class="card mb-4">
-                    <div class="card-header">
-                        <h5 class="mb-0">Speaking Assessment</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="mb-3">
-                            <label for="audioUpload" class="form-label">Upload your audio response (mp3, wav):</label>
-                            <input type="file" class="form-control" id="audioUpload" accept="audio/*">
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Or record directly:</label><br>
-                            <button class="btn btn-outline-primary mb-2" id="startRecordingBtn">Start Recording</button>
-                            <button class="btn btn-outline-secondary mb-2" id="stopRecordingBtn" disabled>Stop Recording</button>
-                            <audio id="audioPreview" controls style="display:none;"></audio>
-                        </div>
-                        <div id="recordingStatus" class="text-info mb-2"></div>
-                    </div>
-                </div>
-                <div class="d-flex justify-content-between">
-                    <a href="/student/assessments" class="btn btn-outline-secondary">
-                        <i class="bi bi-arrow-left me-2"></i>Back to Assessments
-                    </a>
-                    <button class="btn btn-success" id="submitSpeakingBtn">
-                        <i class="bi bi-check2 me-2"></i>Submit Speaking Assessment
-                    </button>
-                </div>
-            `;
-            // Add event listeners for recording and upload
-            setupSpeakingAssessmentHandlers();
-        }
-        
-        function setupSpeakingAssessmentHandlers() {
-            let mediaRecorder;
-            let audioChunks = [];
-            let audioBlob = null;
-            const startBtn = document.getElementById('startRecordingBtn');
-            const stopBtn = document.getElementById('stopRecordingBtn');
-            const audioPreview = document.getElementById('audioPreview');
-            const audioUpload = document.getElementById('audioUpload');
-            const statusDiv = document.getElementById('recordingStatus');
-            const submitBtn = document.getElementById('submitSpeakingBtn');
-
-            startBtn.onclick = async function() {
-                audioChunks = [];
-                audioBlob = null;
-                audioPreview.style.display = 'none';
-                statusDiv.innerHTML = '<span class="recording-indicator"><span class="recording-dot"></span>Recording...</span>';
-                startBtn.disabled = true;
-                stopBtn.disabled = false;
-                if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-                    try {
-                        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                        mediaRecorder = new MediaRecorder(stream);
-                        mediaRecorder.ondataavailable = function(e) {
-                            audioChunks.push(e.data);
-                        };
-                        mediaRecorder.onstop = function() {
-                            audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-                            audioPreview.src = URL.createObjectURL(audioBlob);
-                            audioPreview.style.display = 'block';
-                            statusDiv.innerHTML = '<span style="color: #388e3c; font-weight: bold;">Recording stopped.</span>';
-                        };
-                        mediaRecorder.start();
-                    } catch (err) {
-                        statusDiv.textContent = 'Microphone access denied or not available.';
-                        startBtn.disabled = false;
-                        stopBtn.disabled = true;
-                    }
-                } else {
-                    statusDiv.textContent = 'Audio recording not supported in this browser.';
-                }
+            // Function to convert newlines to <br> tags
+            const formatWithLineBreaks = (text) => {
+                return text ? text.replace(/\\n/g, '<br>').replace(/\n/g, '<br>') : '';
             };
-
-            stopBtn.onclick = function() {
-                if (mediaRecorder && mediaRecorder.state === 'recording') {
-                    mediaRecorder.stop();
-                    startBtn.disabled = false;
-                    stopBtn.disabled = true;
-                }
-            };
-
-            audioUpload.onchange = function() {
-                audioBlob = audioUpload.files[0] || null;
-                if (audioBlob) {
-                    audioPreview.src = URL.createObjectURL(audioBlob);
-                    audioPreview.style.display = 'block';
-                    statusDiv.textContent = 'Audio file selected.';
-                }
-            };
-
-            submitBtn.onclick = async function() {
-                if (!audioBlob) {
-                    statusDiv.textContent = 'Please record or upload an audio file before submitting.';
-                    return;
-                }
-                statusDiv.textContent = 'Submitting...';
-                const formData = new FormData();
-                formData.append('audio', audioBlob, audioBlob.name || 'recording.webm');
-                formData.append('assessmentId', assessmentId);
-                try {
-                    const response = await fetch(`/api/assessments/${assessmentId}/submit-speaking`, {
-                        method: 'POST',
-                        headers: { 'Authorization': `Bearer ${token}` },
-                        body: formData
-                    });
-                    if (!response.ok) throw new Error('Failed to submit speaking assessment');
-                    const result = await response.json();
-                    document.getElementById('assessmentContent').innerHTML = `
-                        <div class="alert alert-success">
-                            <i class="bi bi-check-circle me-2"></i>
-                            Speaking assessment submitted successfully!
-                        </div>
-                        <a href="/student/assessments" class="btn btn-primary">
-                            <i class="bi bi-arrow-left me-2"></i>Back to Assessments
-                        </a>
-                    `;
-                } catch (error) {
-                    statusDiv.textContent = error.message || 'Failed to submit. Please try again.';
-                }
-            };
-        }
-        
-        function navigateToQuestion(index) {
-            // Save current answers first
-            saveCurrentAnswers();
             
-            // Update current question index
-            currentQuestionIndex = index;
-            
-            // Re-render the assessment
-            renderAssessment();
-        }
-        
-        function previousQuestion() {
-            if (currentQuestionIndex > 0) {
-                navigateToQuestion(currentQuestionIndex - 1);
-            }
-        }
-        
-        function nextQuestion() {
-            if (assessment.questions && currentQuestionIndex < assessment.questions.length - 1) {
-                navigateToQuestion(currentQuestionIndex + 1);
-            }
-        }
-        
-        function saveCurrentAnswers() {
-            // All answers are already saved in the userAnswers object
-            // when the user interacts with the elements through event handlers
-            console.log('Saved answers:', userAnswers);
-        }
-        
-        function saveMatchingAnswer(questionIndex, pairIndex, meaningIndex) {
-            if (!userAnswers[questionIndex]) {
-                userAnswers[questionIndex] = {};
-            }
-            userAnswers[questionIndex][pairIndex] = meaningIndex === "" ? null : parseInt(meaningIndex);
-            console.log('Saved matching answer:', userAnswers);
-        }
-        
-        function saveMultipleChoiceAnswer(questionIndex, optionIndex) {
-            userAnswers[questionIndex] = optionIndex;
-            console.log('Saved multiple choice answer:', userAnswers);
-            renderQuiz(document.getElementById('assessmentContent'));
-        }
-        
-        function saveListeningAnswer(questionIndex, answer) {
-            userAnswers[questionIndex] = answer;
-            console.log('Saved listening answer:', userAnswers);
-        }
-        
-        async function submitAssessment(scoreOverride) {
             try {
-                showLoader();
-                // Format answers based on the question types
-                const answers = {};
-                if (assessment.questions) {
-                    assessment.questions.forEach((question, index) => {
-                        if (userAnswers[index]) {
-                            if (question.type === 'drag-and-drop') {
-                                // Detect subtype
-                                let subtype = question.subtype || assessment.subtype;
-                                if (subtype === 'sequence' && Array.isArray(userAnswers[index])) {
-                                    answers[index] = userAnswers[index];
-                                } else if (subtype === 'fill-in-blank' && userAnswers[index].dragAndDrop) {
-                                    answers[index] = { dragAndDrop: userAnswers[index].dragAndDrop };
-                                } else {
-                                    answers[index] = userAnswers[index];
+                // Determine assessment type and render accordingly
+                switch(assessment.type) {
+                    case 'multiple-choice':
+                        renderMultipleChoiceAssessment();
+                        break;
+                        
+                    case 'matching':
+                        // Handle matching type assessments
+                        container.innerHTML = `
+                            <div class="card mb-4">
+                                <div class="card-header bg-primary text-white">
+                                    <h3 class="mb-0" id="assessmentTitle">${assessment.title || 'Vocabulary'}</h3>
+                                </div>
+                                <div class="card-body">
+                                    <p class="mb-3" id="assessmentDescription">${formatWithLineBreaks(assessment.description || 'Match the following items.')}</p>
+                                    
+                                    ${assessment.criteria ? `
+                                        <div class="alert alert-info mb-3">
+                                            <strong>Criteria:</strong> ${formatWithLineBreaks(assessment.criteria)}
+                                        </div>
+                                    ` : ''}
+                                    ${attemptsHtml}
+                                    <div id="matchingContainer" class="mb-4">
+                                        <div class="text-center my-3">
+                                            <div class="spinner-border text-primary" role="status">
+                                                <span class="visually-hidden">Loading...</span>
+                                            </div>
+                                            <p>Loading matching items...</p>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="mt-3">
+                                        <button id="checkMatchingBtn" class="btn btn-primary">Check Answers</button>
+                                        <button id="submitMatchingBtn" class="btn btn-success ms-2">Submit</button>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                        
+                        // Set up matching functionality
+                        setupMatchingAssessment();
+                        break;
+                        
+                    case 'drag-and-drop':
+                        // For drag-and-drop, we need to ensure the container exists and is properly set up
+                        const dragDropCard = document.getElementById('dragDropAssessmentCard');
+                        
+                        // Replace the placeholder with the properly structured card
+                        if (dragDropCard) {
+                            dragDropCard.innerHTML = `
+                                <div class="card mb-4">
+                                    <div class="card-header bg-primary text-white">
+                                        <h3 class="mb-0" id="assessmentTitle">${assessment.title || 'Drag and Drop Exercise'}</h3>
+                                    </div>
+                                    <div class="card-body">
+                                        <p class="mb-3" id="assessmentDescription">${formatWithLineBreaks(assessment.description || 'Complete the drag and drop exercise below.')}</p>
+                                        ${attemptsHtml}
+                                        <div id="dragDropContainerWrapper" class="mt-4">
+                                            <div id="dragDropContainer" class="mt-4">
+                                                <div class="text-center">
+                                                    <div class="spinner-border text-primary" role="status"></div>
+                                                    <p>Preparing drag and drop exercise...</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                            
+                            // Get the container we just created
+                            const ddContainer = document.getElementById('dragDropContainer');
+                            if (ddContainer) {
+                                console.log('Rendering drag-and-drop assessment:', assessment);
+                                // Add debug info to UI if debug parameter is present
+                                const urlParams = new URLSearchParams(window.location.search);
+                                if (urlParams.get('debug') === 'true') {
+                                    ddContainer.innerHTML = `
+                                        <div class="alert alert-info mb-3">
+                                            <strong>Assessment Debug:</strong><br>
+                                            ID: ${assessment.id}<br>
+                                            Type: ${assessment.type}<br>
+                                            Subtype: ${assessment.subtype || 'Not specified'}<br>
+                                            Questions: ${assessment.questions ? assessment.questions.length : 0}<br>
+                                            Word Bank: ${JSON.stringify(assessment.wordBank || 
+                                                (assessment.questions && assessment.questions[0] && assessment.questions[0].wordBank) || [])}
+                                        </div>
+                                    `;
+                                }
+                                renderDragAndDropAssessment(ddContainer);
+                                
+                                // Also trigger the emergency fix one more time
+                                if (typeof window.attemptFix === 'function') {
+                                    setTimeout(window.attemptFix, 200);
                                 }
                             } else {
-                                switch (question.type) {
-                                    case 'multiple-choice':
-                                        answers[index] = userAnswers[index].selectedOption;
-                                        break;
-                                    case 'text':
-                                        answers[index] = userAnswers[index].text;
-                                        break;
-                                    case 'matching':
-                                        answers[index] = userAnswers[index].matching;
-                                        break;
-                                    case 'true-false':
-                                        answers[index] = userAnswers[index].tf;
-                                        break;
-                                    case 'writing':
-                                        answers[index] = userAnswers[index].text;
-                                        break;
-                                    default:
-                                        answers[index] = userAnswers[index];
-                                }
+                                console.error('Failed to find or create drag-and-drop container');
                             }
                         } else {
-                            answers[index] = null;
+                            // If for some reason we don't have the placeholder, create everything from scratch
+                            console.log('Drag-drop card placeholder not found, creating full structure');
+                            container.innerHTML = `
+                                <div class="card mb-4">
+                                    <div class="card-header bg-primary text-white">
+                                        <h3 class="mb-0" id="assessmentTitle">${assessment.title || 'Drag and Drop Exercise'}</h3>
+                                    </div>
+                                    <div class="card-body">
+                                        <p class="mb-3" id="assessmentDescription">${formatWithLineBreaks(assessment.description || 'Complete the drag and drop exercise below.')}</p>
+                                        ${attemptsHtml}
+                                        <div id="dragDropContainerWrapper" class="mt-4">
+                                            <div id="dragDropContainer" class="mt-4">
+                                                <div class="text-center">
+                                                    <div class="spinner-border text-primary" role="status"></div>
+                                                    <p>Preparing drag and drop exercise...</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                            
+                            const ddContainer = document.getElementById('dragDropContainer');
+                            if (ddContainer) {
+                                renderDragAndDropAssessment(ddContainer);
+                            }
                         }
-                    });
-                }
-                // Stop timer and get time taken for this attempt
-                const timeTaken = stopAttemptTimer();
-                // Submit answers to API
-                const response = await fetch(`/api/assessments/${assessmentId}/submit`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify({
-                        assessmentId: assessmentId,
-                        answers: answers,
-                        timeTaken
-                    })
-                });
-                if (!response.ok) {
-                    throw new Error('Failed to submit assessment');
-                }
-                const result = await response.json();
-                console.log('Assessment submitted:', result);
-                // Format time taken as mm:ss
-                let timeTakenStr = '';
-                if (result.timeTaken !== undefined) {
-                    const minutes = String(Math.floor(result.timeTaken / 60)).padStart(2, '0');
-                    const seconds = String(result.timeTaken % 60).padStart(2, '0');
-                    timeTakenStr = `<p class="mt-2">Time taken: <strong>${minutes}:${seconds}</strong></p>`;
-                }
-                document.getElementById('assessmentContent').innerHTML = `
-                    <div class="alert alert-success">
-                        <i class="bi bi-check-circle me-2"></i>
-                        Assessment submitted successfully!
-                        ${result.score !== undefined ? `<p class=\"mt-2\">Your score: <strong>${result.score}%</strong></p>` : ''}
-                        ${timeTakenStr}
-                    </div>
-                    <a href="/student/assessments" class="btn btn-primary">
-                        <i class="bi bi-arrow-left me-2"></i>Back to Assessments
-                    </a>
-                `;
-                // Send timeTaken and handle attempts
-                // --- Fetch latest attempts and update UI ---
-                try {
-                    const subRes = await fetch(`/api/assessments/${assessmentId}/submissions`, {
-                        headers: { 'Authorization': `Bearer ${token}` }
-                    });
-                    if (subRes.ok) {
-                        const submissions = await subRes.json();
-                        if (Array.isArray(submissions) && submissions.length > 0) {
-                            attemptCount = submissions[0].attempts || submissions.length;
-                            const attemptElem = document.getElementById('attemptCount');
-                            if (attemptElem) attemptElem.textContent = attemptCount;
-                        }
-                    }
-                } catch (e) { console.error('Failed to update attempt count:', e); }
-                attemptCount++;
-                document.getElementById('attemptCount').textContent = attemptCount;
-                if (maxAttempts && attemptCount > maxAttempts) {
-                    document.getElementById('submitBtn').disabled = true;
-                    document.getElementById('submitError').classList.remove('d-none');
-                    document.getElementById('submitError').textContent = 'You have reached the maximum number of attempts.';
-                    return;
-                }
-                // Restart timer for next attempt if allowed
-                if (!maxAttempts || attemptCount < maxAttempts) {
-                    startAttemptTimer();
-                }
-            } catch (error) {
-                console.error('Error submitting assessment:', error);
-                // Create submit error element if it doesn't exist
-                let errorElement = document.getElementById('submitError');
-                if (!errorElement) {
-                    errorElement = document.createElement('div');
-                    errorElement.id = 'submitError';
-                    errorElement.className = 'alert alert-danger mt-3';
-                    document.querySelector('.quiz-footer').prepend(errorElement);
-                }
-                errorElement.textContent = error.message || 'Failed to submit assessment. Please try again.';
-                errorElement.classList.remove('d-none');
-                // Reset submit button
-                const submitButton = document.querySelector('button[onclick="submitAssessment()"]');
-                if (submitButton) {
-                    submitButton.disabled = false;
-                    submitButton.innerHTML = '<i class="bi bi-check2 me-2"></i>Submit Quiz';
-                }
-            } finally {
-                hideLoader();
-            }
-        }
-        
-        async function submitAssignment() {
-            try {
-                const imageInput = document.getElementById('assignmentImage');
-                const fileInput = document.getElementById('assignmentFile');
-                const textValue = document.getElementById('assignmentResponse').value;
-                const imageFile = imageInput && imageInput.files && imageInput.files[0] ? imageInput.files[0] : null;
-                const file = fileInput && fileInput.files && fileInput.files[0] ? fileInput.files[0] : null;
-                let response;
-                if (imageFile || file) {
-                    // Use FormData for file/image upload
-                    const formData = new FormData();
-                    formData.append('answers', JSON.stringify({ text: textValue }));
-                    if (imageFile) formData.append('image', imageFile);
-                    if (file) formData.append('file', file);
-                    response = await fetch(`/api/assessments/${assessmentId}/submit`, {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': `Bearer ${token}`
-                        },
-                        body: formData
-                    });
-                } else {
-                    // Fallback to JSON if no file/image
-                    response = await fetch(`/api/assessments/${assessmentId}/submit`, {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': `Bearer ${token}`,
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            answers: { text: textValue },
-                            score: null
-                        })
-                    });
-                }
-                if (!response.ok) {
-                    throw new Error('Failed to submit assignment');
-                }
-                const result = await response.json();
-                console.log('Assignment submitted:', result);
-                document.getElementById('assessmentContent').innerHTML = `
-                    <div class="card mb-4">
-                        <div class="card-header bg-success text-white">
-                            <h3 class="mb-0">Assignment Submitted Successfully!</h3>
-                        </div>
-                        <div class="card-body">
-                            <p>Your assignment has been submitted. Your teacher will review it soon.</p>
-                            <div class="d-flex justify-content-between mt-4">
-                                <a href="/student/assessments" class="btn btn-primary">
-                                    <i class="bi bi-arrow-left me-2"></i>Back to Assessments
-                                </a>
-                                <a href="/student/dashboard" class="btn btn-outline-primary">
-                                    Go to Dashboard<i class="bi bi-arrow-right ms-2"></i>
-                                </a>
+                        break;
+                        
+                    case 'speaking':
+                        // Handle speaking assessments specifically
+                        container.innerHTML = `
+                            <div class="card mb-4">
+                                <div class="card-header bg-primary text-white">
+                                    <h3 class="mb-0" id="assessmentTitle">${assessment.title || 'Speaking Assessment'}</h3>
+                                </div>
+                                <div class="card-body">
+                                    <p class="mb-3" id="assessmentDescription">${formatWithLineBreaks(assessment.description || 'Record your response to the speaking prompt.')}</p>
+                                    
+                                    ${assessment.criteria ? `
+                                        <div class="alert alert-info mb-3">
+                                            <strong>Criteria:</strong> ${formatWithLineBreaks(assessment.criteria)}
+                                        </div>
+                                    ` : ''}
+                                    ${attemptsHtml}
+                                    <div class="mb-4">
+                                        <h4>Recording</h4>
+                                        <div class="d-flex gap-2 mb-3">
+                                            <button id="startRecordingBtn" class="btn btn-primary">
+                                                <i class="bi bi-mic-fill"></i> Start Recording
+                                            </button>
+                                            <button id="stopRecordingBtn" class="btn btn-danger" style="display: none;">
+                                                <i class="bi bi-stop-fill"></i> Stop Recording
+                                            </button>
+                                        </div>
+                                        <div id="recordingStatus" class="text-muted mb-2"></div>
+                                        <div id="recordingTimer" class="text-muted mb-3" style="display: none;">00:00</div>
+                                        
+                                        <div id="audioPreview" class="mb-3" style="display: none;">
+                                            <h5>Recording Preview</h5>
+                                            <audio id="audioPlayer" controls class="w-100"></audio>
+                                        </div>
+                                
+                                        <button id="submitRecordingBtn" class="btn btn-success mt-3" style="display: none;">
+                                            <i class="bi bi-check-circle"></i> Submit Recording
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
+                        `;
+                        
+                        // Set up recording functionality
+                        setupRecording();
+                        break;
+                        
+                    case 'writing':
+                    case 'writing-long':
+                        container.innerHTML = `
+                            <div class="card mb-4">
+                                <div class="card-header bg-primary text-white">
+                                    <h3 class="mb-0" id="assessmentTitle">${assessment.title || 'Writing Assignment'}</h3>
+                                </div>
+                                <div class="card-body">
+                                    <p class="mb-3" id="assessmentDescription">${formatWithLineBreaks(assessment.description || '')}</p>
+                                    ${assessment.criteria ? `
+                                        <div class="card mb-4">
+                                            <div class="card-header">
+                                                <h5 class="mb-0">Grading Criteria</h5>
+                                            </div>
+                                            <div class="card-body">
+                                                <p class="mb-0">${assessment.criteria}</p>
+                                            </div>
+                                        </div>
+                                    ` : ''}
+                                    ${attemptsHtml}
+                                    <div class="writing-assignment-container"></div>
+                                </div>
+                            </div>
+                        `;
+                        renderWritingAssessment();
+                        break;
+                        
+                    default:
+                        container.innerHTML = `
+                            <div class="card mb-4">
+                                <div class="card-header bg-primary text-white">
+                                    <h3 class="mb-0" id="assessmentTitle">${assessment.title || 'Assessment'}</h3>
+                                </div>
+                                <div class="card-body">
+                                    <p class="mb-3" id="assessmentDescription">${formatWithLineBreaks(assessment.description || '')}</p>
+                                    <div class="alert alert-warning">
+                                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                                        Unsupported assessment type: ${assessment.type}
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                        break;
+                }
+            } catch (error) {
+                console.error('Error rendering assessment:', error);
+                container.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        Error rendering assessment: ${error.message}
                     </div>
                 `;
-            } catch (error) {
-                console.error('Error submitting assignment:', error);
-                alert('Failed to submit assignment. Please try again.');
             }
         }
         
@@ -1852,183 +1438,466 @@
         }
         
         function renderDragAndDropAssessment(container) {
-            // Support both top-level and question-level drag-and-drop data
-            let words = assessment.words || assessment.wordBank || [];
-            let correct = assessment.correct || [];
-            let audio = assessment.audio;
-            let subtype = assessment.subtype;
+            // Safety check to ensure container exists
+            if (!container) {
+                console.error("Container element not found for drag-and-drop assessment");
+                return;
+            }
 
-            // If not present at top level, try the first question
-            if ((!words.length || !correct.length) && assessment.questions && assessment.questions.length > 0) {
-                const q = assessment.questions[0];
-                // --- FIX: Merge wordBank and extraWords for sequence subtype ---
-                if ((q.subtype || assessment.subtype) === 'sequence') {
-                    const wordBank = q.wordBank || [];
-                    const extraWords = q.extraWords || [];
-                    words = [...wordBank, ...extraWords];
-                } else {
-                    words = q.words || q.wordBank || q.options || [];
-                }
-                correct = q.correct || q.correctSequence || [];
-                subtype = q.subtype || assessment.subtype;
-                // If audio is stored as a file name, resolve the URL here if needed
-                if (!audio && q.audioFileName && assessment.mediaFiles && assessment.mediaFiles.length > 0) {
-                    const mf = assessment.mediaFiles.find(f => f.label === q.audioFileName);
-                    if (mf) audio = mf.filePath;
+            console.log('Existing elements check:', {
+                containerExists: !!container,
+                containerChildren: container.children.length
+            });
+
+            // Determine if we need to clear the container (except debug info)
+            if (container.children.length > 0) {
+                const debugInfo = container.querySelector('.alert-info');
+                // Clear everything except the debug info
+                container.innerHTML = '';
+                // Add back debug info if it existed
+                if (debugInfo) {
+                    container.appendChild(debugInfo);
                 }
             }
 
-            // Ensure we have a valid subtype
-            if (!subtype || (subtype !== 'sequence' && subtype !== 'fill-in-blank' && subtype !== 'image-fill-blank')) {
+            // Detect the assessment type and subtype
+            let words = [];
+            let correct = [];
+            let text = '';
+            let subtype = '';
+            let extraWords = [];
+            let audio = null;
+
+            // Determine subtype from either assessment or question data
+            if (assessment.subtype) {
+                subtype = assessment.subtype;
+            } else if (assessment.questions && assessment.questions.length > 0 && assessment.questions[0].subtype) {
+                subtype = assessment.questions[0].subtype;
+            } else if (assessment.text && (assessment.text.includes('[BLANK]') || assessment.text.includes('[blank]'))) {
+                // Infer subtype from presence of [BLANK] in text
+                subtype = 'long-paragraph-fill-in-blank';
+            }
+
+            // Get data from the assessment structure
+            if (assessment.questions && assessment.questions.length > 0) {
+                const question = assessment.questions[0];
+                console.log('Found question data:', question);
+                
+                if (question.wordBank) words = question.wordBank;
+                if (question.answers) correct = question.answers;
+                if (question.correctSequence) correct = question.correctSequence;
+                if (question.text) text = question.text;
+                if (question.extraWords) extraWords = question.extraWords;
+                if (question.audioUrl) audio = question.audioUrl;
+                
+                // Ensure we get the correct subtype
+                if (question.subtype && !subtype) {
+                    subtype = question.subtype;
+                }
+                console.log('Using question subtype:', subtype);
+            } else {
+                // Try to get data from top-level assessment object
+                if (assessment.wordBank) words = assessment.wordBank;
+                if (assessment.answers) correct = assessment.answers;
+                if (assessment.correctSequence) correct = assessment.correctSequence;
+                if (assessment.text) text = assessment.text;
+                if (assessment.extraWords) extraWords = assessment.extraWords;
+                if (assessment.audioUrl) audio = assessment.audioUrl;
+            }
+
+            // DON'T add extra words to the word bank - only use them to pad out the word bank if needed
+            // Remove this code that adds extra words to the regular word bank
+            // if (extraWords && extraWords.length > 0) {
+            //     words = [...words, ...extraWords];
+            // }
+
+            console.log('Rendering drag-and-drop with subtype:', subtype);
+            
+            // Clear the container
+            if (container.innerHTML === '') {
+                container.innerHTML = `<div class="text-center">
+                    <div class="spinner-border text-primary" role="status"></div>
+                    <p>Preparing drag and drop exercise...</p>
+                </div>`;
+            }
+            
+            // Add debugging info
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('debug') === 'true') {
+                container.innerHTML += `
+                    <div class="alert alert-info mb-3">
+                        <strong>Drag-and-Drop Data:</strong><br>
+                        Subtype: ${subtype}<br>
+                        Words: ${JSON.stringify(words)}<br>
+                        Correct: ${JSON.stringify(correct)}<br>
+                        Text: ${text ? text.substring(0, 50) + '...' : 'None'}<br>
+                        Audio: ${audio || 'None'}
+                    </div>
+                `;
+            }
+            
+            // Validate required data
+            if (words.length === 0) {
                 container.innerHTML = `
                     <div class="alert alert-danger">
-                        <i class="bi bi-exclamation-triangle me-2"></i>
-                        Invalid drag-and-drop assessment format. Must specify either 'sequence', 'fill-in-blank', or 'image-fill-blank' subtype.
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        Error: No word bank provided for this drag-and-drop assessment.
                     </div>
-                    <a href="/student/assessments" class="btn btn-primary">
-                        <i class="bi bi-arrow-left me-2"></i>Back to Assessments
-                    </a>
                 `;
                 return;
             }
 
-            // If fill-in-blank or image-fill-blank subtype, render sentences
-            if (subtype === 'fill-in-blank' || subtype === 'image-fill-blank') {
+            // For long-paragraph-fill-in-blank subtype, use the improved implementation
+            if (subtype === 'long-paragraph-fill-in-blank') {
+                console.log('Using special long paragraph implementation for subtype:', subtype);
+                
+                // First, clear any existing content except debug info
+                let debugInfo = container.querySelector('.alert-info');
                 container.innerHTML = '';
-                renderDragAndDropQuestion(assessment.questions[0], container);
+                if (debugInfo) container.appendChild(debugInfo);
+                
+                // Create a div for the long paragraph exercise
+                const longParagraph = document.createElement('div');
+                longParagraph.className = 'long-paragraph-container';
+                container.appendChild(longParagraph);
+                
+                // Now render specifically into this container
+                renderLongParagraphDragAndDrop(longParagraph, text, words, correct);
                 return;
             }
 
-            // For sequence-based drag-and-drop
-            container.innerHTML = '';
-            
-            // If audio is not set, but there is an audio file in mediaFiles, use the first one
-            if (!audio && assessment.mediaFiles && assessment.mediaFiles.length > 0) {
-                const audioFile = assessment.mediaFiles.find(f => f.type && f.type.startsWith('audio')) || assessment.mediaFiles[0];
-                if (audioFile && audioFile.filePath) {
-                    audio = audioFile.filePath;
-                }
-            }
-            // If audio is present, render an audio player at the top
-            if (audio) {
-                // Display audio display name if present
-                let displayName = '';
-                if (assessment.questions && assessment.questions[0] && assessment.questions[0].audioDisplayName) {
-                    displayName = assessment.questions[0].audioDisplayName;
-                }
-                if (displayName) {
-                    const nameDiv = document.createElement('div');
-                    nameDiv.className = 'mb-1 fw-bold';
-                    nameDiv.textContent = displayName;
-                    container.appendChild(nameDiv);
-                }
-                const audioDiv = document.createElement('div');
-                audioDiv.className = 'mb-3';
-                audioDiv.innerHTML = `
-                    <audio controls>
-                        <source src="${audio}" type="audio/mpeg">
-                        Your browser does not support the audio element.
-                    </audio>
+            // For other subtypes, implement as needed...
+            // (rest of the function content)
+        }
+
+        // New function to render long paragraph drag and drop
+        function renderLongParagraphDragAndDrop(container, text, words, answers) {
+            // Validate required data
+            if (!text || text.indexOf('[BLANK]') === -1) {
+                container.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        Error: The question text is missing or has no blank spaces to fill in.
+                    </div>
                 `;
-                container.appendChild(audioDiv);
+                return;
             }
-            // Add instructions
-            const instructionsDiv = document.createElement('div');
-            instructionsDiv.className = 'question-instructions';
-            instructionsDiv.textContent = 'Drag the words into the correct order.';
-            container.appendChild(instructionsDiv);
 
-            // Create container for drop targets
-            const dropTargetsContainer = document.createElement('div');
-            dropTargetsContainer.className = 'drop-targets-container mb-4';
+            if (words.length === 0) {
+                container.innerHTML = `
+                    <div class="alert alert-danger">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        Error: No words available for the word bank.
+                    </div>
+                `;
+                return;
+            }
+
+            // Split the text by [BLANK]
+            const parts = text.split('[BLANK]');
             
-            // Create drop targets based on correct order
-            correct.forEach((word, index) => {
-                const dropTarget = document.createElement('div');
-                dropTarget.className = 'drop-target';
-                dropTarget.dataset.index = index;
-                dropTarget.dataset.correctAnswer = word;
+            // Create the HTML
+            let html = `
+                <div class="card mb-4 p-4">
+                    <div class="paragraph-text" style="font-size: 1.2rem; line-height: 1.8;">
+            `;
+            
+            // Build the paragraph with blanks
+            for (let i = 0; i < parts.length; i++) {
+                html += parts[i];
                 
-                // Add drop event listeners
-                dropTarget.addEventListener('dragover', handleDragOver);
-                dropTarget.addEventListener('dragenter', handleDragEnter);
-                dropTarget.addEventListener('dragleave', handleDragLeave);
-                dropTarget.addEventListener('drop', handleDrop);
+                if (i < parts.length - 1) {
+                    const correctAnswer = answers[i] || '';
+                    html += `<span class="blank-space" 
+                          id="blank-${i}" 
+                          data-index="${i}" 
+                          data-correct="${correctAnswer}"
+                          style="display: inline-block; 
+                                 min-width: 120px; 
+                                 height: 35px; 
+                                 border: 2px dashed #ced4da; 
+                                 border-radius: 4px; 
+                                 margin: 0 5px; 
+                                 vertical-align: middle; 
+                                 background-color: #f8f9fa;"></span>`;
+                }
+            }
+            
+            html += `
+                    </div>
+                </div>
                 
-                dropTargetsContainer.appendChild(dropTarget);
+                <div class="card mb-4 p-3">
+                    <h5 class="mb-3">Word Bank:</h5>
+                    <div class="word-bank" style="display: flex; flex-wrap: wrap; gap: 10px;">
+            `;
+            
+            // Use only the valid words for the word bank, not extraWords
+            // We'll make sure we're only using actual word bank items
+            const wordBankItems = words.filter(word => {
+                // Check if it's one of the valid answers or part of the original word bank
+                // This will ensure extraWords are excluded
+                const isAnswer = answers.includes(word);
+                const isFromWordBank = assessment.questions && 
+                    assessment.questions[0] && 
+                    assessment.questions[0].wordBank && 
+                    assessment.questions[0].wordBank.includes(word);
+                
+                return isAnswer || isFromWordBank;
             });
             
-            container.appendChild(dropTargetsContainer);
-
-            // Create container for draggable items (word bank)
-            const draggableContainer = document.createElement('div');
-            draggableContainer.className = 'draggable-items-container';
+            // Shuffle the FILTERED words to display them in random order
+            const shuffledWords = [...wordBankItems].sort(() => Math.random() - 0.5);
             
-            // Add word bank label
-            const wordBankLabel = document.createElement('div');
-            wordBankLabel.className = 'mb-2';
-            wordBankLabel.innerHTML = '<strong>Word Bank:</strong>';
-            container.appendChild(wordBankLabel);
-            
-            // Shuffle the words to display them in random order
-            const shuffledWords = [...words].sort(() => Math.random() - 0.5);
-            
-            // Create draggable items
-            shuffledWords.forEach(word => {
-                const draggableItem = document.createElement('div');
-                draggableItem.className = 'draggable-item';
-                draggableItem.textContent = word;
-                draggableItem.setAttribute('draggable', 'true');
-                draggableItem.dataset.value = word;
-                
-                // Add drag event listeners
-                draggableItem.addEventListener('dragstart', handleDragStart);
-                draggableItem.addEventListener('dragend', handleDragEnd);
-                
-                draggableContainer.appendChild(draggableItem);
+            // Add the word bank items
+            shuffledWords.forEach((word, index) => {
+                html += `<div class="word-item" 
+                          id="word-${index}" 
+                          data-word="${word}"
+                          draggable="true"
+                          style="padding: 8px 12px; 
+                                 background-color: #e7f3ff; 
+                                 border: 1px solid #b8daff; 
+                                 border-radius: 4px; 
+                                 cursor: grab; 
+                                 user-select: none;">${word}</div>`;
             });
             
-            container.appendChild(draggableContainer);
+            html += `
+                    </div>
+                </div>
+                
+                <button id="submit-btn" class="btn btn-primary">Submit</button>
+            `;
             
-            // Add a submit button instead of check answers
-            const submitButton = document.createElement('button');
-            submitButton.className = 'btn btn-primary mt-3';
-            submitButton.textContent = 'Submit';
-            submitButton.addEventListener('click', () => submitDragDropAssessment(container));
-            container.appendChild(submitButton);
+            // Set the HTML
+            container.innerHTML = html;
+            
+            // Add event listeners for drag and drop
+            const wordItems = document.querySelectorAll('.word-item');
+            const blankSpaces = document.querySelectorAll('.blank-space');
+            
+            wordItems.forEach(item => {
+                item.addEventListener('dragstart', function(e) {
+                    e.dataTransfer.setData('text', this.id);
+                    this.style.opacity = '0.5';
+                });
+                
+                item.addEventListener('dragend', function() {
+                    this.style.opacity = '1';
+                });
+            });
+            
+            blankSpaces.forEach(blank => {
+                blank.addEventListener('dragover', function(e) {
+                    e.preventDefault();
+                    this.style.borderColor = '#0d6efd';
+                    this.style.backgroundColor = '#e7f3ff';
+                });
+                
+                blank.addEventListener('dragleave', function() {
+                    this.style.borderColor = '#ced4da';
+                    this.style.backgroundColor = '#f8f9fa';
+                });
+                
+                blank.addEventListener('drop', function(e) {
+                    e.preventDefault();
+                    this.style.borderColor = '#ced4da';
+                    this.style.backgroundColor = '#f8f9fa';
+                    
+                    const id = e.dataTransfer.getData('text');
+                    const wordItem = document.getElementById(id);
+                    
+                    if (wordItem) {
+                        // If this blank already has a word, return that word to the word bank
+                        if (this.dataset.wordId) {
+                            const oldWordItem = document.getElementById(this.dataset.wordId);
+                            if (oldWordItem) {
+                                oldWordItem.style.display = '';
+                            }
+                        }
+                        
+                        // Set the text content
+                        this.textContent = wordItem.textContent;
+                        
+                        // Store which word is in this blank
+                        this.dataset.wordId = wordItem.id;
+                        
+                        // Style the blank
+                        this.style.border = '2px solid #6c757d';
+                        this.style.backgroundColor = '#e9ecef';
+                        this.style.textAlign = 'center';
+                        this.style.padding = '5px';
+                        this.style.fontWeight = '500';
+                        
+                        // Hide the word item
+                        wordItem.style.display = 'none';
+                    }
+                });
+            });
+            
+            // Add submit button handler
+            document.getElementById('submit-btn').addEventListener('click', function() {
+                // Collect answers
+                const answers = [];
+                let correctCount = 0;
+                let totalCount = blankSpaces.length;
+                
+                blankSpaces.forEach((blank, index) => {
+                    const userAnswer = blank.textContent;
+                    const correctAnswer = blank.dataset.correct;
+                    
+                    answers.push({
+                        index,
+                        userAnswer,
+                        correctAnswer,
+                        isCorrect: userAnswer === correctAnswer
+                    });
+                    
+                    if (userAnswer === correctAnswer) {
+                        correctCount++;
+                        blank.style.borderColor = '#28a745';
+                        blank.style.backgroundColor = '#d4edda';
+                    } else {
+                        blank.style.borderColor = '#dc3545';
+                        blank.style.backgroundColor = '#f8d7da';
+                    }
+                });
+                
+                // Calculate score
+                const score = Math.round((correctCount / totalCount) * 100);
+                
+                // Show score
+                alert(`Your score: ${score}% (${correctCount} out of ${totalCount} correct)`);
+                
+                // Submit to server if needed
+                if (window.submitAssessment) {
+                    window.submitAssessment({
+                        answers,
+                        score
+                    });
+                }
+            });
         }
 
         function submitDragDropAssessment(container) {
+            console.log('Submitting drag-drop assessment...');
+            
             // Detect subtype
             let subtype = assessment.subtype;
             if (!subtype && assessment.questions && assessment.questions[0]) {
                 subtype = assessment.questions[0].subtype;
             }
-            if (subtype === 'sequence') {
-                // For sequence, collect answers as an array in order
-                const dropTargets = container.querySelectorAll('.drop-target');
-                const answer = [];
-                dropTargets.forEach(target => {
-                    answer.push(target.dataset.userAnswer || null);
-                });
-                // Save to userAnswers in the expected format
-                userAnswers[currentQuestionIndex] = answer;
-                submitAssessment();
-                return;
-            }
-            // For fill-in-blank, keep existing logic
-            const dropTargets = container.querySelectorAll('.drop-target.filled');
+            
+            console.log('Assessment subtype for submission:', subtype);
+            
             let correctCount = 0;
-            let totalCount = dropTargets.length;
-            dropTargets.forEach(target => {
-                const userAnswer = target.dataset.userAnswer;
-                const correctAnswer = target.dataset.correctAnswer;
-                if (userAnswer === correctAnswer) {
-                    correctCount++;
+            let totalCount = 0;
+            let answerData = {};
+            
+            if (subtype === 'long-paragraph-fill-in-blank') {
+                // For long paragraph, collect answers from the drop targets
+                const dropTargets = document.querySelectorAll('.drop-target');
+                totalCount = dropTargets.length;
+                
+                // Record each answer and check if correct
+                dropTargets.forEach((target, index) => {
+                    const userAnswer = target.textContent;
+                    // Find the correct answer - could be in different places depending on the data structure
+                    let correctAnswer = null;
+                    
+                    if (assessment.questions && assessment.questions[0] && assessment.questions[0].answers) {
+                        correctAnswer = assessment.questions[0].answers[index];
+                    } else if (assessment.answers) {
+                        correctAnswer = assessment.answers[index];
+                    }
+                    
+                    // Record the answer regardless of whether we found a correct answer
+                    answerData[`answer_${index}`] = userAnswer;
+                    
+                    // Check if correct (if we have a correct answer to compare against)
+                    if (correctAnswer && userAnswer) {
+                        const isCorrect = userAnswer.trim().toLowerCase() === correctAnswer.trim().toLowerCase();
+                        answerData[`correct_${index}`] = isCorrect;
+                        if (isCorrect) correctCount++;
+                    }
+                });
+            } 
+            else if (subtype === 'sequence') {
+                // For sequence, collect answers from the drop targets in order
+                const dropTargets = document.querySelectorAll('.drop-target');
+                totalCount = dropTargets.length;
+                
+                // Get the expected sequence from the assessment
+                let correctSequence = [];
+                if (assessment.questions && assessment.questions[0] && assessment.questions[0].correctSequence) {
+                    correctSequence = assessment.questions[0].correctSequence;
+                } else if (assessment.correct) {
+                    correctSequence = assessment.correct;
                 }
+                
+                // Check each position in the sequence
+                dropTargets.forEach((target, index) => {
+                    const userAnswer = target.textContent;
+                    const correctAnswer = correctSequence[index];
+                    
+                    // Record the answer
+                    answerData[`answer_${index}`] = userAnswer;
+                    
+                    // Check if this position is correct
+                    if (correctAnswer && userAnswer) {
+                        const isCorrect = userAnswer.trim() === correctAnswer.trim();
+                        answerData[`correct_${index}`] = isCorrect;
+                        if (isCorrect) correctCount++;
+                    }
+                });
+            }
+            else {
+                // Default handling for other subtypes
+                const dropTargets = document.querySelectorAll('.drop-target.filled');
+                totalCount = dropTargets.length;
+                
+                // Check each drop target
+                dropTargets.forEach((target, index) => {
+                    const userAnswer = target.textContent;
+                    const correctAnswer = target.dataset.correctAnswer;
+                    
+                    // Record the answer
+                    answerData[`answer_${index}`] = userAnswer;
+                    
+                    // Check if correct
+                    if (correctAnswer && userAnswer) {
+                        const isCorrect = userAnswer.trim() === correctAnswer.trim();
+                        answerData[`correct_${index}`] = isCorrect;
+                        if (isCorrect) correctCount++;
+                    }
+                });
+            }
+            
+            // Calculate score as percentage
+            let score = 0;
+            if (totalCount > 0) {
+                score = Math.round((correctCount / totalCount) * 100);
+            }
+            
+            console.log('Assessment submission results:', {
+                totalQuestions: totalCount,
+                correctAnswers: correctCount,
+                score: score,
+                answerData: answerData
             });
-            const score = Math.round((correctCount / totalCount) * 100);
-            submitAssessment(score);
+            
+            // Set up the submission data
+            const submissionData = {
+                answers: answerData,
+                score: score
+            };
+            
+            // Show submission confirmation dialog
+            if (confirm(`Are you sure you want to submit this assessment? Your score is ${score}%.`)) {
+                // Submit to the server
+                submitAssessment(submissionData);
+            }
         }
 
         // Add loader functions
@@ -2082,7 +1951,7 @@
         // Function to test the drag-and-drop functionality
         function testDragAndDrop() {
             // Create a container 
-            const container = document.getElementById('assessmentContent');
+            const container = document.getElementById('assessmentContainer');
             container.innerHTML = `
                 <div class="container mt-5">
                     <h2>Drag and Drop Test</h2>
@@ -2134,7 +2003,7 @@
         // Function to test the image-matching functionality
         function testImageMatching() {
             // Create a container 
-            const container = document.getElementById('assessmentContent');
+            const container = document.getElementById('assessmentContainer');
             container.innerHTML = `
                 <div class="container mt-5">
                     <h2>Image Matching Test</h2>
@@ -2156,7 +2025,7 @@
         
         // To test both types, add buttons to switch between them
         function showTestOptions() {
-            const container = document.getElementById('assessmentContent');
+            const container = document.getElementById('assessmentContainer');
             container.innerHTML = `
                 <div class="container mt-5">
                     <h2>Drag & Drop Testing</h2>
@@ -2174,7 +2043,7 @@
         }
         
         // Uncomment this line to show test options immediately
-        document.addEventListener('DOMContentLoaded', showTestOptions);
+        // document.addEventListener('DOMContentLoaded', showTestOptions);
 
         function startAttemptTimer() {
             clearInterval(timerInterval);
@@ -2446,6 +2315,927 @@
                 }
             };
         }
+
+        function showError(message) {
+            const container = document.getElementById('assessmentContainer');
+            container.style.display = 'block';
+            container.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    ${message}
+                </div>
+                <a href="/student/assessments" class="btn btn-primary">
+                    <i class="bi bi-arrow-left me-2"></i>Back to Assessments
+                </a>
+            `;
+            hideLoader();
+        }
+        
+        function showMaxAttemptsReached() {
+            const container = document.getElementById('assessmentContainer');
+            container.style.display = 'block';
+            container.innerHTML = `
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-circle-fill me-2"></i>
+                    You have reached the maximum number of attempts for this assessment.
+                </div>
+                <div class="mt-3">
+                    <h4>Your Submissions</h4>
+                    <ul class="list-group">
+                        ${submissionData.map(submission => `
+                            <li class="list-group-item">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <strong>Submitted:</strong> ${new Date(submission.submittedAt).toLocaleString()}
+                                    </div>
+                                    <div>
+                                        <strong>Score:</strong> ${submission.score !== null ? submission.score + '%' : 'Pending'}
+                                    </div>
+                                </div>
+                            </li>
+                        `).join('')}
+                    </ul>
+                </div>
+                <a href="/student/assessments" class="btn btn-primary mt-3">
+                    <i class="bi bi-arrow-left me-2"></i>Back to Assessments
+                </a>
+            `;
+            hideLoader();
+        }
+
+        function setupRecording() {
+            const startBtn = document.getElementById('startRecordingBtn');
+            const stopBtn = document.getElementById('stopRecordingBtn');
+            const statusDiv = document.getElementById('recordingStatus');
+            const timerDiv = document.getElementById('recordingTimer');
+            const audioPreview = document.getElementById('audioPreview');
+            const audioPlayer = document.getElementById('audioPlayer');
+            const submitBtn = document.getElementById('submitRecordingBtn');
+            
+            let mediaRecorder;
+            let audioChunks = [];
+            let recordingInterval;
+            let recordingDuration = 0;
+            
+            startBtn.addEventListener('click', function() {
+                // Reset previous recording
+                audioChunks = [];
+                recordingDuration = 0;
+                audioPlayer.src = '';
+                audioPreview.style.display = 'none';
+                submitBtn.style.display = 'none';
+                
+                // Update UI
+                startBtn.style.display = 'none';
+                stopBtn.style.display = 'inline-block';
+                timerDiv.style.display = 'block';
+                timerDiv.textContent = '00:00';
+                
+                // Create recording indicator with animation
+                statusDiv.innerHTML = `
+                    <div class="d-flex align-items-center text-danger">
+                        <div class="recording-dot pulsing me-2"></div>
+                        <span>Recording...</span>
+                    </div>
+                `;
+                
+                // Update timer every second
+                recordingInterval = setInterval(function() {
+                    recordingDuration++;
+                    const minutes = Math.floor(recordingDuration / 60).toString().padStart(2, '0');
+                    const seconds = (recordingDuration % 60).toString().padStart(2, '0');
+                    timerDiv.textContent = `${minutes}:${seconds}`;
+                }, 1000);
+                
+                // Request microphone access
+                navigator.mediaDevices.getUserMedia({ audio: true })
+                    .then(stream => {
+                        mediaRecorder = new MediaRecorder(stream);
+                        
+                        mediaRecorder.ondataavailable = e => {
+                            if (e.data.size > 0) {
+                                audioChunks.push(e.data);
+                            }
+                        };
+                        
+                        mediaRecorder.onstop = () => {
+                            clearInterval(recordingInterval);
+                            
+                            const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                            const audioUrl = URL.createObjectURL(audioBlob);
+                            audioPlayer.src = audioUrl;
+                            audioPreview.style.display = 'block';
+                            submitBtn.style.display = 'block';
+                            
+                            // Store for submission
+                            window.recordedAudio = audioBlob;
+                        };
+                        
+                        mediaRecorder.start();
+                    })
+                    .catch(error => {
+                        console.error('Error accessing microphone:', error);
+                        statusDiv.innerHTML = `<div class="text-danger">Error: Unable to access microphone. Please check permissions.</div>`;
+                        startBtn.style.display = 'inline-block';
+                        stopBtn.style.display = 'none';
+                        clearInterval(recordingInterval);
+                    });
+            });
+            
+            stopBtn.addEventListener('click', function() {
+                if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                    mediaRecorder.stop();
+                    
+                    // Stop all tracks in the stream
+                    mediaRecorder.stream.getTracks().forEach(track => track.stop());
+                }
+                
+                // Update UI
+                startBtn.style.display = 'inline-block';
+                stopBtn.style.display = 'none';
+                statusDiv.innerHTML = '<div class="text-success">Recording complete! You can preview or re-record.</div>';
+            });
+            
+            submitBtn.addEventListener('click', async function() {
+                if (!window.recordedAudio) {
+                    statusDiv.innerHTML = '<div class="text-danger">No recording available to submit.</div>';
+                    return;
+                }
+                
+                // Disable button during submission
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Submitting...';
+                statusDiv.innerHTML = '<div class="text-primary">Submitting recording...</div>';
+                
+                // Create form data and add audio blob
+                const formData = new FormData();
+                formData.append('audio', window.recordedAudio, 'recording.webm');
+                
+                try {
+                    // Submit to API
+                    const response = await fetch(`/api/assessments/${assessment.id}/submit-speaking`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: formData
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (response.ok && data.success) {
+                        // Show success message
+                        container.innerHTML = `
+                            <div class="alert alert-success">
+                                <h4 class="alert-heading">Success!</h4>
+                                <p>Your speaking assessment has been submitted successfully.</p>
+                                <hr>
+                                <p class="mb-0">You will receive feedback from your teacher soon.</p>
+                            </div>
+                            <a href="/student/assessments" class="btn btn-primary">
+                                <i class="bi bi-arrow-left"></i> Back to Assessments
+                            </a>
+                        `;
+                    } else {
+                        throw new Error(data.error || 'Unknown error');
+                    }
+                } catch (error) {
+                    console.error('Error submitting recording:', error);
+                    statusDiv.innerHTML = `<div class="alert alert-danger">Error submitting recording: ${error.message || 'Unknown error'}</div>`;
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '<i class="bi bi-check-circle"></i> Submit Recording';
+                }
+            });
+        }
+
+        function setupMatchingAssessment() {
+            const container = document.getElementById('matchingContainer');
+            const checkBtn = document.getElementById('checkMatchingBtn');
+            const submitBtn = document.getElementById('submitMatchingBtn');
+            
+            // Ensure userAnswers is initialized
+            if (!window.userAnswers) {
+                window.userAnswers = [];
+            }
+            
+            // Get matching pairs from the assessment data
+            let pairs = [];
+            
+            // Extract pairs from questions
+            if (assessment.questions && Array.isArray(assessment.questions)) {
+                const matchingQuestion = assessment.questions.find(q => q.type === 'matching');
+                if (matchingQuestion) {
+                    // If pairs are directly available in the question
+                    if (matchingQuestion.pairs && Array.isArray(matchingQuestion.pairs)) {
+                        pairs = matchingQuestion.pairs;
+                    }
+                    // If expressions and meanings are available, create pairs
+                    else if (matchingQuestion.expressions && matchingQuestion.meanings && 
+                            Array.isArray(matchingQuestion.expressions) && 
+                            Array.isArray(matchingQuestion.meanings)) {
+                        pairs = [];
+                        for (let i = 0; i < Math.min(matchingQuestion.expressions.length, matchingQuestion.meanings.length); i++) {
+                            pairs.push({
+                                expression: matchingQuestion.expressions[i],
+                                meaning: matchingQuestion.meanings[i]
+                            });
+                        }
+                    }
+                }
+            }
+            
+            // Clear the container and create the matching interface
+            container.innerHTML = '';
+            
+            if (pairs.length > 0) {
+                // Create array of meanings and shuffle them
+                const meanings = pairs.map(pair => pair.meaning);
+                const shuffledMeanings = shuffleArray([...meanings]);
+                
+                // Create the matching interface
+                const matchingTable = document.createElement('div');
+                matchingTable.className = 'matching-table';
+                
+                // Create a container for feedback
+                const feedbackElement = document.createElement('div');
+                feedbackElement.id = 'matchingFeedback';
+                feedbackElement.className = 'mt-3';
+                
+                pairs.forEach((pair, index) => {
+                    const expressionDiv = document.createElement('div');
+                    expressionDiv.className = 'mb-2'; // Reduced spacing
+                    expressionDiv.innerHTML = `
+                        <div class="card-body p-2"> <!-- Reduced padding -->
+                            <div class="row align-items-center">
+                                <div class="col-sm-5">
+                                    <div class="expression-item" style="font-size: 1.2rem; font-weight: 500;">${pair.expression}</div>
+                                </div>
+                                <div class="col-sm-1 text-center p-0">
+                                    <span class="arrow">→</span>
+                                </div>
+                                <div class="col-sm-6">
+                                    <select class="form-select matching-select" id="option-${index}" style="font-size: 1.2rem;">
+                                        <option value="">-- Select --</option>
+                                        ${shuffledMeanings.map((meaning, i) => `<option value="meaning-${meanings.indexOf(meaning)}">${meaning}</option>`).join('')}
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    container.appendChild(expressionDiv);
+                });
+                
+                container.appendChild(feedbackElement);
+                
+                // Add event listeners for check and submit buttons
+                checkBtn.addEventListener('click', function() {
+                    const result = checkMatching();
+                    // Record first attempt
+                    if (!userAnswers[0] || !userAnswers[0].hasBeenChecked) {
+                        // Save the first attempt result
+                        if (!userAnswers[0]) userAnswers[0] = {};
+                        userAnswers[0].score = result.score;
+                        userAnswers[0].hasBeenChecked = true;
+                        console.log('First attempt score recorded:', result.score);
+                    }
+                });
+                
+                submitBtn.addEventListener('click', submitMatching);
+            } else {
+                container.innerHTML = `
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        No matching pairs found for this assessment.
+                    </div>
+                `;
+                checkBtn.disabled = true;
+                submitBtn.disabled = true;
+            }
+        }
+
+        function checkMatching() {
+            // Ensure userAnswers is initialized
+            if (!window.userAnswers) {
+                window.userAnswers = [];
+            }
+            
+            const container = document.getElementById('matchingContainer');
+            const selectElements = container.querySelectorAll('.matching-select');
+            const matchingPairs = {};
+            let correctCount = 0;
+            
+            selectElements.forEach((select, index) => {
+                const userSelection = select.value;
+                // Extract the index from the value (meaning-X format)
+                const selectedMeaningIndex = userSelection ? parseInt(userSelection.split('-')[1]) : -1;
+                // The correct meaning would be the one with the same index as the expression
+                const isCorrect = selectedMeaningIndex === index;
+                
+                matchingPairs[`option-${index}`] = userSelection;
+                
+                if (isCorrect) {
+                    correctCount++;
+                    select.classList.add('is-valid');
+                    select.classList.remove('is-invalid');
+                } else {
+                    select.classList.add('is-invalid');
+                    select.classList.remove('is-valid');
+                }
+            });
+            
+            const totalPairs = selectElements.length;
+            const score = Math.round((correctCount / totalPairs) * 100);
+            
+            const feedbackElement = document.getElementById('matchingFeedback');
+            feedbackElement.innerHTML = `
+                <div class="alert alert-info mt-3">
+                    <strong>Score:</strong> ${score}% (${correctCount} out of ${totalPairs} correct)
+                </div>
+            `;
+            
+            return {score, correctCount, totalPairs};
+        }
+
+        async function submitMatching() {
+            // Ensure userAnswers is initialized
+            if (!window.userAnswers) {
+                window.userAnswers = [];
+            }
+            
+            const container = document.getElementById('matchingContainer');
+            const selectElements = container.querySelectorAll('.matching-select');
+            const matchingPairs = {};
+            let correctCount = 0;
+            
+            selectElements.forEach((select, index) => {
+                const userSelection = select.value;
+                // Extract the index from the value (meaning-X format)
+                const selectedMeaningIndex = userSelection ? parseInt(userSelection.split('-')[1]) : -1;
+                // The correct meaning would be the one with the same index as the expression
+                const isCorrect = selectedMeaningIndex === index;
+                
+                matchingPairs[`option-${index}`] = userSelection;
+                
+                if (isCorrect) correctCount++;
+            });
+            
+            const totalPairs = selectElements.length;
+            const score = Math.round((correctCount / totalPairs) * 100);
+            
+            // Use the score from the first check if available
+            const finalScore = (window.userAnswers[0] && window.userAnswers[0].hasBeenChecked) ? 
+                window.userAnswers[0].score : score;
+            
+            try {
+                const token = localStorage.getItem('token');
+                const response = await fetch(`/api/assessments/${assessment.id}/submit`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        answers: [matchingPairs],
+                        score: finalScore
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    document.getElementById('checkMatchingBtn').disabled = true;
+                    document.getElementById('submitMatchingBtn').disabled = true;
+                    
+                    // Show submission results
+                    const feedbackElement = document.getElementById('matchingFeedback');
+                    feedbackElement.innerHTML = `
+                        <div class="alert alert-success mt-3">
+                            <strong>Assessment submitted!</strong><br>
+                            Score: ${finalScore}% 
+                            ${(window.userAnswers[0] && window.userAnswers[0].hasBeenChecked) ? 
+                                '(Based on your first attempt)' : ''}
+                        </div>
+                    `;
+                    
+                    // Show a more visible success message
+                    alert('Assessment submitted successfully!');
+                    
+                    // Increment the attempt count displayed
+                    const attemptCount = document.getElementById('attemptCount');
+                    if (attemptCount) {
+                        attemptCount.textContent = (parseInt(attemptCount.textContent) + 1).toString();
+                    }
+                } else {
+                    alert('Failed to submit assessment. Please try again.');
+                }
+            } catch (error) {
+                console.error('Error submitting matching assessment:', error);
+                alert('Failed to submit assessment. Please try again.');
+            }
+        }
+
+        function createLongParagraphFillInBlanks(question) {
+            console.log('Creating long paragraph with:', question);
+            
+            // Create the container
+            const container = document.createElement('div');
+            container.className = 'long-paragraph-container';
+            
+            // Create the paragraph with drop targets
+            const paragraphText = question.text || '';
+            if (!paragraphText) {
+                console.error('No paragraph text provided for long paragraph fill-in-blank question');
+                return container;
+            }
+            
+            const parts = paragraphText.split('[BLANK]');
+            if (parts.length <= 1) {
+                console.error('No [BLANK] placeholders found in paragraph text');
+                container.innerHTML = `
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        No blank placeholders found in the paragraph text.
+                    </div>
+                    <div class="paragraph-text">${paragraphText}</div>
+                `;
+                return container;
+            }
+            
+            // Create the HTML for paragraph with drop targets
+            // Use a more structured approach for better formatting
+            const paragraphContainer = document.createElement('div');
+            paragraphContainer.className = 'paragraph-container card p-4 mb-4';
+            paragraphContainer.style.fontSize = '1.2rem';
+            paragraphContainer.style.lineHeight = '1.8';
+            
+            const sentenceContainer = document.createElement('div');
+            sentenceContainer.className = 'sentence-container';
+            
+            // Properly format the paragraph with drop targets
+            for (let i = 0; i < parts.length; i++) {
+                // Add the text part with proper spacing
+                const textSpan = document.createElement('span');
+                textSpan.textContent = parts[i];
+                sentenceContainer.appendChild(textSpan);
+                
+                // Add a drop target after each part except the last one
+                if (i < parts.length - 1) {
+                    const dropTarget = document.createElement('span');
+                    dropTarget.className = 'drop-target';
+                    dropTarget.id = `target-${i}`;
+                    dropTarget.dataset.index = i;
+                    dropTarget.style.display = 'inline-block';
+                    dropTarget.style.minWidth = '120px';
+                    dropTarget.style.height = '35px';
+                    dropTarget.style.margin = '0 5px';
+                    dropTarget.style.verticalAlign = 'middle';
+                    dropTarget.style.border = '2px dashed #ced4da';
+                    dropTarget.style.borderRadius = '4px';
+                    dropTarget.style.backgroundColor = '#f8f9fa';
+                    dropTarget.addEventListener('dragover', allowDrop);
+                    dropTarget.addEventListener('drop', drop);
+                    sentenceContainer.appendChild(dropTarget);
+                }
+            }
+            
+            paragraphContainer.appendChild(sentenceContainer);
+            
+            // Get word bank
+            const wordBank = [...(question.wordBank || [])];
+            // Add extra words if available
+            if (question.extraWords && question.extraWords.length) {
+                wordBank.push(...question.extraWords);
+            }
+            
+            // If no word bank, use the answers as a fallback
+            if (wordBank.length === 0 && question.answers && question.answers.length) {
+                wordBank.push(...question.answers);
+            }
+            
+            // If still no word bank, show an error
+            if (wordBank.length === 0) {
+                console.error('No word bank provided for long paragraph fill-in-blank question');
+                container.innerHTML = paragraphContainer.outerHTML + `
+                    <div class="alert alert-warning mt-3">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        No word bank provided for this exercise.
+                    </div>
+                `;
+                return container;
+            }
+            
+            // Create word bank container with better styling
+            const wordBankSection = document.createElement('div');
+            wordBankSection.className = 'mb-4';
+            
+            const wordBankHeader = document.createElement('h5');
+            wordBankHeader.className = 'mb-3';
+            wordBankHeader.innerHTML = '<strong>Word Bank:</strong>';
+            wordBankSection.appendChild(wordBankHeader);
+            
+            // Shuffle the word bank
+            const shuffledWordBank = [...wordBank].sort(() => Math.random() - 0.5);
+            
+            // Create word bank items with improved styling
+            const draggableContainer = document.createElement('div');
+            draggableContainer.className = 'draggable-items-container';
+            draggableContainer.style.display = 'flex';
+            draggableContainer.style.flexWrap = 'wrap';
+            draggableContainer.style.gap = '10px';
+            draggableContainer.style.padding = '15px';
+            draggableContainer.style.backgroundColor = '#f8f9fa';
+            draggableContainer.style.borderRadius = '5px';
+            draggableContainer.style.border = '1px solid #dee2e6';
+            
+            shuffledWordBank.forEach((word, index) => {
+                const draggableItem = document.createElement('div');
+                draggableItem.className = 'draggable-item';
+                draggableItem.id = `item-${index}`;
+                draggableItem.textContent = word;
+                draggableItem.setAttribute('draggable', 'true');
+                draggableItem.dataset.value = word;
+                
+                // Add drag event listeners
+                draggableItem.addEventListener('dragstart', function(e) {
+                    e.dataTransfer.setData('text', draggableItem.id);
+                    draggableItem.classList.add('dragging');
+                    draggableItem.style.opacity = '0.5';
+                });
+                
+                draggableItem.addEventListener('dragend', function() {
+                    draggableItem.classList.remove('dragging');
+                    draggableItem.style.opacity = '1';
+                });
+                
+                draggableContainer.appendChild(draggableItem);
+            });
+            
+            wordBankSection.appendChild(draggableContainer);
+            
+            // Get the correct answers
+            const correctAnswers = question.answers || question.correct || [];
+            
+            // Add hidden input fields to store data, but without 'required' attribute
+            const hiddenInputsHtml = `
+                <div style="display:none;">
+                    <input type="hidden" id="long_paragraph_result" name="long_paragraph_result" value="">
+                    ${correctAnswers.map((answer, i) => `
+                        <input type="hidden" id="expression_question_${question.id || Date.now()}_${i}" name="expression_question_${question.id || Date.now()}_${i}" value="${answer}">
+                        <input type="hidden" id="meaning_question_${question.id || Date.now()}_${i}" name="meaning_question_${question.id || Date.now()}_${i}" value="">
+                    `).join('')}
+                </div>
+            `;
+            
+            // Add debug information if needed
+            const urlParams = new URLSearchParams(window.location.search);
+            let debugHtml = '';
+            if (urlParams.get('debug') === 'true') {
+                debugHtml = `
+                    <div class="alert alert-info mb-3">
+                        <strong>Long Paragraph Debug:</strong><br>
+                        Parts: ${parts.length}<br>
+                        Word Bank: ${JSON.stringify(shuffledWordBank)}<br>
+                        Correct Answers: ${JSON.stringify(correctAnswers)}<br>
+                    </div>
+                `;
+            }
+            
+            // Combine everything into the container
+            container.appendChild(paragraphContainer);
+            container.appendChild(wordBankSection);
+            container.innerHTML += hiddenInputsHtml + debugHtml;
+            
+            return container;
+        }
+
+        async function submitAssessment(submissionData) {
+            try {
+                showLoader();
+                
+                // Get assessment ID from URL
+                const urlParams = new URLSearchParams(window.location.search);
+                const assessmentId = urlParams.get('id');
+                
+                if (!assessmentId) {
+                    throw new Error('No assessment ID provided');
+                }
+                
+                // Prepare submission data
+                const data = {
+                    answers: submissionData ? submissionData.answers : userAnswers,
+                    score: submissionData ? submissionData.score : null
+                };
+                
+                console.log('Submitting data:', data);
+                
+                const response = await fetch(`/api/assessments/${assessmentId}/submit`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to submit assessment');
+                }
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    // Show success message
+                    document.getElementById('assessmentContainer').innerHTML = `
+                        <div class="alert alert-success">
+                            <h4 class="alert-heading">Assessment Submitted Successfully!</h4>
+                            <p>Your score: ${data.score !== null ? data.score + '%' : 'Will be graded by your teacher'}</p>
+                            <hr>
+                            <p class="mb-0">You can now return to your assessments page or review your work.</p>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <a href="/student/assessments" class="btn btn-primary">
+                                <i class="bi bi-arrow-left"></i> Back to Assessments
+                            </a>
+                            <button onclick="window.location.reload()" class="btn btn-outline-secondary">
+                                <i class="bi bi-arrow-clockwise"></i> Review Your Work
+                            </button>
+                        </div>
+                    `;
+                } else {
+                    throw new Error(result.error || 'Unknown error submitting assessment');
+                }
+            } catch (error) {
+                console.error('Error submitting assessment:', error);
+                alert(`Error submitting assessment: ${error.message}`);
+            } finally {
+                hideLoader();
+            }
+        }
+    </script>
+    <!-- Direct fix for drag and drop functionality -->
+    <script>
+        // Wait for DOM to be fully loaded
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Applying drag-drop fixes...');
+            
+            // Fix for existing drop targets
+            const dropTargets = document.querySelectorAll('.drop-target, [id^="target-"]');
+            console.log('Found drop targets:', dropTargets.length);
+            
+            dropTargets.forEach(target => {
+                // Apply styling
+                target.style.display = 'inline-block';
+                target.style.minWidth = '120px';
+                target.style.height = '35px';
+                target.style.border = '2px dashed #ced4da';
+                target.style.borderRadius = '4px';
+                target.style.margin = '0 5px';
+                target.style.verticalAlign = 'middle';
+                target.style.backgroundColor = '#f8f9fa';
+                
+                // Add event listeners
+                target.ondragover = function(e) {
+                    e.preventDefault();
+                    this.classList.add('highlight');
+                };
+                
+                target.ondragleave = function() {
+                    this.classList.remove('highlight');
+                };
+                
+                target.ondrop = function(e) {
+                    e.preventDefault();
+                    this.classList.remove('highlight');
+                    
+                    const id = e.dataTransfer.getData('text');
+                    const draggedItem = document.getElementById(id);
+                    
+                    if (draggedItem) {
+                        // Clear any existing content
+                        this.innerHTML = '';
+                        // Add the dragged text content
+                        this.textContent = draggedItem.textContent;
+                        // Apply filled styling
+                        this.classList.add('filled');
+                        this.style.borderStyle = 'solid';
+                        this.style.borderColor = '#6c757d';
+                        this.style.backgroundColor = '#e9ecef';
+                        this.style.textAlign = 'center';
+                        this.style.lineHeight = '35px';
+                        this.style.fontWeight = '500';
+                        
+                        // Hide the original item
+                        draggedItem.style.display = 'none';
+                        
+                        // Update hidden form elements
+                        const index = this.dataset.index || this.id.replace('target-', '');
+                        const questionId = window.assessment && window.assessment.id ? window.assessment.id : 'question';
+                        
+                        const meaningInput = document.querySelector(`input[name="meaning_question_${questionId}_${index}"]`);
+                        if (meaningInput) {
+                            meaningInput.value = draggedItem.textContent;
+                            meaningInput.removeAttribute('required');
+                        }
+                        
+                        // Store answer for submission
+                        if (!window.userAnswers) window.userAnswers = [];
+                        if (!window.userAnswers[0]) window.userAnswers[0] = {};
+                        if (!window.userAnswers[0].dropTargets) window.userAnswers[0].dropTargets = {};
+                        window.userAnswers[0].dropTargets[index] = {
+                            text: draggedItem.textContent,
+                            correct: draggedItem.textContent === this.dataset.correctAnswer
+                        };
+                    }
+                };
+            });
+            
+            // Fix for draggable items
+            const draggableItems = document.querySelectorAll('.draggable-item');
+            console.log('Found draggable items:', draggableItems.length);
+            
+            draggableItems.forEach((item, index) => {
+                // Set ID if not already set
+                if (!item.id) {
+                    item.id = `draggable-${index}`;
+                }
+                
+                // Apply styling
+                item.style.padding = '8px 12px';
+                item.style.margin = '5px';
+                item.style.backgroundColor = '#e7f3ff';
+                item.style.border = '1px solid #b8daff';
+                item.style.borderRadius = '4px';
+                item.style.cursor = 'grab';
+                item.style.display = 'inline-block';
+                
+                // Make draggable
+                item.draggable = true;
+                
+                // Add event listeners
+                item.ondragstart = function(e) {
+                    e.dataTransfer.setData('text', this.id);
+                    this.classList.add('dragging');
+                    this.style.opacity = '0.5';
+                };
+                
+                item.ondragend = function() {
+                    this.classList.remove('dragging');
+                    this.style.opacity = '1';
+                };
+            });
+        });
+    </script>
+    <!-- Emergency fix for drag and drop exercise -->
+    <script>
+        // Wait for DOM to be fully loaded and assessment data to be available
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM loaded, setting up emergency fix and monitoring');
+            
+            // Set up a MutationObserver to watch for the container being added to the DOM
+            const bodyObserver = new MutationObserver(function(mutations) {
+                mutations.forEach(function(mutation) {
+                    if (mutation.type === 'childList') {
+                        mutation.addedNodes.forEach(function(node) {
+                            if (node.nodeType === 1) { // Element node
+                                if (node.id === 'dragDropContainer') {
+                                    console.log('MutationObserver: dragDropContainer added to DOM');
+                                    setTimeout(attemptFix, 100); // Try fix when container is detected
+                                } else if (node.querySelector && node.querySelector('#dragDropContainer')) {
+                                    console.log('MutationObserver: Container with dragDropContainer inside added');
+                                    setTimeout(attemptFix, 100); // Try fix when container is detected
+                                }
+                            }
+                        });
+                    }
+                });
+            });
+            
+            // Start observing
+            bodyObserver.observe(document.body, { childList: true, subtree: true });
+            
+            // Check if container exists immediately
+            const initialCheck = document.getElementById('dragDropContainer');
+            console.log('Initial container check:', initialCheck ? 'exists' : 'does not exist');
+            
+            // Instead of a single timeout, let's use a retry mechanism
+            let retryCount = 0;
+            const maxRetries = 10; // Increase max retries
+            
+            // Define the fix function
+            function attemptFix() {
+                console.log(`Emergency fix: Attempt ${retryCount+1} to rebuild drag-and-drop exercise`);
+                
+                // Check if assessment data is available
+                console.log('Assessment data available:', !!window.assessment);
+                
+                if (!window.assessment) {
+                    console.warn('Assessment data not available yet, retrying...');
+                    if (retryCount < maxRetries) {
+                        retryCount++;
+                        // Exponential backoff to retry
+                        setTimeout(attemptFix, 500 * retryCount); // Use shorter initial timeout
+                    } else {
+                        console.error('Failed to get assessment data after multiple attempts');
+                        // Create a visible error message in the container
+                        const container = document.getElementById('dragDropContainer');
+                        if (container) {
+                            container.innerHTML = `
+                                <div class="alert alert-danger">
+                                    <strong>Error:</strong> Could not load the drag-and-drop exercise. 
+                                    Please try refreshing the page.
+                                </div>
+                            `;
+                        }
+                    }
+                    return;
+                }
+                
+                // Check if this is a drag-and-drop assessment
+                console.log('Assessment type:', window.assessment.type);
+                if (window.assessment.type !== 'drag-and-drop') {
+                    console.log('Not a drag-and-drop assessment, skipping fix');
+                    return;
+                }
+
+                // Get the drag and drop container - use the new structure
+                const dragDropContainer = document.getElementById('dragDropContainer');
+                
+                if (!dragDropContainer) {
+                    console.log('Container not found yet, will retry');
+                    if (retryCount < maxRetries) {
+                        retryCount++;
+                        setTimeout(attemptFix, 300 * retryCount);
+                    }
+                    return;
+                }
+                
+                // Check if we have questions data correctly
+                if (!window.assessment.questions || !window.assessment.questions.length) {
+                    // Try to detect questions from other properties if possible
+                    if (window.assessment.wordBank && window.assessment.answers) {
+                        console.log('No questions array but found wordBank and answers, creating question structure');
+                        window.assessment.questions = [{
+                            type: 'drag-and-drop',
+                            subtype: 'long-paragraph-fill-in-blank', 
+                            text: window.assessment.text || '',
+                            wordBank: window.assessment.wordBank || [],
+                            answers: window.assessment.answers || [],
+                            extraWords: window.assessment.extraWords || []
+                        }];
+                    }
+                }
+                
+                // Container exists, check if it's empty or just has loading spinner
+                if (container.children.length === 0 || 
+                    (container.children.length === 1 && container.firstChild.className === 'text-center')) {
+                    console.log('Container is empty or just has loading spinner, applying real fix');
+                    
+                    // Determine the question subtype
+                    let subtype = '';
+                    if (window.assessment.subtype) {
+                        subtype = window.assessment.subtype;
+                    } else if (window.assessment.questions && window.assessment.questions.length > 0) {
+                        subtype = window.assessment.questions[0].subtype;
+                    }
+                    
+                    if (subtype === 'long-paragraph-fill-in-blank' || !subtype) {
+                        console.log('Emergency fix: Rendering drag-and-drop properly');
+                        try {
+                            // Call the main rendering function
+                            if (typeof renderDragAndDropAssessment === 'function') {
+                                renderDragAndDropAssessment(container);
+                            } else {
+                                // If the function doesn't exist yet, try again later
+                                setTimeout(attemptFix, 500);
+                            }
+                        } catch (err) {
+                            console.error('Error rendering drag and drop:', err);
+                        }
+                    }
+                }
+            }
+            
+            // Make it globally accessible
+            window.attemptFix = attemptFix;
+            
+            // Try to apply the fix immediately
+            attemptFix();
+            
+            // Also listen for the assessment-loaded event
+            document.addEventListener('assessment-loaded', function(e) {
+                console.log('assessment-loaded event detected, applying fix');
+                // Update window.assessment if not already set
+                if (!window.assessment) {
+                    window.assessment = e.detail;
+                    console.log('Updated window.assessment from event');
+                }
+                // Wait a moment to ensure containers are in the DOM
+                setTimeout(attemptFix, 200);
+            });
+            
+            // One final safety check - try again after a few seconds
+            setTimeout(attemptFix, 2000);
+        });
     </script>
 </body>
 </html> 

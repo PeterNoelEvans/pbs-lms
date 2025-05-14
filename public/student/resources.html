@@ -150,6 +150,18 @@
             transform: translateX(-50%);
             z-index: 4;
         }
+        /* Assessment status colors - increased specificity with !important */
+        .resource-card.resource-completed-good {
+            background-color: #d4edda !important;
+            border-color: #c3e6cb !important;
+        }
+        .resource-card.resource-completed-poor {
+            background-color: #fff3cd !important;
+            border-color: #ffeeba !important;
+        }
+        .resource-card.resource-not-attempted {
+            background-color: white !important;
+        }
     </style>
 </head>
 <body class="bg-light">
@@ -183,7 +195,47 @@
     <div class="container mt-4">
         <h1>My Resources</h1>
         <p class="text-muted">Access learning materials for your enrolled subjects.</p>
-
+        
+        <!-- Test Cards Section for Debugging -->
+        <div class="card mb-4">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0">Debug Test Cards</h5>
+            </div>
+            <div class="card-body">
+                <p class="mb-3">These are test cards to verify color styling is working properly:</p>
+                <div class="row">
+                    <div class="col-md-4">
+                        <div style="position: relative; background-color: #d4edda; border: 1px solid #c3e6cb; border-radius: 8px; padding: 15px; margin-bottom: 15px; min-height: 100px;">
+                            <div style="position: absolute; top: 5px; right: 5px; z-index: 9999; padding: 3px 6px; border-radius: 3px; font-weight: bold; color: white; background-color: green;">
+                                GOOD
+                            </div>
+                            <h4>Test Good Card</h4>
+                            <p>Should have green background</p>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div style="position: relative; background-color: #fff3cd; border: 1px solid #ffeeba; border-radius: 8px; padding: 15px; margin-bottom: 15px; min-height: 100px;">
+                            <div style="position: absolute; top: 5px; right: 5px; z-index: 9999; padding: 3px 6px; border-radius: 3px; font-weight: bold; color: white; background-color: orange;">
+                                NEEDS WORK
+                            </div>
+                            <h4>Test Needs Work Card</h4>
+                            <p>Should have yellow background</p>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div style="position: relative; background-color: white; border: 1px solid #ddd; border-radius: 8px; padding: 15px; margin-bottom: 15px; min-height: 100px;">
+                            <div style="position: absolute; top: 5px; right: 5px; z-index: 9999; padding: 3px 6px; border-radius: 3px; font-weight: bold; color: white; background-color: gray;">
+                                NOT ATTEMPTED
+                            </div>
+                            <h4>Test Not Attempted Card</h4>
+                            <p>Should have white background</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <button id="forceRefresh" class="btn btn-info mb-3">Force Refresh (Debug)</button>
         <div id="resourcesContent">
             <!-- Resources will be loaded here -->
         </div>
@@ -200,6 +252,12 @@
 
         // Load resources when page loads
         document.addEventListener('DOMContentLoaded', loadEnrolledSubjects);
+        
+        // Add force refresh button event listener
+        document.getElementById('forceRefresh').addEventListener('click', () => {
+            console.log('Forcing refresh...');
+            loadEnrolledSubjects();
+        });
 
         async function loadEnrolledSubjects() {
             try {
@@ -210,6 +268,16 @@
                 const assessmentsData = await assessmentsResponse.json();
                 const studentAssessments = (assessmentsData.assessments || []);
                 console.log('Student Assessments:', studentAssessments); // Debug log
+                
+                // Add detailed debug information about assessment scores and status
+                console.log('Assessment Scores Summary:');
+                const completedAssessments = studentAssessments.filter(a => a.lastScore !== null && a.lastScore !== undefined);
+                console.log(`- Total assessments: ${studentAssessments.length}`);
+                console.log(`- Assessments with scores: ${completedAssessments.length}`);
+                console.log(`- Assessment score range: ${completedAssessments.length > 0 ? 
+                    `${Math.min(...completedAssessments.map(a => a.lastScore))} - ${Math.max(...completedAssessments.map(a => a.lastScore))}` : 
+                    'N/A'}`);
+                console.log('Full assessment details:', JSON.stringify(studentAssessments, null, 2));
 
                 // Get user info to get enrolled subjects
                 const userResponse = await fetch('/api/user/info', {
@@ -336,38 +404,255 @@
         // Update resource card rendering to show assessment links and completion
         function createResourceCard(resource, studentAssessments) {
             const resourceAssessments = resource.assessments || [];
-            // Check if all assessments are completed
-            const allCompleted = resourceAssessments.length > 0 &&
-                resourceAssessments.every(a => {
-                    const status = studentAssessments.find(sa => sa.id === a.id);
-                    return status && status.completed;
-                });
-            // Render assessment links
-            const assessmentLinks = resourceAssessments.map(a => {
+            
+            // Calculate assessment status and average score
+            let totalScore = 0;
+            let completedCount = 0;
+            let hasAttempted = false;
+            
+            // First try to match by ID, then by title if no matches
+            const matchedAssessments = [];
+            
+            // Find matching assessments by ID first
+            resourceAssessments.forEach(a => {
                 const status = studentAssessments.find(sa => sa.id === a.id);
-                return `<a href="/student/assessment.html?id=${a.id}" class="btn btn-sm ${status && status.completed ? 'btn-success' : 'btn-outline-primary'} mt-1 me-1">${a.title || 'Assessment'}${status && status.completed ? ' ✓' : ''}</a>`;
+                if (status) {
+                    matchedAssessments.push({ resourceAssessment: a, studentAssessment: status });
+                }
+            });
+            
+            // If no matches by ID, try matching by title
+            if (matchedAssessments.length === 0 && resource.title) {
+                studentAssessments.forEach(sa => {
+                    // Check if assessment title matches or contains the resource title
+                    if (sa.title && (
+                        sa.title.toLowerCase() === resource.title.toLowerCase() ||
+                        sa.title.toLowerCase().includes(resource.title.toLowerCase()) ||
+                        resource.title.toLowerCase().includes(sa.title.toLowerCase())
+                    )) {
+                        matchedAssessments.push({ 
+                            resourceAssessment: { id: sa.id, title: sa.title }, 
+                            studentAssessment: sa 
+                        });
+                    }
+                });
+            }
+            
+            // Use the matched assessments
+            matchedAssessments.forEach(match => {
+                // Check for both completed flag and scores
+                const sa = match.studentAssessment;
+                
+                // Look for score in various possible properties
+                const score = sa.score || sa.lastScore || sa.bestScore || null;
+                const isCompleted = sa.completed || sa.status === 'Completed' || sa.attempts > 0;
+                
+                if (isCompleted || (typeof score === 'number' && score > 0)) {
+                    completedCount++;
+                    if (typeof score === 'number') {
+                        totalScore += score;
+                        hasAttempted = true;
+                    }
+                }
+            });
+            
+            // Determine card color class based on assessment scores
+            let cardColorClass = 'resource-not-attempted';
+            let averageScore = 0;
+            
+            if (hasAttempted && completedCount > 0) {
+                averageScore = totalScore / completedCount;
+                
+                // Set color based on score
+                if (averageScore >= 50) {
+                    cardColorClass = 'resource-completed-good';
+                } else {
+                    cardColorClass = 'resource-completed-poor';
+                }
+            }
+            
+            // Define background and border colors directly based on status
+            let bgColor = 'white';
+            let borderColor = '#ddd';
+            
+            if (cardColorClass === 'resource-completed-good') {
+                bgColor = '#d4edda';
+                borderColor = '#c3e6cb';
+            } else if (cardColorClass === 'resource-completed-poor') {
+                bgColor = '#fff3cd';
+                borderColor = '#ffeeba';
+            }
+            
+            // Debug output to see what's happening
+            console.log(`Resource "${resource.title}": assessments=${matchedAssessments.length}, completed=${completedCount}, score=${averageScore}, class=${cardColorClass}`);
+            // Add more detailed debugging
+            console.log({
+                resourceTitle: resource.title,
+                matchedAssessments: matchedAssessments,
+                completedCount: completedCount,
+                hasAttempted: hasAttempted,
+                totalScore: totalScore,
+                averageScore: averageScore,
+                cardColorClass: cardColorClass,
+                bgColor: bgColor,
+                borderColor: borderColor,
+                resource: resource
+            });
+            
+            // Render assessment links
+            const assessmentLinks = matchedAssessments.map(match => {
+                const status = match.studentAssessment;
+                let btnClass = 'btn-outline-primary';
+                let scoreText = '';
+                
+                if (status && status.completed) {
+                    if (status.score >= 50) {
+                        btnClass = 'btn-success';
+                    } else {
+                        btnClass = 'btn-warning';
+                    }
+                    scoreText = status.score ? ` (${status.score}%)` : ' ✓';
+                }
+                
+                return `<a href="/student/assessment.html?id=${match.studentAssessment.id}" class="btn btn-sm ${btnClass} mt-1 me-1" 
+                    data-assessment-id="${match.studentAssessment.id}" 
+                    data-status="${status ? 'found' : 'not-found'}" 
+                    data-completed="${status && status.completed ? 'true' : 'false'}" 
+                    data-score="${status && status.score ? status.score : 'none'}">${match.resourceAssessment.title || 'Assessment'}${scoreText}</a>`;
             }).join('');
+            
             // Find the highest score for this resource's assessments
             let scoreHtml = '';
-            const scores = resourceAssessments
-                .map(a => {
-                    const status = studentAssessments.find(sa => sa.id === a.id);
-                    return status && typeof status.score === 'number' ? status.score : null;
-                })
-                .filter(s => s !== null);
+            const scores = matchedAssessments
+                .map(match => match.studentAssessment.score)
+                .filter(s => s !== null && s !== undefined);
+            
             if (scores.length > 0) {
                 const bestScore = Math.max(...scores);
-                scoreHtml = `<div class="resource-score-badge">${bestScore}%</div>`;
+                let scoreColorClass = bestScore >= 50 ? 'bg-success' : 'bg-warning';
+                scoreHtml = `<div class="resource-score-badge ${scoreColorClass}">${bestScore}%</div>`;
             }
-            return `
-                <div class="resource-card${allCompleted ? ' completed-resource' : ''}" style="position: relative;">
+            
+            const safeTitleForHTML = String(resource.title || '');
+            const safeDescription = String(resource.description || 'No description');
+            const safeType = String(resource.type || '');
+            const safeUrl = String(resource.url || '');
+            const safeFilePath = String(resource.filePath || '');
+            const safeAudioPath = String(resource.audioPath || '');
+            
+            // This is a direct visual indicator on each resource card that will always show its status
+            const statusIndicator = `
+                <div style="position: absolute; top: 5px; right: 5px; z-index: 9999; padding: 2px 5px; border-radius: 3px; 
+                           font-size: 0.75rem; font-weight: bold; 
+                           color: white; background-color: ${
+                           cardColorClass === 'resource-completed-good' ? 'green' : 
+                           cardColorClass === 'resource-completed-poor' ? 'orange' : 
+                           'gray'}">
+                    ${cardColorClass === 'resource-completed-good' ? 'GOOD' : 
+                     cardColorClass === 'resource-completed-poor' ? 'NEEDS WORK' : 
+                     'NOT ATTEMPTED'}
+                </div>
+            `;
+            
+            // Prepare the card HTML
+            const cardHTML = `
+                <div class="resource-card" 
+                     style="position: relative; background-color: ${bgColor}; border-color: ${borderColor};"
+                     data-status="${cardColorClass}"
+                     data-score="${averageScore}"
+                     data-resource="${resource.id}">
+                    ${statusIndicator}
                     ${resource.thumbnail ? `<img src="${resource.thumbnail}" class="resource-thumbnail-corner" alt="thumbnail">` : ''}
                     ${scoreHtml}
-                    <h3 class="resource-type-badge">${resource.type}</h3>
-                    <h4>${resource.title}</h4>
-                    <p>${resource.description}</p>
-                    <a href="${resource.url}" class="btn btn-primary view-btn-bottom">View</a>
+                    <h3 class="resource-type-badge">${safeType}</h3>
+                    <h4>${safeTitleForHTML}</h4>
+                    <p>${safeDescription}</p>
+                    
+                    ${safeFilePath ? `
+                        <div class="mt-2 text-center">
+                            ${safeType === 'image' || safeType === 'image-with-audio' ? `
+                                <img src="${safeFilePath}" class="img-fluid mb-2" style="max-height: 150px;">
+                            ` : ''}
+                            ${safeType === 'audio' ? `
+                                <audio controls class="w-100">
+                                    <source src="${safeFilePath}" type="audio/mpeg">
+                                    Your browser does not support the audio element.
+                                </audio>
+                            ` : ''}
+                            ${safeType === 'video' ? `
+                                <video controls class="w-100" style="max-height: 150px;">
+                                    <source src="${safeFilePath}" type="video/mp4">
+                                    Your browser does not support the video element.
+                                </video>
+                            ` : ''}
+                            ${safeType === 'image-with-audio' && safeAudioPath ? `
+                                <audio controls class="w-100 mt-2">
+                                    <source src="${safeAudioPath}" type="audio/mpeg">
+                                    Your browser does not support the audio element.
+                                </audio>
+                            ` : ''}
+                        </div>
+                    ` : ''}
+                    
+                    <a href="/student/resource-view.html?id=${resource.id}" class="btn btn-primary view-btn-bottom">View</a>
                     <div class="mt-2">${assessmentLinks}</div>
+                </div>
+            `;
+            
+            // Log the first few characters of generated HTML for debugging
+            console.log(`Card HTML for ${resource.title} begins with: ${cardHTML.substring(0, 200)}...`);
+            
+            return cardHTML;
+        }
+
+        async function loadResourceCard(resource) {
+            const safeTitleForHTML = String(resource.title || '');
+            const safeDescription = String(resource.description || 'No description');
+            const safeType = String(resource.type || '');
+            const safeUrl = String(resource.url || '');
+            const safeFilePath = String(resource.filePath || '');
+            const safeAudioPath = String(resource.audioPath || '');
+            
+            return `
+                <div class="resource-card" data-id="${resource.id}">
+                    <div class="d-flex justify-content-between">
+                        <h5>${safeTitleForHTML}</h5>
+                        <span class="resource-type-badge">${safeType}</span>
+                    </div>
+                    <p class="text-muted" style="height: 50px; overflow: hidden;">${safeDescription}</p>
+                    ${safeUrl ? `
+                        <div class="my-3">
+                            <a href="${safeUrl}" target="_blank" class="btn btn-sm btn-primary">Open Link</a>
+                        </div>
+                    ` : ''}
+                    ${safeFilePath ? `
+                        <div class="mt-2 text-center">
+                            ${safeType === 'image' || safeType === 'image-with-audio' ? `
+                                <img src="${safeFilePath}" class="img-fluid mb-2" style="max-height: 150px;">
+                            ` : ''}
+                            ${safeType === 'audio' ? `
+                                <audio controls class="w-100">
+                                    <source src="${safeFilePath}" type="audio/mpeg">
+                                    Your browser does not support the audio element.
+                                </audio>
+                            ` : ''}
+                            ${safeType === 'video' ? `
+                                <video controls class="w-100" style="max-height: 150px;">
+                                    <source src="${safeFilePath}" type="video/mp4">
+                                    Your browser does not support the video element.
+                                </video>
+                            ` : ''}
+                            ${safeType === 'image-with-audio' && safeAudioPath ? `
+                                <audio controls class="w-100 mt-2">
+                                    <source src="${safeAudioPath}" type="audio/mpeg">
+                                    Your browser does not support the audio element.
+                                </audio>
+                            ` : ''}
+                        </div>
+                    ` : ''}
+                    <button class="btn btn-primary btn-sm view-btn-bottom" onclick="window.location.href='/student/resource-view.html?id=${resource.id}'">
+                        View Resource
+                    </button>
                 </div>
             `;
         }

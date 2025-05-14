@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resource View</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.3/font/bootstrap-icons.css">
+    <style>
+        .resource-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .resource-type-badge {
+            background-color: #e9ecef;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.875rem;
+        }
+        .resource-content {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .recording-dot {
+            width: 12px;
+            height: 12px;
+            background-color: #dc3545;
+            border-radius: 50%;
+            margin-right: 8px;
+            transition: transform 0.2s ease;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.5); opacity: 0.7; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .recording-dot.pulsing {
+            animation: pulse 1s infinite;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="/student/dashboard">Student Portal</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/student/dashboard">Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/student/resources">Resources</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/student/assessments">Assessments</a>
+                    </li>
+                </ul>
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <button class="btn btn-outline-light" onclick="logout()">Logout</button>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="mb-3">
+            <a href="/student/resources" class="btn btn-outline-primary">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-arrow-left" viewBox="0 0 16 16">
+                    <path fill-rule="evenodd" d="M15 8a.5.5 0 0 0-.5-.5H2.707l3.147-3.146a.5.5 0 1 0-.708-.708l-4 4a.5.5 0 0 0 0 .708l4 4a.5.5 0 0 0 .708-.708L2.707 8.5H14.5A.5.5 0 0 0 15 8z"/>
+                </svg>
+                Back to Resources
+            </a>
+        </div>
+        
+        <div class="resource-container">
+            <div id="resourceContent" class="resource-content">
+                <!-- Resource content will be loaded here -->
+                <div class="text-center">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p>Loading resource...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const token = localStorage.getItem('token');
+        
+        // Check authentication
+        if (!token) {
+            window.location.href = '/login';
+        }
+
+        // Get resource ID from URL params
+        const urlParams = new URLSearchParams(window.location.search);
+        const resourceId = urlParams.get('id');
+
+        if (!resourceId) {
+            document.getElementById('resourceContent').innerHTML = `
+                <div class="alert alert-danger">
+                    Resource ID not provided. Please go back to resources.
+                </div>
+            `;
+        } else {
+            loadResource(resourceId);
+        }
+
+        async function loadResource(resourceId) {
+            try {
+                const response = await fetch(`/api/resources/${resourceId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to load resource');
+                }
+                
+                const resource = await response.json();
+                displayResource(resource);
+            } catch (error) {
+                console.error('Error loading resource:', error);
+                document.getElementById('resourceContent').innerHTML = `
+                    <div class="alert alert-danger">
+                        Failed to load resource. Please try again later.
+                    </div>
+                `;
+            }
+        }
+
+        function displayResource(resource) {
+            const safeTitleForHTML = String(resource.title || '');
+            const safeDescription = String(resource.description || 'No description');
+            const safeType = String(resource.type || '');
+            const safeUrl = String(resource.url || '');
+            const safeFilePath = String(resource.filePath || '');
+            const safeAudioPath = String(resource.audioPath || '');
+
+            let contentHtml = `
+                <h1>${safeTitleForHTML}</h1>
+                <span class="resource-type-badge mb-3">${safeType}</span>
+                <p class="lead">${safeDescription}</p>
+            `;
+
+            if (safeType === 'document') {
+                contentHtml += `
+                    <div class="embed-responsive mt-3">
+                        <iframe src="${safeFilePath || safeUrl}" class="w-100" style="height: 600px; border: 1px solid #ddd;"></iframe>
+                    </div>
+                    <div class="mt-3">
+                        <a href="${safeFilePath || safeUrl}" target="_blank" class="btn btn-primary">Open in New Tab</a>
+                    </div>
+                `;
+            } else if (safeType === 'image') {
+                contentHtml += `
+                    <div class="mt-3 text-center">
+                        <img src="${safeFilePath || safeUrl}" class="img-fluid" style="max-height: 600px;">
+                    </div>
+                    <div class="mt-3">
+                        <a href="${safeFilePath || safeUrl}" target="_blank" class="btn btn-primary">View Full Size</a>
+                    </div>
+                `;
+            } else if (safeType === 'video') {
+                contentHtml += `
+                    <div class="mt-3">
+                        <video controls class="w-100" style="max-height: 500px;">
+                            <source src="${safeFilePath || safeUrl}" type="video/mp4">
+                            Your browser does not support the video element.
+                        </video>
+                    </div>
+                `;
+            } else if (safeType === 'audio') {
+                contentHtml += `
+                    <div class="mt-3">
+                        <audio controls class="w-100">
+                            <source src="${safeFilePath || safeUrl}" type="audio/mpeg">
+                            Your browser does not support the audio element.
+                        </audio>
+                    </div>
+                `;
+            } else if (safeType === 'image-with-audio') {
+                contentHtml += `
+                    <div class="mt-3 text-center">
+                        <img src="${safeFilePath}" class="img-fluid" style="max-height: 500px;">
+                    </div>
+                    <div class="mt-3">
+                        <audio controls class="w-100">
+                            <source src="${safeAudioPath}" type="audio/mpeg">
+                            Your browser does not support the audio element.
+                        </audio>
+                    </div>
+                `;
+            } else if (safeType === 'link') {
+                contentHtml += `
+                    <div class="mt-3">
+                        <a href="${safeUrl}" target="_blank" class="btn btn-primary">Open External Link</a>
+                    </div>
+                `;
+            }
+
+            // Show assessment links if available
+            if (resource.assessments && resource.assessments.length > 0) {
+                // Check if any assessment is of type "speaking"
+                const speakingAssessments = resource.assessments.filter(a => a.type === 'speaking');
+                
+                if (speakingAssessments.length > 0) {
+                    // Add recording section above assessment links
+                    contentHtml += `
+                        <div class="mt-4 p-3 border rounded bg-light">
+                            <h4>Speaking Practice</h4>
+                            <p class="mb-3">Record your voice to practice speaking</p>
+                            
+                            <div class="mb-3">
+                                <div class="d-flex gap-2">
+                                    <button id="startRecordBtn" class="btn btn-primary">
+                                        <i class="bi bi-mic-fill"></i> Start Recording
+                                    </button>
+                                    <button id="stopRecordBtn" class="btn btn-danger" style="display: none;">
+                                        <i class="bi bi-stop-fill"></i> Stop Recording
+                                    </button>
+                                </div>
+                                <div id="recordingStatus" class="mt-2">
+                                    <!-- Recording status will appear here -->
+                                </div>
+                            </div>
+                            
+                            <div id="audioPreview" class="mb-3" style="display: none;">
+                                <h5>Recording Preview</h5>
+                                <audio id="audioPlayer" controls class="w-100"></audio>
+                                <button id="submitRecordingBtn" class="btn btn-success mt-2">
+                                    <i class="bi bi-check-circle"></i> Submit Recording
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                contentHtml += `
+                    <div class="mt-4">
+                        <h4>Related Assessments</h4>
+                        <div class="d-flex flex-wrap gap-2">
+                            ${resource.assessments.map(a => 
+                                `<a href="/student/assessment.html?id=${a.id}&debug=true" class="btn btn-outline-primary">
+                                    ${a.title || 'Assessment'} (ID: ${a.id})
+                                </a>`
+                            ).join('')}
+                        </div>
+                        <div class="mt-2 text-muted small">
+                            <p>Debug info - Assessment IDs: ${resource.assessments.map(a => a.id).join(', ')}</p>
+                        </div>
+                    </div>
+                `;
+            }
+
+            document.getElementById('resourceContent').innerHTML = contentHtml;
+            
+            // Set up recording functionality if there are speaking assessments
+            if (resource.assessments && resource.assessments.some(a => a.type === 'speaking')) {
+                setupRecordingFeature(resource.assessments.find(a => a.type === 'speaking').id);
+            }
+        }
+
+        function setupRecordingFeature(assessmentId) {
+            let mediaRecorder;
+            let audioChunks = [];
+            let recordingInterval;
+            
+            const startBtn = document.getElementById('startRecordBtn');
+            const stopBtn = document.getElementById('stopRecordBtn');
+            const statusDiv = document.getElementById('recordingStatus');
+            const audioPreview = document.getElementById('audioPreview');
+            const audioPlayer = document.getElementById('audioPlayer');
+            const submitBtn = document.getElementById('submitRecordingBtn');
+            
+            startBtn.addEventListener('click', startRecording);
+            stopBtn.addEventListener('click', stopRecording);
+            submitBtn.addEventListener('click', submitRecording);
+            
+            function startRecording() {
+                // Reset previous recording
+                audioChunks = [];
+                audioPlayer.src = '';
+                audioPreview.style.display = 'none';
+                
+                // Show recording UI
+                startBtn.style.display = 'none';
+                stopBtn.style.display = 'inline-block';
+                
+                // Create recording indicator with pulsing animation
+                statusDiv.innerHTML = `
+                    <div class="d-flex align-items-center text-danger">
+                        <div id="recordingDot" class="recording-dot pulsing"></div>
+                        <span>Recording...</span>
+                    </div>
+                `;
+                
+                // Request microphone access
+                navigator.mediaDevices.getUserMedia({ audio: true })
+                    .then(stream => {
+                        mediaRecorder = new MediaRecorder(stream);
+                        
+                        mediaRecorder.ondataavailable = e => {
+                            if (e.data.size > 0) {
+                                audioChunks.push(e.data);
+                            }
+                        };
+                        
+                        mediaRecorder.onstop = () => {
+                            const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                            const audioUrl = URL.createObjectURL(audioBlob);
+                            audioPlayer.src = audioUrl;
+                            audioPreview.style.display = 'block';
+                            
+                            // Store for submission
+                            window.recordedAudio = audioBlob;
+                        };
+                        
+                        mediaRecorder.start();
+                    })
+                    .catch(error => {
+                        console.error('Error accessing microphone:', error);
+                        statusDiv.innerHTML = `<div class="text-danger">Error: Unable to access microphone. Please check permissions.</div>`;
+                        startBtn.style.display = 'inline-block';
+                        stopBtn.style.display = 'none';
+                        clearInterval(recordingInterval);
+                    });
+            }
+            
+            function stopRecording() {
+                if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                    mediaRecorder.stop();
+                    
+                    // Stop all tracks in the stream
+                    mediaRecorder.stream.getTracks().forEach(track => track.stop());
+                }
+                
+                // Update UI
+                startBtn.style.display = 'inline-block';
+                stopBtn.style.display = 'none';
+                statusDiv.innerHTML = '<div class="text-success">Recording complete!</div>';
+            }
+            
+            function submitRecording() {
+                if (!window.recordedAudio) {
+                    statusDiv.innerHTML = '<div class="text-danger">No recording available to submit.</div>';
+                    return;
+                }
+                
+                statusDiv.innerHTML = '<div class="text-primary">Submitting recording...</div>';
+                
+                // Create form data and add audio blob
+                const formData = new FormData();
+                formData.append('audio', window.recordedAudio, 'recording.webm');
+                
+                // Submit to API
+                fetch(`/api/assessments/${assessmentId}/submit-speaking`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        statusDiv.innerHTML = '<div class="alert alert-success">Recording submitted successfully!</div>';
+                        // Reset the audio preview
+                        audioPreview.style.display = 'none';
+                        window.recordedAudio = null;
+                    } else {
+                        statusDiv.innerHTML = `<div class="alert alert-danger">Error submitting recording: ${data.error || 'Unknown error'}</div>`;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error submitting recording:', error);
+                    statusDiv.innerHTML = '<div class="alert alert-danger">Error submitting recording. Please try again.</div>';
+                });
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('token');
+            window.location.href = '/login';
+        }
+    </script>
+</body>
+</html> 
