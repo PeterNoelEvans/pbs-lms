@@ -1511,6 +1511,43 @@ app.post('/api/parts/:partId/sections', auth, async (req, res) => {
     }
 });
 
+// Update a section by ID
+app.put('/api/sections/:sectionId', auth, async (req, res) => {
+    try {
+        const { sectionId } = req.params;
+        const { name, description, order } = req.body;
+
+        // Validate input
+        if (!name) {
+            return res.status(400).json({ error: 'Name is required' });
+        }
+
+        // Check if section exists
+        const existingSection = await prisma.section.findUnique({
+            where: { id: sectionId }
+        });
+
+        if (!existingSection) {
+            return res.status(404).json({ error: 'Section not found' });
+        }
+
+        // Update the section
+        const updatedSection = await prisma.section.update({
+            where: { id: sectionId },
+            data: {
+                name,
+                description,
+                order: order !== undefined ? order : existingSection.order
+            }
+        });
+
+        res.json(updatedSection);
+    } catch (error) {
+        console.error('Error updating section:', error);
+        res.status(500).json({ error: 'Failed to update section' });
+    }
+});
+
 // Get a single section by ID
 app.get('/api/sections/:sectionId', auth, async (req, res) => {
     try {
@@ -2469,11 +2506,62 @@ app.post('/api/assessments/:assessmentId/submit', auth, async (req, res) => {
                         for (let i = 0; i < total; i++) {
                             if (answers[0].dragAndDrop[i] === q.correct[i]) correct++;
                         }
-                    } else if (q.subtype === 'image-fill-in-blank' && Array.isArray(q.pairs) && answers[0]) {
-                        total = q.pairs.length;
-                        for (let i = 0; i < total; i++) {
-                            if (answers[0][`option-${i}`] === `match-${i}`) correct++;
+                    } else if (q.subtype === 'image-fill-in-blank' && answers[0]) {
+                        console.log('Grading image-fill-in-blank:', { question: q, answers: answers[0] });
+                        
+                        // Handle different possible data structures for image-fill-in-blank
+                        if (Array.isArray(q.pairs) && q.pairs.length > 0) {
+                            total = q.pairs.length;
+                            for (let i = 0; i < total; i++) {
+                                // Check standard format
+                                if (answers[0][`option-${i}`] === `match-${i}`) {
+                                    correct++;
+                                }
+                                // Check alternative format where the answer might be an array
+                                else if (Array.isArray(answers[0]) && answers[0][i] === i) {
+                                    correct++;
+                                }
+                                // Also try direct property mapping
+                                else if (answers[0][i] === i) {
+                                    correct++;
+                                }
+                            }
+                        } 
+                        // If question has correct array instead of pairs
+                        else if (Array.isArray(q.correct) && q.correct.length > 0) {
+                            total = q.correct.length;
+                            
+                            // Try to match answers to correct values
+                            if (Array.isArray(answers[0])) {
+                                // If answer is array, compare positions
+                                for (let i = 0; i < total; i++) {
+                                    if (answers[0][i] === q.correct[i]) {
+                                        correct++;
+                                    }
+                                }
+                            } else if (answers[0].dragAndDrop) {
+                                // If using dragAndDrop format
+                                for (let i = 0; i < total; i++) {
+                                    if (answers[0].dragAndDrop[i] === q.correct[i]) {
+                                        correct++;
+                                    }
+                                }
+                            } else {
+                                // Check for direct property mapping or other formats
+                                for (let i = 0; i < total; i++) {
+                                    const key = Object.keys(answers[0]).find(k => 
+                                        k === `option-${i}` || k === `${i}` || k === i.toString());
+                                    
+                                    if (key && (answers[0][key] === q.correct[i] || 
+                                               answers[0][key] === `match-${i}` || 
+                                               answers[0][key] === i.toString())) {
+                                        correct++;
+                                    }
+                                }
+                            }
                         }
+                        
+                        console.log('Image-fill-in-blank grading result:', { total, correct });
                     }
                 }
                 if (total > 0) {
