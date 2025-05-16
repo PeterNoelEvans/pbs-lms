@@ -656,6 +656,14 @@
                 </div>
             `;
         }
+
+        // Function to handle logout
+        function logout() {
+            // Clear the authentication token from localStorage
+            localStorage.removeItem('token');
+            // Redirect to the login page
+            window.location.href = '/login';
+        }
     </script>
 </body>
 </html>

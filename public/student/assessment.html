@@ -67,13 +67,18 @@
             border-radius: 5px;
             cursor: pointer;
             transition: all 0.2s;
+            display: block;
+            position: relative;
+            padding-left: 15px;
         }
         .multiple-choice-option:hover {
             background-color: #f8f9fa;
+            border-color: #adb5bd;
         }
         .multiple-choice-option.selected {
             background-color: #e7f3ff;
             border-color: #0d6efd;
+            font-weight: 500;
         }
         .list-group {
             margin-bottom: 0;
@@ -552,6 +557,11 @@
         // Call showDebugInfo immediately
         showDebugInfo();
         
+        // Global helper functions
+        function formatWithLineBreaks(text) {
+            return text ? text.replace(/\\n/g, '<br>').replace(/\n/g, '<br>') : '';
+        }
+        
         // Check authentication
         if (!token) {
             window.location.href = '/login';
@@ -715,11 +725,6 @@
                 attemptsHtml = `<div id="attemptsInfo" class="mb-2"><strong>Attempts:</strong> <span id="attemptCount">${attemptCount}</span> / Unlimited</div>`;
                 maxAttempts = null;
             }
-            
-            // Function to convert newlines to <br> tags
-            const formatWithLineBreaks = (text) => {
-                return text ? text.replace(/\\n/g, '<br>').replace(/\n/g, '<br>') : '';
-            };
             
             try {
                 // Determine assessment type and render accordingly
@@ -966,39 +971,113 @@
         }
         
         function renderMultipleChoiceQuestion(question, questionDiv) {
+            // Debug info
+            console.log('Rendering question:', JSON.stringify(question));
+            console.log('Question keys:', Object.keys(question));
+            
+            // For empty question objects, try to handle gracefully
+            if (!question || (!question.options && !question.choices)) {
+                questionDiv.innerHTML += `
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        This question has no options defined. Please contact your teacher.
+                    </div>
+                    <div class="alert alert-info">
+                        <strong>Debug info:</strong> 
+                        <pre>${JSON.stringify(question, null, 2)}</pre>
+                    </div>
+                `;
+                return;
+            }
+            
             // Support both 'options' and 'choices' keys
             const choices = question.options || question.choices || [];
+            
+            // If no choices still, show a friendly message
+            if (choices.length === 0) {
+                questionDiv.innerHTML += `
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        This question has no choices defined. Please contact your teacher.
+                    </div>
+                    <div class="alert alert-info">
+                        <strong>Debug info:</strong> 
+                        <pre>${JSON.stringify(question, null, 2)}</pre>
+                    </div>
+                `;
+                return;
+            }
+            
             // Create container for options
             const optionsContainer = document.createElement('div');
-            optionsContainer.className = 'options-container';
+            optionsContainer.className = 'options-container mt-3';
+            
             // Add each option
             choices.forEach((option, optionIndex) => {
                 const optionDiv = document.createElement('div');
                 optionDiv.className = 'multiple-choice-option';
                 optionDiv.textContent = option;
                 optionDiv.dataset.optionIndex = optionIndex;
+                
+                // Create a visual radio button indicator
+                const radioIndicator = document.createElement('span');
+                radioIndicator.className = 'radio-indicator';
+                radioIndicator.style.position = 'absolute';
+                radioIndicator.style.left = '15px';
+                radioIndicator.style.top = '50%';
+                radioIndicator.style.transform = 'translateY(-50%)';
+                radioIndicator.style.width = '16px';
+                radioIndicator.style.height = '16px';
+                radioIndicator.style.border = '1px solid #adb5bd';
+                radioIndicator.style.borderRadius = '50%';
+                radioIndicator.style.display = 'inline-block';
+                optionDiv.style.paddingLeft = '40px';
+                optionDiv.appendChild(radioIndicator);
+                
                 // Check if this option is already selected
                 if (userAnswers[currentQuestionIndex] && 
                     userAnswers[currentQuestionIndex].selectedOption === optionIndex) {
                     optionDiv.classList.add('selected');
+                    radioIndicator.style.backgroundColor = '#0d6efd';
+                    radioIndicator.style.borderColor = '#0d6efd';
                 }
+                
                 // Add click handler
                 optionDiv.addEventListener('click', function() {
                     // Remove selected class from all options
                     optionsContainer.querySelectorAll('.multiple-choice-option').forEach(el => {
                         el.classList.remove('selected');
+                        const indicator = el.querySelector('.radio-indicator');
+                        if (indicator) {
+                            indicator.style.backgroundColor = '';
+                            indicator.style.borderColor = '#adb5bd';
+                        }
                     });
+                    
                     // Add selected class to this option
                     this.classList.add('selected');
+                    const indicator = this.querySelector('.radio-indicator');
+                    if (indicator) {
+                        indicator.style.backgroundColor = '#0d6efd';
+                        indicator.style.borderColor = '#0d6efd';
+                    }
+                    
                     // Save the answer
                     updateMultipleChoiceAnswer(optionIndex);
                 });
+                
                 optionsContainer.appendChild(optionDiv);
             });
+            
             questionDiv.appendChild(optionsContainer);
         }
         
         function updateMultipleChoiceAnswer(optionIndex) {
+            // Make sure userAnswers is initialized
+            if (!window.userAnswers) {
+                window.userAnswers = [];
+            }
+            
             // Initialize if not exists
             if (!userAnswers[currentQuestionIndex]) {
                 userAnswers[currentQuestionIndex] = {};
@@ -2969,6 +3048,342 @@
                 alert(`Error submitting assessment: ${error.message}`);
             } finally {
                 hideLoader();
+            }
+        }
+
+        function renderMultipleChoiceAssessment() {            // Check if questions are empty objects and need to be fixed            if (assessment.questions && assessment.questions.length > 0) {                // Find questions that only have "type" property                const emptyQuestions = assessment.questions.filter(q =>                     q.type === 'multiple-choice' &&                     Object.keys(q).length === 1                );                                if (emptyQuestions.length > 0) {                    console.warn(`Found ${emptyQuestions.length} empty multiple choice questions, creating default content`);                                        // Create default questions with placeholder content                    assessment.questions = assessment.questions.map((q, index) => {                        if (q.type === 'multiple-choice' && Object.keys(q).length === 1) {                            return {                                type: 'multiple-choice',                                text: `Question ${index + 1}`,                                options: ['Option A', 'Option B', 'Option C', 'Option D'],                                correctOption: 0                            };                        }                        return q;                    });                                        console.log('Fixed questions:', assessment.questions);                }            }                        // Create the basic structure            const mcContainer = document.createElement('div');            mcContainer.id = 'multipleChoiceContainer';                        // Set up attempts information
+            let attemptsHtml = '';
+            if (assessment.maxAttempts) {
+                attemptsHtml = `<div id="attemptsInfo" class="mb-2"><strong>Attempts:</strong> <span id="attemptCount">${attemptCount}</span> / ${assessment.maxAttempts}</div>`;
+            } else {
+                attemptsHtml = `<div id="attemptsInfo" class="mb-2"><strong>Attempts:</strong> <span id="attemptCount">${attemptCount}</span> / Unlimited</div>`;
+            }
+            
+            // Add the container to the DOM
+            const container = document.getElementById('assessmentContainer');
+            container.innerHTML = `
+                <div class="card mb-4">
+                    <div class="card-header bg-primary text-white">
+                        <h3 class="mb-0" id="assessmentTitle">${assessment.title || 'Multiple Choice Quiz'}</h3>
+                    </div>
+                    <div class="card-body">
+                        <p class="mb-3" id="assessmentDescription">${formatWithLineBreaks(assessment.description || 'Select the correct answer for each question.')}</p>
+                        
+                        ${assessment.criteria ? `
+                            <div class="alert alert-info mb-3">
+                                <strong>Criteria:</strong> ${formatWithLineBreaks(assessment.criteria)}
+                            </div>
+                        ` : ''}
+                        ${attemptsHtml}
+                        <div id="quizContainer" class="mb-4">
+                            <div id="questionContainer"></div>
+                            
+                            <div class="mt-3 d-flex justify-content-between">
+                                <button id="prevQuestionBtn" class="btn btn-secondary" disabled>
+                                    <i class="bi bi-arrow-left"></i> Previous
+                                </button>
+                                <div>
+                                    <span id="questionCounter">1 of ${assessment.questions ? assessment.questions.length : 1}</span>
+                                </div>
+                                <button id="nextQuestionBtn" class="btn btn-primary" disabled>
+                                    Next <i class="bi bi-arrow-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-3">
+                            <button id="submitBtn" class="btn btn-success">Submit Answers</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Set up the question display
+            if (assessment.questions && assessment.questions.length > 0) {
+                // Initialize user answers array if not already done
+                if (!window.userAnswers) {
+                    window.userAnswers = [];
+                }
+                
+                // Set up navigation buttons
+                const prevBtn = document.getElementById('prevQuestionBtn');
+                const nextBtn = document.getElementById('nextQuestionBtn');
+                
+                // Enable navigation buttons if we have multiple questions
+                if (assessment.questions.length > 1) {
+                    nextBtn.disabled = false;
+                    nextBtn.addEventListener('click', function() {
+                        if (currentQuestionIndex < assessment.questions.length - 1) {
+                            currentQuestionIndex++;
+                            renderCurrentQuestion();
+                        }
+                    });
+                    
+                    prevBtn.addEventListener('click', function() {
+                        if (currentQuestionIndex > 0) {
+                            currentQuestionIndex--;
+                            renderCurrentQuestion();
+                        }
+                    });
+                }
+                
+                // Render the first question
+                renderCurrentQuestion();
+            } else {
+                // If no questions are available
+                document.getElementById('questionContainer').innerHTML = `
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        No questions available for this assessment.
+                    </div>
+                `;
+            }
+            
+            // Set up submit button
+            document.getElementById('submitBtn').addEventListener('click', submitMultipleChoiceAnswers);
+        }
+        
+        // Function to render the current question
+        function renderCurrentQuestion() {
+            const questionContainer = document.getElementById('questionContainer');
+            const questionCounter = document.getElementById('questionCounter');
+            const prevBtn = document.getElementById('prevQuestionBtn');
+            const nextBtn = document.getElementById('nextQuestionBtn');
+            
+            // Update navigation button states
+            prevBtn.disabled = currentQuestionIndex <= 0;
+            nextBtn.disabled = currentQuestionIndex >= assessment.questions.length - 1;
+            
+            // Update question counter
+            questionCounter.textContent = `${currentQuestionIndex + 1} of ${assessment.questions.length}`;
+            
+            // Get current question
+            const question = assessment.questions[currentQuestionIndex];
+            
+            // Create question container
+            questionContainer.innerHTML = '';
+            const questionDiv = document.createElement('div');
+            questionDiv.className = 'question p-3 border rounded mb-3';
+            
+            // Add question title/text if it exists
+            if (question.text) {
+                const questionTitle = document.createElement('div');
+                questionTitle.className = 'question-title mb-3';
+                questionTitle.textContent = question.text;
+                questionDiv.appendChild(questionTitle);
+            } else {
+                // No question text, use a generic label
+                const questionTitle = document.createElement('div');
+                questionTitle.className = 'question-title mb-3';
+                questionTitle.textContent = `Question ${currentQuestionIndex + 1}`;
+                questionDiv.appendChild(questionTitle);
+            }
+            
+            // Check if we need to add audio player for listening exercises or multiple choice assessments
+            const isListeningExercise = 
+                assessment.type === 'listening' || 
+                assessment.title.toLowerCase().includes('listening') ||
+                (assessment.type === 'multiple-choice' && assessment.title.toLowerCase().includes('listen'));
+                
+            let audioFound = false;
+            
+            if (isListeningExercise) {
+                const audioPlayer = document.createElement('div');
+                audioPlayer.className = 'audio-player mb-3';
+                
+                // Create info message
+                const infoMessage = document.createElement('div');
+                infoMessage.className = 'alert alert-info';
+                infoMessage.innerHTML = '<i class="bi bi-volume-up me-2"></i>Listen to the audio and choose the best answer.';
+                audioPlayer.appendChild(infoMessage);
+                
+                            // Check if we already showed the audio player for this assessment
+            // Only show it once per assessment to avoid duplicate error messages
+            if (currentQuestionIndex === 0 || !window.audioPlayerShown) {
+                window.audioPlayerShown = true;
+                
+                // Add audio element
+                const audio = document.createElement('audio');
+                audio.controls = true;
+                audio.className = 'w-100';
+                
+                // Try to find audio sources in priority order
+                if (assessment.mediaFiles && assessment.mediaFiles.length > 0) {
+                    // Find audio files from mediaFiles array
+                    const audioFiles = assessment.mediaFiles.filter(file => 
+                        (file.url || file.filePath) && (
+                            (file.url && (file.url.endsWith('.mp3') || file.url.endsWith('.wav') || file.url.endsWith('.ogg'))) ||
+                            (file.filePath && (file.filePath.endsWith('.mp3') || file.filePath.endsWith('.wav') || file.filePath.endsWith('.ogg'))) ||
+                            (file.type && file.type.startsWith('audio/'))
+                        )
+                    );
+                    
+                    if (audioFiles.length > 0) {
+                        audioFound = true;
+                        console.log("Found audio files in mediaFiles:", audioFiles);
+                        // Add each audio source in priority order
+                        audioFiles.forEach(file => {
+                            const source = document.createElement('source');
+                            source.src = file.url || file.filePath; // Use url or filePath
+                            
+                            // Determine MIME type based on file extension
+                            const filePath = file.url || file.filePath;
+                            if (filePath.endsWith('.mp3')) {
+                                source.type = 'audio/mpeg';
+                            } else if (filePath.endsWith('.wav')) {
+                                source.type = 'audio/wav';
+                            } else if (filePath.endsWith('.ogg')) {
+                                source.type = 'audio/ogg';
+                            } else if (file.type && file.type.startsWith('audio/')) {
+                                source.type = file.type;
+                            }
+                            
+                            audio.appendChild(source);
+                        });
+                    } else {
+                        console.log("No audio files found in mediaFiles, trying default paths");
+                        // No audio files found in mediaFiles, add warning immediately
+                        const warningMsg = document.createElement('div');
+                        warningMsg.className = 'alert alert-warning mb-3';
+                        warningMsg.innerHTML = `
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                            <strong>No audio found!</strong><br>
+                            This listening exercise requires an audio file that is missing. 
+                            Please contact your teacher and ask them to upload the audio file for this assessment (ID: ${assessment.id}).
+                        `;
+                        audioPlayer.appendChild(warningMsg);
+                    }
+                } else {
+                    console.log("No mediaFiles array, adding missing audio warning");
+                    // No media files available, add warning immediately
+                    const warningMsg = document.createElement('div');
+                    warningMsg.className = 'alert alert-warning mb-3';
+                    warningMsg.innerHTML = `
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        <strong>No audio found!</strong><br>
+                        This listening exercise requires an audio file that is missing. 
+                        Please contact your teacher and ask them to upload the audio file for this assessment (ID: ${assessment.id}).
+                    `;
+                    audioPlayer.appendChild(warningMsg);
+                }
+                
+                // Only add audio element if not showing the warning
+                if (!audioPlayer.querySelector('.alert-warning')) {
+                    // Add error text
+                    audio.innerHTML += 'Your browser does not support the audio element.';
+                    
+                    // Add onerror handler to show message if audio cannot be loaded
+                    audio.onerror = function() {
+                        audioFound = false;
+                        if (!this.parentNode.querySelector('.alert-danger')) {
+                            const errorMsg = document.createElement('div');
+                            errorMsg.className = 'alert alert-danger mt-2';
+                            errorMsg.innerHTML = `
+                                <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                                <strong>Audio file not found!</strong><br>
+                                This listening exercise requires an audio file that is missing. 
+                                Please contact your teacher and ask them to upload the audio file for this assessment (ID: ${assessment.id}).
+                            `;
+                            this.parentNode.appendChild(errorMsg);
+                            
+                            // Hide the audio element since it's not working
+                            this.style.display = 'none';
+                        }
+                    };
+                    
+                                        // Add onloadeddata handler to confirm audio was found
+                    audio.onloadeddata = function() {
+                        audioFound = true;
+                        console.log("Audio loaded successfully");
+                    };
+                    
+                    audioPlayer.appendChild(audio);
+                }
+            }
+            
+            questionDiv.appendChild(audioPlayer);
+            }
+            
+            // Use the appropriate rendering function based on question type
+            if (question.type === 'multiple-choice') {
+                renderMultipleChoiceQuestion(question, questionDiv);
+            } else {
+                // Default to multiple choice if no specific type is set
+                renderMultipleChoiceQuestion(question, questionDiv);
+            }
+            
+            questionContainer.appendChild(questionDiv);
+        }
+        
+        // Function to submit multiple choice answers
+        async function submitMultipleChoiceAnswers() {
+            try {
+                // Check if all questions are answered
+                let allAnswered = true;
+                let score = 0;
+                let totalQuestions = assessment.questions.length;
+                
+                // Calculate score based on correct answers
+                assessment.questions.forEach((question, index) => {
+                    if (!userAnswers[index] || userAnswers[index].selectedOption === undefined) {
+                        allAnswered = false;
+                    } else {
+                        // Check if the answer is correct
+                        const selectedOption = userAnswers[index].selectedOption;
+                        const correctOption = question.correctOption;
+                        
+                        if (correctOption !== undefined && selectedOption === correctOption) {
+                            score++;
+                        }
+                    }
+                });
+                
+                if (!allAnswered) {
+                    if (!confirm('You have not answered all questions. Do you want to submit anyway?')) {
+                        return;
+                    }
+                }
+                
+                // Calculate percentage score
+                const percentageScore = Math.round((score / totalQuestions) * 100);
+                
+                // Prepare submission data
+                const submissionData = {
+                    answers: userAnswers,
+                    score: percentageScore
+                };
+                
+                // Submit assessment
+                const response = await fetch(`/api/assessments/${assessment.id}/submit`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(submissionData)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    // Show success message
+                    document.getElementById('assessmentContainer').innerHTML = `
+                        <div class="alert alert-success">
+                            <h4 class="alert-heading">Assessment Submitted Successfully!</h4>
+                            <p>Your score: ${percentageScore}%</p>
+                            <hr>
+                            <p class="mb-0">You can now return to your assessments page.</p>
+                        </div>
+                        <a href="/student/assessments" class="btn btn-primary">
+                            <i class="bi bi-arrow-left"></i> Back to Assessments
+                        </a>
+                    `;
+                } else {
+                    throw new Error(result.error || 'Failed to submit assessment');
+                }
+            } catch (error) {
+                console.error('Error submitting assessment:', error);
+                alert(`Error submitting assessment: ${error.message}`);
             }
         }
     </script>

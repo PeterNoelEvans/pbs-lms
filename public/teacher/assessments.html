@@ -146,6 +146,31 @@
                                 <label for="criteria" class="form-label">Grading Criteria</label>
                                 <textarea class="form-control" id="criteria" rows="3" placeholder="Enter grading criteria or rubric for this assessment"></textarea>
                             </div>
+                            
+                            <!-- Audio upload section for listening exercises -->
+                            <div class="mb-4" id="audioUploadContainer">
+                                <div class="card">
+                                    <div class="card-header bg-info bg-opacity-25">
+                                        <h5 class="mb-0">
+                                            <i class="bi bi-volume-up me-2"></i>Audio for Listening Exercise
+                                        </h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <p class="text-muted mb-3">
+                                            For listening exercises, upload an audio file that students will listen to before answering questions.
+                                            This is especially important for assessments with type "Multiple Choice" or "Listening".
+                                        </p>
+                                        <div class="mb-3">
+                                            <label for="assessmentAudio" class="form-label">Upload Audio File</label>
+                                            <input type="file" class="form-control" id="assessmentAudio" accept="audio/*" onchange="previewAudio(this)">
+                                            <audio id="audioPreview" controls style="display: none; margin-top: 10px; width: 100%;"></audio>
+                                            <input type="hidden" id="audioUrl" name="audioUrl">
+                                            <div class="form-text">Supported formats: MP3, WAV, OGG</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
                             <div class="mb-3">
                                 <label for="dueDate" class="form-label">Due Date</label>
                                 <input type="datetime-local" class="form-control" id="dueDate">
@@ -238,11 +263,32 @@
             window.location.href = '/login';
         }
 
+        // Logout function
+        function logout() {
+            localStorage.removeItem('token');
+            window.location.href = '/login';
+        }
+
+        // Add event listener to logout button
+        document.getElementById('logoutBtn').addEventListener('click', logout);
+
         // Load subjects when page loads
         document.addEventListener('DOMContentLoaded', () => {
+            // Check authentication
+            if (!token) {
+                window.location.href = '/login';
+            }
+            
+            // Initialize the page
             loadSubjects();
             loadExistingAssessments();
             updateQuestionOptions();
+            
+            // Initialize the type change handler
+            handleTypeChange();
+            
+            // Add event listener for type change
+            document.getElementById('type').addEventListener('change', handleTypeChange);
             
             // Fix for "invalid form control" errors
             // Remove required attribute from any inputs that might cause issues
@@ -263,10 +309,7 @@
                     const questionCards = document.querySelectorAll('.question-card[data-type="drag-and-drop"]');
                     questionCards.forEach(card => {
                         const requiredInputs = card.querySelectorAll('[required]');
-                        requiredInputs.forEach(input => {
-                            console.log('Removing required from:', input.name || input.id);
-                            input.removeAttribute('required');
-                        });
+                        requiredInputs.forEach(input => input.removeAttribute('required'));
                     });
                 }
             });
@@ -1001,10 +1044,12 @@
         // Load existing assessments when page loads
         async function loadExistingAssessments(subjectId = null) {
             try {
-                let url = '/api/teacher/assessments';
-                // Add subject filter parameter if provided
+                let url;
+                // Choose the appropriate endpoint based on filter
                 if (subjectId) {
-                    url += `?subjectId=${subjectId}`;
+                    url = `/api/subjects/${subjectId}/assessments`;
+                } else {
+                    url = '/api/teacher/assessments';
                 }
                 
                 const response = await fetch(url, {
@@ -1045,13 +1090,8 @@
                     return;
                 }
 
-                // Filter assessments by subject if subjectId is provided
-                const filteredAssessments = subjectId 
-                    ? assessments.filter(assessment => 
-                        assessment.section?.part?.unit?.subject?.id === subjectId)
-                    : assessments;
-                
-                filteredAssessments.forEach(assessment => {
+                // No additional filtering needed - backend has already filtered
+                assessments.forEach(assessment => {
                     const card = document.createElement('div');
                     card.className = 'card mb-3';
                     
@@ -1152,6 +1192,37 @@
                 // Trigger the type change event to set up the form correctly
                 handleTypeChange();
                 updateQuestionOptions();
+                
+                // Load and display any existing audio files
+                const audioPreview = document.getElementById('audioPreview');
+                const audioUrl = document.getElementById('audioUrl');
+                
+                // Check if there are any audio media files
+                if (assessment.mediaFiles && assessment.mediaFiles.length > 0) {
+                    // Find audio files
+                    const audioFiles = assessment.mediaFiles.filter(file => 
+                        file.type && file.type.startsWith('audio/'));
+                    
+                    if (audioFiles.length > 0) {
+                        // Use the first audio file
+                        const audioFile = audioFiles[0];
+                        audioPreview.src = audioFile.filePath;
+                        audioPreview.style.display = 'block';
+                        audioUrl.value = audioFile.filePath;
+                        
+                        // Show feedback that audio is already uploaded
+                        const audioContainer = document.getElementById('audioUploadContainer');
+                        // Remove any previous feedback
+                        const oldFeedback = audioContainer.querySelector('.upload-feedback');
+                        if (oldFeedback) oldFeedback.remove();
+                        
+                        // Add new feedback
+                        const feedbackDiv = document.createElement('div');
+                        feedbackDiv.className = 'alert alert-info mt-2 upload-feedback';
+                        feedbackDiv.innerHTML = `<strong>Audio File:</strong> This assessment already has an audio file attached.`;
+                        audioContainer.querySelector('.card-body').appendChild(feedbackDiv);
+                    }
+                }
                 
                 if (assessment.dueDate) {
                     document.getElementById('dueDate').value = new Date(assessment.dueDate).toISOString().slice(0, 16);
@@ -1979,7 +2050,7 @@ Ooh, exciting!|That sounds fun.</pre>
         function addQuestionWithId(type, questionId) {
             const questionsList = document.getElementById('questionsList');
             let questionHtml = `
-                <div class="card mb-3" id="${questionId}">
+                <div class="card mb-3 question-card" id="${questionId}" data-type="${type}">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h6 class="mb-0">${type.charAt(0).toUpperCase() + type.slice(1)} Question</h6>
                         <button type="button" class="btn btn-outline-danger btn-sm" onclick="removeQuestion('${questionId}')">
@@ -2204,27 +2275,273 @@ Ooh, exciting!|That sounds fun.</pre>
             document.getElementById('assessmentDueDate').textContent = assessment.dueDate ? new Date(assessment.dueDate).toLocaleString() : 'No due date set';
         }
 
+        // Handle type change to show appropriate form
         function handleTypeChange() {
             const type = document.getElementById('type').value;
             const subtypeContainer = document.getElementById('subtypeContainer');
-            const criteriaContainer = document.getElementById('criteriaContainer');
-            // Show subtype only for drag-and-drop
+            const audioUploadContainer = document.getElementById('audioUploadContainer');
+            
+            // Hide/show subtype container based on drag-and-drop type
             if (type === 'drag-and-drop') {
-                subtypeContainer.style.display = '';
+                subtypeContainer.style.display = 'block';
             } else {
                 subtypeContainer.style.display = 'none';
             }
-            // Hide grading criteria for auto-graded types
-            const autoGradedTypes = ['matching', 'drag-and-drop', 'true-false', 'multiple-choice', 'listening'];
-            if (autoGradedTypes.includes(type)) {
-                criteriaContainer.style.display = 'none';
+            
+            // Show audio upload section prominently for listening/audio related assessments
+            if (type === 'multiple-choice' || type === 'listening') {
+                audioUploadContainer.style.display = 'block';
+                // If it's specifically a listening type, add an alert/highlight
+                if (type === 'listening' || document.getElementById('title').value.toLowerCase().includes('listening')) {
+                    audioUploadContainer.querySelector('.card').classList.add('border-danger');
+                    // If there's no existing warning, add one
+                    if (!audioUploadContainer.querySelector('.audio-upload-warning')) {
+                        const warningDiv = document.createElement('div');
+                        warningDiv.className = 'alert alert-warning mt-2 audio-upload-warning';
+                        warningDiv.innerHTML = '<strong>Important:</strong> Audio file is required for listening exercises. Students will not be able to complete the assessment without it.';
+                        audioUploadContainer.querySelector('.card-body').appendChild(warningDiv);
+                    }
+                } else {
+                    audioUploadContainer.querySelector('.card').classList.remove('border-danger');
+                    const warning = audioUploadContainer.querySelector('.audio-upload-warning');
+                    if (warning) warning.remove();
+                }
             } else {
-                criteriaContainer.style.display = '';
+                audioUploadContainer.style.display = 'none';
+            }
+            
+            // Update question options based on type
+            updateQuestionOptions();
+        }
+
+        // Function to preview audio after selection
+        function previewAudio(input) {
+            const audioPreview = document.getElementById('audioPreview');
+            if (input.files && input.files[0]) {
+                const file = input.files[0];
+                const audioUrl = URL.createObjectURL(file);
+                audioPreview.src = audioUrl;
+                audioPreview.style.display = 'block';
+                
+                // Upload the audio file when selected
+                uploadAudioFile(file);
+            } else {
+                audioPreview.style.display = 'none';
+                audioPreview.src = '';
             }
         }
-        document.getElementById('type').addEventListener('change', handleTypeChange);
-        // Call on page load
-        handleTypeChange();
+        
+        // Function to upload audio file
+        async function uploadAudioFile(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            try {
+                const response = await fetch('/api/assessments/upload-audio', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to upload audio');
+                }
+                
+                const result = await response.json();
+                
+                // Store the file path for form submission
+                document.getElementById('audioUrl').value = result.filePath;
+                
+                // Show success feedback
+                const audioContainer = document.getElementById('audioUploadContainer');
+                // Remove any previous feedback
+                const oldFeedback = audioContainer.querySelector('.upload-feedback');
+                if (oldFeedback) oldFeedback.remove();
+                
+                // Add new feedback
+                const feedbackDiv = document.createElement('div');
+                feedbackDiv.className = 'alert alert-success mt-2 upload-feedback';
+                feedbackDiv.innerHTML = `<strong>Success!</strong> Audio file "${file.name}" uploaded successfully.`;
+                audioContainer.querySelector('.card-body').appendChild(feedbackDiv);
+            } catch (error) {
+                console.error('Error uploading audio:', error);
+                alert('Failed to upload audio file: ' + error.message);
+            }
+        }
+
+        // Call handleTypeChange on page load to set initial state
+        document.addEventListener('DOMContentLoaded', handleTypeChange);
+        
+        // Preview uploaded audio file
+        function previewAudio(input) {
+            const audioPreview = document.getElementById('audioPreview');
+            const file = input.files[0];
+            
+            if (file) {
+                const audioUrl = URL.createObjectURL(file);
+                audioPreview.src = audioUrl;
+                audioPreview.style.display = 'block';
+                
+                // Also upload the file immediately to get a server URL
+                uploadAudioFile(file);
+            } else {
+                audioPreview.src = '';
+                audioPreview.style.display = 'none';
+            }
+        }
+        
+        // Upload audio file to server
+        async function uploadAudioFile(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch('/api/assessments/upload-audio', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: formData
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    document.getElementById('audioUrl').value = data.filePath;
+                    console.log('Audio uploaded successfully:', data.filePath);
+                } else {
+                    alert('Failed to upload audio file');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Failed to upload audio file');
+            }
+        }
+        
+        // Modified version of addAssessment - adding audio handling
+        async function addAssessment(e) {
+            e.preventDefault();
+            
+            // Get form values
+            const sectionId = document.getElementById('sectionSelect').value;
+            const title = document.getElementById('title').value;
+            const description = document.getElementById('description').value;
+            const type = document.getElementById('type').value;
+            const category = document.getElementById('assessmentCategory').value;
+            const dueDate = document.getElementById('dueDate').value;
+            const maxAttempts = document.getElementById('maxAttempts').value;
+            const criteria = document.getElementById('criteria').value;
+            
+            // Get subtype if applicable
+            let subtype = '';
+            if (type === 'drag-and-drop') {
+                subtype = document.getElementById('subtype').value;
+            }
+            
+            // Get audio file URL if uploaded
+            const audioUrl = document.getElementById('audioUrl').value;
+            
+            // Validate required fields
+            if (!sectionId || !title) {
+                alert('Please fill in all required fields');
+                return;
+            }
+            
+            // Get all questions from questionsList
+            let questions = [];
+            
+            try {
+                // Get questions based on type
+                if (type === 'multiple-choice') {
+                    questions = getMultipleChoiceQuestions();
+                } else if (type === 'true-false') {
+                    questions = getTrueFalseQuestions();
+                } else if (type === 'drag-and-drop') {
+                    questions = getDragAndDropQuestions(subtype);
+                } else if (type === 'matching') {
+                    questions = getMatchingQuestions();
+                }
+                
+                // Build form data
+                const formData = new FormData();
+                formData.append('title', title);
+                formData.append('description', description);
+                formData.append('type', type);
+                formData.append('category', category);
+                
+                // Add subtype for drag-and-drop
+                if (type === 'drag-and-drop' && subtype) {
+                    formData.append('subtype', subtype);
+                }
+                
+                // Add questions as JSON string
+                formData.append('questions', JSON.stringify(questions));
+                
+                // Add criteria if provided
+                if (criteria) {
+                    formData.append('criteria', criteria);
+                }
+                
+                // Add due date if provided
+                if (dueDate) {
+                    formData.append('dueDate', dueDate);
+                }
+                
+                // Add max attempts if provided
+                if (maxAttempts) {
+                    formData.append('maxAttempts', maxAttempts);
+                }
+                
+                // If audio URL exists, create a media file record
+                if (audioUrl) {
+                    // Add the audio URL as a media file
+                    // Either append directly as a file or use the URL
+                    formData.append('audioFile', audioUrl);
+                }
+                
+                // Show loading state
+                const submitBtn = document.querySelector('#assessmentForm button[type="submit"]');
+                const originalText = submitBtn.textContent;
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Creating...';
+                
+                // Send request to create assessment
+                const response = await fetch(`/api/sections/${sectionId}/assessments`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: formData
+                });
+                
+                // Reset button
+                submitBtn.disabled = false;
+                submitBtn.textContent = originalText;
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    alert('Assessment created successfully!');
+                    
+                    // Reset form and reload assessments
+                    document.getElementById('assessmentForm').reset();
+                    clearQuestionsUi();
+                    loadExistingAssessments();
+                } else {
+                    const error = await response.json();
+                    alert(`Failed to create assessment: ${error.error || 'Unknown error'}`);
+                }
+            } catch (error) {
+                console.error('Error creating assessment:', error);
+                alert(`Error creating assessment: ${error.message}`);
+            }
+        }
+        
+        // Update the event listener for form submission
+        document.addEventListener('DOMContentLoaded', () => {
+            // Also initialize the type change handler
+            handleTypeChange();
+        });
 
         function getQuestionData(card) {
             const type = card.getAttribute('data-type');
@@ -2435,6 +2752,208 @@ Ooh, exciting!|That sounds fun.</pre>
             } catch (error) {
                 console.error('Error deleting assessment:', error);
                 alert('Failed to delete assessment. Please try again.');
+            }
+        }
+
+        // Function to get multiple choice questions from the UI
+        function getMultipleChoiceQuestions() {
+            const questions = [];
+            const questionCards = document.querySelectorAll('.question-card[data-type="multiple-choice"]');
+            
+            questionCards.forEach(card => {
+                const questionText = card.querySelector('textarea').value.trim();
+                const optionInputs = card.querySelectorAll('.input-group input[type="text"]');
+                const radioInputs = card.querySelectorAll('.input-group input[type="radio"]');
+                
+                // Get options
+                const options = Array.from(optionInputs).map(input => input.value.trim());
+                
+                // Find which option is selected as correct
+                let correctOption = -1;
+                radioInputs.forEach((radio, index) => {
+                    if (radio.checked) {
+                        correctOption = index;
+                    }
+                });
+                
+                // Create question object
+                const question = {
+                    type: 'multiple-choice',
+                    text: questionText,
+                    options: options,
+                    correctOption: correctOption
+                };
+                
+                questions.push(question);
+            });
+            
+            return questions;
+        }
+        
+        // Function to get true/false questions from the UI
+        function getTrueFalseQuestions() {
+            const questions = [];
+            const questionCards = document.querySelectorAll('.question-card[data-type="true-false"]');
+            
+            questionCards.forEach(card => {
+                // Get sentences and their T/F values
+                const sentenceRows = card.querySelectorAll('.tf-sentence-row');
+                const sentences = [];
+                
+                sentenceRows.forEach(row => {
+                    const sentenceText = row.querySelector('input[type="text"]').value.trim();
+                    const tfButton = row.querySelector('.tf-toggle');
+                    const isTrue = tfButton.dataset.state === 'T';
+                    
+                    sentences.push({
+                        text: sentenceText,
+                        isTrue: isTrue
+                    });
+                });
+                
+                // Create question object
+                const question = {
+                    type: 'true-false',
+                    sentences: sentences
+                };
+                
+                questions.push(question);
+            });
+            
+            return questions;
+        }
+        
+        // Function to get drag-and-drop questions from the UI
+        function getDragAndDropQuestions(subtype) {
+            const questions = [];
+            const questionCards = document.querySelectorAll('.question-card[data-type="drag-and-drop"]');
+            
+            questionCards.forEach(card => {
+                const cardBody = card.querySelector('.card-body');
+                if (!cardBody) return;
+                
+                // Create base question object
+                const question = {
+                    type: 'drag-and-drop',
+                    subtype: subtype || 'sequence'
+                };
+                
+                if (subtype === 'long-paragraph-fill-in-blank') {
+                    // Get the paragraph text with [BLANK] placeholders
+                    const paragraphText = cardBody.querySelector('.long-paragraph-text')?.value || '';
+                    question.text = paragraphText;
+                    
+                    // Get word bank items
+                    const wordBank = (cardBody.querySelector('.long-paragraph-wordbank')?.value || '')
+                        .split(',').map(item => item.trim()).filter(Boolean);
+                    question.wordBank = wordBank;
+                    
+                    // Get correct answers in order
+                    const correctAnswers = (cardBody.querySelector('.long-paragraph-answers')?.value || '')
+                        .split(',').map(item => item.trim()).filter(Boolean);
+                    question.answers = correctAnswers;
+                    
+                    // Get extra word bank items
+                    const extraWords = (cardBody.querySelector('.long-paragraph-extra')?.value || '')
+                        .split(',').map(item => item.trim()).filter(Boolean);
+                    question.extraWords = extraWords;
+                    
+                    // Check for audio information
+                    const audioDisplayName = cardBody.querySelector('.long-paragraph-audio-display-name')?.value;
+                    if (audioDisplayName) {
+                        question.audioDisplayName = audioDisplayName;
+                    }
+                    
+                    // Store the audio path if it exists
+                    const audioPath = cardBody.querySelector('.audio-file-path')?.value;
+                    if (audioPath) {
+                        question.audioPath = audioPath;
+                    }
+                } else if (subtype === 'sequence') {
+                    // Handle sequence subtype
+                    const items = (cardBody.querySelector('.sequence-items')?.value || '')
+                        .split(',').map(item => item.trim()).filter(Boolean);
+                    question.items = items;
+                    
+                    const correctSequence = (cardBody.querySelector('.sequence-correct')?.value || '')
+                        .split(',').map(item => item.trim()).filter(Boolean);
+                    question.correctSequence = correctSequence;
+                    
+                    const extraItems = (cardBody.querySelector('.sequence-extra')?.value || '')
+                        .split(',').map(item => item.trim()).filter(Boolean);
+                    question.extraItems = extraItems;
+                    
+                    // Store audio display name if present
+                    const audioDisplayName = cardBody.querySelector('.sequence-audio-display-name')?.value;
+                    if (audioDisplayName) {
+                        question.audioDisplayName = audioDisplayName;
+                    }
+                }
+                
+                questions.push(question);
+            });
+            
+            return questions;
+        }
+        
+        // Function to get matching questions from the UI
+        function getMatchingQuestions() {
+            const questions = [];
+            const questionCards = document.querySelectorAll('.question-card[data-type="matching"]');
+            
+            questionCards.forEach(card => {
+                // Get all matching pairs
+                const pairRows = card.querySelectorAll('.matching-pair');
+                const expressions = [];
+                const meanings = [];
+                const pairs = [];
+                
+                pairRows.forEach(row => {
+                    const expressionInput = row.querySelector('input[placeholder="Enter expression"]');
+                    const meaningInput = row.querySelector('input[placeholder="Enter meaning"]');
+                    
+                    if (expressionInput && meaningInput) {
+                        const expression = expressionInput.value.trim();
+                        const meaning = meaningInput.value.trim();
+                        
+                        if (expression && meaning) {
+                            expressions.push(expression);
+                            meanings.push(meaning);
+                            pairs.push({
+                                expression: expression,
+                                meaning: meaning
+                            });
+                        }
+                    }
+                });
+                
+                // Create question object with both formats for compatibility
+                const question = {
+                    type: 'matching',
+                    expressions: expressions,
+                    meanings: meanings,
+                    pairs: pairs
+                };
+                
+                questions.push(question);
+            });
+            
+            return questions;
+        }
+
+        // Function to clear all questions from the UI
+        function clearQuestionsUi() {
+            const questionsList = document.getElementById('questionsList');
+            if (questionsList) {
+                // Remove all question cards
+                const questionCards = questionsList.querySelectorAll('.question-card');
+                questionCards.forEach(card => card.remove());
+                
+                // Reset any other UI elements related to questions if needed
+                const noQuestionsMsg = document.getElementById('noQuestionsMsg');
+                if (noQuestionsMsg) {
+                    noQuestionsMsg.style.display = 'block';
+                }
             }
         }
     </script>

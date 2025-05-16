@@ -7,6 +7,7 @@ const cors = require('cors');
 const auth = require('./middleware/auth');
 const { PrismaClient } = require('@prisma/client');
 const multer = require('multer');
+const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -1972,7 +1973,7 @@ app.get('/api/assessments/:assessmentId/submissions', auth, async (req, res) => 
 app.post('/api/sections/:sectionId/assessments', auth, upload.any(), async (req, res) => {
     try {
         const { sectionId } = req.params;
-        const { title, description, type, questions, dueDate, maxAttempts, category, topicId, weeklyScheduleId, criteria } = req.body;
+        const { title, description, type, questions, dueDate, maxAttempts, category, topicId, weeklyScheduleId, criteria, audioFile } = req.body;
 
         if (!sectionId) {
             return res.status(400).json({ error: 'sectionId is required to create an assessment.' });
@@ -1997,17 +1998,33 @@ app.post('/api/sections/:sectionId/assessments', auth, upload.any(), async (req,
         }
 
         // Handle file uploads if any (accept any field name)
-        const mediaFiles = req.files ? req.files.map(file => ({
+        let mediaFiles = req.files ? req.files.map(file => ({
             filePath: `/uploads/resources/${file.filename}`,
             type: file.mimetype,
             label: file.fieldname
         })) : [];
+        
+        // Handle audioFile parameter from the form
+        if (audioFile && typeof audioFile === 'string' && audioFile.startsWith('/uploads/resources/')) {
+            console.log(`[AUDIO] Adding audio file from URL: ${audioFile}`);
+            // Add audio file from URL to mediaFiles
+            mediaFiles.push({
+                filePath: audioFile,
+                type: audioFile.toLowerCase().endsWith('.mp3') ? 'audio/mpeg' : 
+                      audioFile.toLowerCase().endsWith('.wav') ? 'audio/wav' : 
+                      audioFile.toLowerCase().endsWith('.ogg') ? 'audio/ogg' : 'audio/mpeg',
+                label: 'audio'
+            });
+        }
 
         // Parse and prepare questions
         let parsedQuestions = [];
         if (questions) {
             try {
                 parsedQuestions = JSON.parse(questions);
+                
+                // Log the parsed questions for debugging
+                console.log('Parsed questions:', JSON.stringify(parsedQuestions, null, 2));
                 
                 // Special handling for matching questions
                 if (type === 'matching' && Array.isArray(parsedQuestions)) {
@@ -2037,12 +2054,67 @@ app.post('/api/sections/:sectionId/assessments', auth, upload.any(), async (req,
                         return question;
                     });
                 }
+                
+                // Fix empty multiple choice questions that only have type property
+                if (type === 'multiple-choice' && Array.isArray(parsedQuestions)) {
+                    console.log('[DEBUG MC] Multiple choice questions before processing:', JSON.stringify(parsedQuestions));
+                    
+                    parsedQuestions = parsedQuestions.map((question, index) => {
+                        // Check if it's an empty multiple choice question (only has type property)
+                        if (question.type === 'multiple-choice') {
+                            console.log(`[DEBUG MC] Question ${index} keys:`, Object.keys(question));
+                            
+                            if (Object.keys(question).length === 1) {
+                                console.log('[DEBUG MC] Found empty multiple choice question, adding default values');
+                                // This is an empty question object, add missing properties
+                                return {
+                                    ...question,
+                                    options: question.options || [],
+                                    text: question.text || '',
+                                    correctOption: question.correctOption || 0
+                                };
+                            } else {
+                                console.log(`[DEBUG MC] Question ${index} has ${Object.keys(question).length} properties`);
+                                // Make sure the important properties exist
+                                if (!question.options && !question.choices) {
+                                    console.log(`[DEBUG MC] Question ${index} has no options/choices, adding empty array`);
+                                    question.options = [];
+                                }
+                            }
+                        }
+                        return question;
+                    });
+                    
+                    console.log('[DEBUG MC] Multiple choice questions after processing:', JSON.stringify(parsedQuestions));
+                }
             } catch (error) {
                 console.error('Error parsing questions:', error);
                 return res.status(400).json({ error: 'Invalid questions format' });
             }
         }
 
+        // Special handling for listening exercises
+        if (type === 'listening' || type === 'multiple-choice' && 
+            (category === 'Listening' || title.toLowerCase().includes('listening'))) {
+            console.log('[AUDIO] Detected listening exercise, ensuring audio is properly attached');
+            
+            // Check if we have any audio files to attach
+            const hasAudioFiles = mediaFiles.some(file => 
+                file.type && file.type.startsWith('audio/') || 
+                file.label === 'audio' ||
+                file.filePath && (file.filePath.endsWith('.mp3') || file.filePath.endsWith('.wav') || file.filePath.endsWith('.ogg'))
+            );
+            
+            console.log(`[AUDIO] Audio files found for listening exercise: ${hasAudioFiles ? 'Yes' : 'No'}`);
+            if (hasAudioFiles) {
+                console.log('[AUDIO] Audio files to be attached:', mediaFiles.filter(f => 
+                    f.type && f.type.startsWith('audio/') || 
+                    f.label === 'audio' ||
+                    f.filePath && (f.filePath.endsWith('.mp3') || f.filePath.endsWith('.wav') || f.filePath.endsWith('.ogg'))
+                ));
+            }
+        }
+        
         // Create the assessment
         const assessment = await prisma.assessment.create({
             data: {
@@ -2059,9 +2131,9 @@ app.post('/api/sections/:sectionId/assessments', auth, upload.any(), async (req,
                 createdBy: {
                     connect: { id: req.user.userId }
                 },
-                mediaFiles: {
+                mediaFiles: mediaFiles.length > 0 ? {
                     create: mediaFiles
-                },
+                } : undefined,
                 maxAttempts: maxAttempts ? parseInt(maxAttempts) : null,
                 topic: topicId ? {
                     connect: { id: topicId }
@@ -2077,6 +2149,12 @@ app.post('/api/sections/:sectionId/assessments', auth, upload.any(), async (req,
                 weeklySchedule: true
             }
         });
+        
+        // Log whether media files were successfully attached
+        console.log(`[AUDIO] Assessment created with ${assessment.mediaFiles?.length || 0} media files`);
+        if (assessment.mediaFiles && assessment.mediaFiles.length > 0) {
+            console.log('[AUDIO] Attached media files:', JSON.stringify(assessment.mediaFiles));
+        }
 
         res.json(assessment);
     } catch (error) {
@@ -2091,6 +2169,8 @@ app.put('/api/assessments/:assessmentId', auth, upload.any(), async (req, res) =
         const { assessmentId } = req.params;
         const { title, description, type, questions, dueDate, maxAttempts, category, topicId, weeklyScheduleId, criteria } = req.body;
 
+        console.log(`[UPDATE] Updating assessment ${assessmentId}, type ${type}`);
+
         // Validate required fields
         if (!title || !title.trim()) {
             return res.status(400).json({ error: 'Title is required' });
@@ -2102,13 +2182,17 @@ app.put('/api/assessments/:assessmentId', auth, upload.any(), async (req, res) =
 
         // Check if assessment exists
         const existingAssessment = await prisma.assessment.findUnique({
-            where: { id: assessmentId }
+            where: { id: assessmentId },
+            include: { mediaFiles: true }
         });
 
         if (!existingAssessment) {
             return res.status(404).json({ error: 'Assessment not found' });
         }
 
+        // Log existing media files
+        console.log(`[UPDATE] Existing media files: ${existingAssessment.mediaFiles?.length || 0}`);
+        
         // Handle file uploads if any (accept any field name)
         const mediaFiles = req.files ? req.files.map(file => ({
             filePath: `/uploads/resources/${file.filename}`,
@@ -2146,6 +2230,24 @@ app.put('/api/assessments/:assessmentId', auth, upload.any(), async (req, res) =
                                 }
                                 console.log(`Created ${question.pairs.length} pairs from expressions and meanings for update`);
                             }
+                        }
+                        return question;
+                    });
+                }
+                
+                // Fix empty multiple choice questions that only have type property
+                if (type === 'multiple-choice' && Array.isArray(parsedQuestions)) {
+                    parsedQuestions = parsedQuestions.map(question => {
+                        // Check if it's an empty multiple choice question (only has type property)
+                        if (question.type === 'multiple-choice' && Object.keys(question).length === 1) {
+                            console.log('Found empty multiple choice question, adding default values for update');
+                            // This is an empty question object, add missing properties
+                            return {
+                                ...question,
+                                options: question.options || [],
+                                text: question.text || '',
+                                correctOption: question.correctOption || 0
+                            };
                         }
                         return question;
                     });
@@ -2220,10 +2322,18 @@ app.get('/api/teacher/assessments', auth, async (req, res) => {
             },
             orderBy: {
                 createdAt: 'desc'
-            }
+            },
+            distinct: ['id'] // Ensure we only get unique assessments
         });
 
-        res.json(assessments);
+        // Since 'distinct' might not be enough in some complex queries,
+        // we'll also ensure uniqueness using a Map
+        const uniqueAssessments = Array.from(
+            new Map(assessments.map(item => [item.id, item])).values()
+        );
+
+        console.log(`Found ${assessments.length} assessments, ${uniqueAssessments.length} are unique`);
+        res.json(uniqueAssessments);
     } catch (error) {
         console.error('Error fetching teacher assessments:', error);
         res.status(500).json({ error: 'Failed to fetch assessments' });
@@ -2265,10 +2375,18 @@ app.get('/api/subjects/:subjectId/assessments', auth, async (req, res) => {
             },
             orderBy: {
                 createdAt: 'desc'
-            }
+            },
+            distinct: ['id'] // Ensure we only get unique assessments
         });
 
-        res.json(assessments);
+        // Since 'distinct' might not be enough in some complex queries,
+        // we'll also ensure uniqueness using a Map
+        const uniqueAssessments = Array.from(
+            new Map(assessments.map(item => [item.id, item])).values()
+        );
+
+        console.log(`Found ${assessments.length} assessments, ${uniqueAssessments.length} are unique`);
+        res.json(uniqueAssessments);
     } catch (error) {
         console.error('Error fetching subject assessments:', error);
         res.status(500).json({ error: 'Failed to fetch subject assessments', details: error.message });
@@ -3006,3 +3124,196 @@ app.get('/api/resources/:resourceId', auth, async (req, res) => {
     }
 });
 
+// Serve audio files for assessments using the assessment ID
+app.get('/audio/:assessmentId.:ext', async (req, res) => {
+    try {
+        const { assessmentId, ext } = req.params;
+        console.log(`[AUDIO] Request for assessment ${assessmentId} with extension ${ext}`);
+        
+        // Lookup assessment and its media files
+        const assessment = await prisma.assessment.findUnique({
+            where: { id: assessmentId },
+            include: { mediaFiles: true }
+        });
+        
+        console.log(`[AUDIO] Found assessment: ${assessment ? 'Yes' : 'No'}`);
+        console.log(`[AUDIO] Media files: ${assessment?.mediaFiles?.length || 0}`);
+        
+        if (!assessment || !assessment.mediaFiles || assessment.mediaFiles.length === 0) {
+            console.log(`[AUDIO] No media files found for assessment ${assessmentId}`);
+            return res.status(404).send('Audio file not found');
+        }
+        
+        // Find audio media files
+        const audioFiles = assessment.mediaFiles.filter(file => 
+            (file.type && file.type.startsWith('audio/')) || 
+            (file.filePath && (file.filePath.endsWith('.mp3') || file.filePath.endsWith('.wav') || file.filePath.endsWith('.ogg')))
+        );
+        
+        console.log(`[AUDIO] Audio files found: ${audioFiles.length}`);
+        if (audioFiles.length > 0) {
+            console.log(`[AUDIO] First audio file:`, JSON.stringify(audioFiles[0]));
+        }
+        
+        if (audioFiles.length === 0) {
+            console.log(`[AUDIO] No audio files matched the filter criteria`);
+            return res.status(404).send('No audio files found for this assessment');
+        }
+        
+        // Use the first audio file
+        const audioFile = audioFiles[0];
+        
+        // Get the file path - remove leading slash if needed
+        let filePath = audioFile.filePath;
+        if (filePath.startsWith('/')) {
+            filePath = filePath.substring(1);
+        }
+        
+        // Set appropriate content type based on extension
+        let contentType = audioFile.type || 'audio/mpeg';
+        if (ext === 'wav') contentType = 'audio/wav';
+        if (ext === 'ogg') contentType = 'audio/ogg';
+        
+        // Check if file exists before trying to send it
+        let fullPath = path.join(__dirname, filePath);
+        console.log(`[AUDIO] Checking file path: ${fullPath}`);
+        
+        // If file doesn't exist at the direct path, try the uploads/resources folder
+        if (!fs.existsSync(fullPath)) {
+            console.log(`[AUDIO] File not found at primary path, trying alternative path`);
+            // Extract just the filename (everything after the last slash)
+            const filename = filePath.substring(filePath.lastIndexOf('/') + 1);
+            const altPath = path.join(__dirname, 'uploads', 'resources', filename);
+            console.log(`[AUDIO] Alternative path: ${altPath}`);
+            
+            if (fs.existsSync(altPath)) {
+                fullPath = altPath;
+                console.log(`[AUDIO] Using alternative path for audio: ${fullPath}`);
+            } else {
+                console.error(`[AUDIO] Audio file not found on disk: ${fullPath} or ${altPath}`);
+                
+                // List files in the uploads/resources directory to help debug
+                try {
+                    const files = fs.readdirSync(path.join(__dirname, 'uploads', 'resources'));
+                    console.log(`[AUDIO] Files in uploads/resources:`, files.slice(0, 10)); // Show first 10 files
+                } catch (err) {
+                    console.error(`[AUDIO] Error listing files:`, err);
+                }
+                
+                return res.status(404).send('Audio file not found on disk');
+            }
+        }
+        
+        // Set appropriate headers and send the file
+        res.setHeader('Content-Type', contentType);
+        res.sendFile(fullPath);
+        
+    } catch (error) {
+        console.error('Error serving audio file:', error);
+        res.status(500).send('Error serving audio file');
+    }
+});
+
+// Add a new API endpoint for uploading audio files for assessments
+app.post('/api/assessments/upload-audio', auth, upload.single('file'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'No audio file provided' });
+        }
+
+        const audioFile = req.file;
+        const filePath = `/uploads/resources/${audioFile.filename}`;
+
+        // Return the file path for the client to use
+        res.json({
+            success: true,
+            filePath,
+            fileName: audioFile.originalname,
+            fileType: audioFile.mimetype
+        });
+    } catch (error) {
+        console.error('Error uploading audio file:', error);
+        res.status(500).json({ error: 'Failed to upload audio file' });
+    }
+});
+
+// Add a new API endpoint for attaching audio to an existing assessment
+app.post('/api/assessments/:assessmentId/attach-audio', auth, upload.single('audio'), async (req, res) => {
+    try {
+        const { assessmentId } = req.params;
+
+        if (!req.file) {
+            return res.status(400).json({ error: 'No audio file provided' });
+        }
+
+        // Check if assessment exists
+        const assessment = await prisma.assessment.findUnique({
+            where: { id: assessmentId },
+            include: { mediaFiles: true }
+        });
+
+        if (!assessment) {
+            return res.status(404).json({ error: 'Assessment not found' });
+        }
+
+        // Create a new media file record
+        const mediaFile = await prisma.mediaFile.create({
+            data: {
+                filePath: `/uploads/resources/${req.file.filename}`,
+                type: req.file.mimetype,
+                label: req.file.fieldname || 'audio',
+                assessment: {
+                    connect: { id: assessmentId }
+                }
+            }
+        });
+
+        res.json({
+            success: true,
+            mediaFile,
+            message: 'Audio file attached to assessment successfully'
+        });
+    } catch (error) {
+        console.error('Error attaching audio to assessment:', error);
+        res.status(500).json({ error: 'Failed to attach audio file' });
+    }
+});
+
+// Add a utility endpoint for showing available audio files
+app.get('/api/assessments/:assessmentId/audio-status', auth, async (req, res) => {
+    try {
+        const { assessmentId } = req.params;
+        
+        // Look up the assessment
+        const assessment = await prisma.assessment.findUnique({
+            where: { id: assessmentId },
+            include: { mediaFiles: true }
+        });
+        
+        if (!assessment) {
+            return res.status(404).json({ error: 'Assessment not found' });
+        }
+        
+        // Find audio files
+        const audioFiles = assessment.mediaFiles.filter(file => 
+            (file.type && file.type.startsWith('audio/')) || 
+            (file.filePath && (file.filePath.endsWith('.mp3') || file.filePath.endsWith('.wav') || file.filePath.endsWith('.ogg')))
+        );
+        
+        res.json({
+            assessmentId,
+            assessmentTitle: assessment.title,
+            hasAudio: audioFiles.length > 0,
+            audioCount: audioFiles.length,
+            audioFiles: audioFiles.map(file => ({
+                id: file.id,
+                filePath: file.filePath,
+                type: file.type,
+                label: file.label
+            }))
+        });
+    } catch (error) {
+        console.error('Error checking audio status:', error);
+        res.status(500).json({ error: 'Error checking audio status' });
+    }
+});
