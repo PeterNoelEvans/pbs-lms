@@ -97,7 +97,7 @@ async function main() {
     const assessment = await prisma.assessment.create({
         data: {
             title: 'Expressions Quiz',
-            type: 'quiz',
+            type: 'multiple-choice',
             questions: [
                 {
                     type: 'matching',

@@ -443,6 +443,7 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     <script>
         const token = localStorage.getItem('token');
         let assessment = null;
@@ -732,7 +733,9 @@
                     case 'multiple-choice':
                         renderMultipleChoiceAssessment();
                         break;
-                        
+                    case 'true-false':
+                        renderTrueFalseAssessment();
+                        break;
                     case 'matching':
                         // Handle matching type assessments
                         container.innerHTML = `
@@ -856,14 +859,35 @@
                         
                     case 'speaking':
                         // Handle speaking assessments specifically
+                        // Add reference audio if available
+                        let referenceAudioHtml = '';
+                        if (assessment.mediaFiles && assessment.mediaFiles.length > 0) {
+                            const audioFile = assessment.mediaFiles.find(f =>
+                                (f.url || f.filePath) &&
+                                ((f.url && (f.url.endsWith('.mp3') || f.url.endsWith('.wav') || f.url.endsWith('.ogg')))
+                                 || (f.filePath && (f.filePath.endsWith('.mp3') || f.filePath.endsWith('.wav') || f.filePath.endsWith('.ogg')))
+                                 || (f.type && f.type.startsWith('audio/')))
+                            );
+                            if (audioFile) {
+                                referenceAudioHtml = `
+                                    <div class="mb-3">
+                                        <label class="form-label"><strong>Listen to this example:</strong></label>
+                                        <audio controls class="w-100">
+                                            <source src="${audioFile.url || audioFile.filePath}">
+                                            Your browser does not support the audio element.
+                                        </audio>
+                                    </div>
+                                `;
+                            }
+                        }
                         container.innerHTML = `
                             <div class="card mb-4">
                                 <div class="card-header bg-primary text-white">
                                     <h3 class="mb-0" id="assessmentTitle">${assessment.title || 'Speaking Assessment'}</h3>
                                 </div>
                                 <div class="card-body">
+                                    ${referenceAudioHtml}
                                     <p class="mb-3" id="assessmentDescription">${formatWithLineBreaks(assessment.description || 'Record your response to the speaking prompt.')}</p>
-                                    
                                     ${assessment.criteria ? `
                                         <div class="alert alert-info mb-3">
                                             <strong>Criteria:</strong> ${formatWithLineBreaks(assessment.criteria)}
@@ -882,22 +906,32 @@
                                         </div>
                                         <div id="recordingStatus" class="text-muted mb-2"></div>
                                         <div id="recordingTimer" class="text-muted mb-3" style="display: none;">00:00</div>
-                                        
                                         <div id="audioPreview" class="mb-3" style="display: none;">
                                             <h5>Recording Preview</h5>
                                             <audio id="audioPlayer" controls class="w-100"></audio>
                                         </div>
-                                
                                         <button id="submitRecordingBtn" class="btn btn-success mt-3" style="display: none;">
                                             <i class="bi bi-check-circle"></i> Submit Recording
                                         </button>
                                     </div>
+                                    <div class="text-center my-3">
+                                        <span class="fw-bold">OR</span>
+                                    </div>
+                                    <div class="mb-4">
+                                        <h5>If you cannot record, upload an audio file:</h5>
+                                        <form id="audioUploadForm">
+                                            <input type="file" id="audioFileInput" accept="audio/*" class="form-control mb-2" required />
+                                            <button type="submit" class="btn btn-secondary">Upload Audio File</button>
+                                            <div id="audioUploadStatus" class="mt-2"></div>
+                                        </form>
+                                    </div>
                                 </div>
                             </div>
                         `;
-                        
                         // Set up recording functionality
                         setupRecording();
+                        // Set up audio file upload functionality
+                        setupAudioUpload();
                         break;
                         
                     case 'writing':
@@ -926,6 +960,85 @@
                         `;
                         renderWritingAssessment();
                         break;
+                        
+                    case 'change-sequence':
+                        // Title
+                        const title = document.createElement('h3');
+                        title.textContent = assessment.title || 'Change-Sequence Activity';
+                        container.appendChild(title);
+                        // Audio (if present)
+                        if (assessment.mediaFiles && assessment.mediaFiles.length > 0) {
+                            const audioFile = assessment.mediaFiles.find(f => f.type && f.type.startsWith('audio/'));
+                            if (audioFile) {
+                                const audioDiv = document.createElement('div');
+                                audioDiv.className = 'mb-3';
+                                audioDiv.innerHTML = `<audio controls src="${audioFile.filePath}"></audio>`;
+                                container.appendChild(audioDiv);
+                            }
+                        }
+                        // Instructions
+                        const instr = document.createElement('div');
+                        instr.className = 'alert alert-info';
+                        instr.textContent = 'Drag and drop the items to put them in the correct order.';
+                        container.appendChild(instr);
+                        // Sortable list
+                        const list = document.createElement('ul');
+                        list.className = 'list-group mb-3';
+                        list.id = 'sortable-sequence';
+                        // Use items if present, otherwise sentences
+                        let items = (assessment.questions[0]?.items && assessment.questions[0].items.length > 0)
+                            ? assessment.questions[0].items
+                            : (assessment.questions[0]?.sentences || []);
+                        // Shuffle the items for display
+                        items = [...items].sort(() => Math.random() - 0.5);
+                        items.forEach((item, idx) => {
+                            const li = document.createElement('li');
+                            li.className = 'list-group-item';
+                            li.textContent = item;
+                            li.dataset.index = idx;
+                            list.appendChild(li);
+                        });
+                        container.appendChild(list);
+                        // Add pastel ghost class for SortableJS
+                        const style = document.createElement('style');
+                        style.innerHTML = `.sortable-ghost { background: #e7f3ff !important; opacity: 0.8 !important; }`;
+                        document.head.appendChild(style);
+                        // Init SortableJS with ghostClass
+                        Sortable.create(list, { animation: 150, ghostClass: 'sortable-ghost' });
+                        // Submit button
+                        const submitBtn = document.createElement('button');
+                        submitBtn.className = 'btn btn-primary';
+                        submitBtn.textContent = 'Submit Sequence';
+                        container.appendChild(submitBtn);
+                        // Feedback
+                        const feedback = document.createElement('div');
+                        feedback.className = 'mt-3';
+                        container.appendChild(feedback);
+                        // Submit handler
+                        submitBtn.onclick = async function() {
+                            const items = Array.from(list.children).map(li => li.textContent);
+                            // Send to backend (adjust endpoint as needed)
+                            const res = await fetch(`/api/assessments/${assessment.id}/submit`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Bearer ${token}`
+                                },
+                                body: JSON.stringify({ answers: [items] })
+                            });
+                            const data = await res.json();
+                            if (data.success) {
+                                feedback.innerHTML = `<div class='alert alert-success'>Your sequence was submitted!</div>`;
+                                submitBtn.disabled = true;
+                                setTimeout(function() {
+                                    window.location.href = '/student/resources';
+                                }, 5000); // 5 seconds delay
+                                return;
+                            } else {
+                                feedback.innerHTML = `<div class='alert alert-danger'>${data.error || 'Submission failed.'}</div>`;
+                            }
+                        };
+                        return;
                         
                     default:
                         container.innerHTML = `
@@ -1121,11 +1234,18 @@
                 // Sentences with blanks
                 const sentencesContainer = document.createElement('div');
                 sentencesContainer.className = 'sentences-container';
+                sentencesContainer.style.margin = '0';
+                sentencesContainer.style.padding = '0';
                 (question.sentences || []).forEach((sentence, idx) => {
                     // Create a card for each sentence
                     const sentenceCard = document.createElement('div');
-                    sentenceCard.className = 'card mb-4';
-                    
+                    sentenceCard.className = 'card';
+                    sentenceCard.style.marginBottom = '4px';
+                    sentenceCard.style.padding = '2px 4px';
+                    sentenceCard.style.borderRadius = '6px';
+                    sentenceCard.style.boxShadow = 'none';
+                    sentenceCard.style.background = '#fff';
+                    sentenceCard.style.minHeight = 'unset';
                     // If this is image-fill-blank, add the image
                     if (question.subtype === 'image-fill-blank' || assessment.subtype === 'image-fill-blank') {
                         const imageDiv = document.createElement('div');
@@ -1139,13 +1259,16 @@
                         imageDiv.appendChild(img);
                         sentenceCard.appendChild(imageDiv);
                     }
-
                     const cardBody = document.createElement('div');
                     cardBody.className = 'card-body';
-                    
+                    cardBody.style.padding = '2px 0 2px 0';
+                    cardBody.style.minHeight = 'unset';
                     const sentenceDiv = document.createElement('div');
                     sentenceDiv.className = 'sentence-container';
-                    // Replace \n with <br> for line breaks
+                    sentenceDiv.style.lineHeight = '1.4';
+                    sentenceDiv.style.fontSize = '1.05rem';
+                    sentenceDiv.style.marginBottom = '2px';
+                    // Replace \\n with <br> for line breaks
                     let sentenceText = sentence.text.replace(/\\n/g, '\n');
                     const parts = sentenceText.split(/___|\[BLANK\]/);
                     for (let i = 0; i < parts.length; i++) {
@@ -1161,6 +1284,15 @@
                             dropTarget.dataset.sentenceIndex = idx;
                             dropTarget.dataset.blankIndex = i;
                             dropTarget.dataset.correctAnswer = sentence.answers ? sentence.answers[i] : sentence.answer;
+                            dropTarget.style.display = 'inline-block';
+                            dropTarget.style.minWidth = '90px';
+                            dropTarget.style.height = '28px';
+                            dropTarget.style.margin = '0 3px';
+                            dropTarget.style.verticalAlign = 'middle';
+                            dropTarget.style.border = '2px dashed #ced4da';
+                            dropTarget.style.borderRadius = '4px';
+                            dropTarget.style.backgroundColor = '#f8f9fa';
+                            dropTarget.style.lineHeight = '1.2';
                             dropTarget.addEventListener('dragover', handleDragOver);
                             dropTarget.addEventListener('dragenter', handleDragEnter);
                             dropTarget.addEventListener('dragleave', handleDragLeave);
@@ -1176,10 +1308,42 @@
 
                 // Add a check answers button
                 const checkButton = document.createElement('button');
-                checkButton.className = 'btn btn-primary mt-3';
+                checkButton.className = 'btn btn-primary mt-3 me-2';
                 checkButton.textContent = 'Check Answers';
                 checkButton.addEventListener('click', () => checkDragDropAnswers(questionDiv));
                 questionDiv.appendChild(checkButton);
+
+                // --- Add a submit button for fill-in-blank drag-and-drop ---
+                const submitButton = document.createElement('button');
+                submitButton.className = 'btn btn-success mt-3';
+                submitButton.textContent = 'Submit';
+                submitButton.addEventListener('click', async () => {
+                    // Collect answers and calculate score
+                    const dropTargets = questionDiv.querySelectorAll('.drop-target');
+                    let correctCount = 0;
+                    let totalCount = dropTargets.length;
+                    let answerData = {};
+                    dropTargets.forEach((target, index) => {
+                        const userAnswer = target.textContent;
+                        const correctAnswer = target.dataset.correctAnswer;
+                        answerData[`answer_${index}`] = userAnswer;
+                        if (correctAnswer && userAnswer) {
+                            const isCorrect = userAnswer.trim() === correctAnswer.trim();
+                            answerData[`correct_${index}`] = isCorrect;
+                            if (isCorrect) correctCount++;
+                        }
+                    });
+                    // Calculate score as percentage
+                    let score = 0;
+                    if (totalCount > 0) {
+                        score = Math.round((correctCount / totalCount) * 100);
+                    }
+                    // Confirm submission
+                    if (confirm(`Are you sure you want to submit this assessment? Your score is ${score}%.`)) {
+                        await submitAssessment({ answers: answerData, score });
+                    }
+                });
+                questionDiv.appendChild(submitButton);
                 return;
             }
             // ... fallback to original drag-and-drop (sequence) ...
@@ -1534,119 +1698,35 @@
                 // Clear everything except the debug info
                 container.innerHTML = '';
                 // Add back debug info if it existed
-                if (debugInfo) {
-                    container.appendChild(debugInfo);
-                }
-            }
-
-            // Detect the assessment type and subtype
-            let words = [];
-            let correct = [];
-            let text = '';
-            let subtype = '';
-            let extraWords = [];
-            let audio = null;
-
-            // Determine subtype from either assessment or question data
-            if (assessment.subtype) {
-                subtype = assessment.subtype;
-            } else if (assessment.questions && assessment.questions.length > 0 && assessment.questions[0].subtype) {
-                subtype = assessment.questions[0].subtype;
-            } else if (assessment.text && (assessment.text.includes('[BLANK]') || assessment.text.includes('[blank]'))) {
-                // Infer subtype from presence of [BLANK] in text
-                subtype = 'long-paragraph-fill-in-blank';
-            }
-
-            // Get data from the assessment structure
-            if (assessment.questions && assessment.questions.length > 0) {
-                const question = assessment.questions[0];
-                console.log('Found question data:', question);
-                
-                if (question.wordBank) words = question.wordBank;
-                if (question.answers) correct = question.answers;
-                if (question.correctSequence) correct = question.correctSequence;
-                if (question.text) text = question.text;
-                if (question.extraWords) extraWords = question.extraWords;
-                if (question.audioUrl) audio = question.audioUrl;
-                
-                // Ensure we get the correct subtype
-                if (question.subtype && !subtype) {
-                    subtype = question.subtype;
-                }
-                console.log('Using question subtype:', subtype);
-            } else {
-                // Try to get data from top-level assessment object
-                if (assessment.wordBank) words = assessment.wordBank;
-                if (assessment.answers) correct = assessment.answers;
-                if (assessment.correctSequence) correct = assessment.correctSequence;
-                if (assessment.text) text = assessment.text;
-                if (assessment.extraWords) extraWords = assessment.extraWords;
-                if (assessment.audioUrl) audio = assessment.audioUrl;
-            }
-
-            // DON'T add extra words to the word bank - only use them to pad out the word bank if needed
-            // Remove this code that adds extra words to the regular word bank
-            // if (extraWords && extraWords.length > 0) {
-            //     words = [...words, ...extraWords];
-            // }
-
-            console.log('Rendering drag-and-drop with subtype:', subtype);
-            
-            // Clear the container
-            if (container.innerHTML === '') {
-                container.innerHTML = `<div class="text-center">
-                    <div class="spinner-border text-primary" role="status"></div>
-                    <p>Preparing drag and drop exercise...</p>
-                </div>`;
-            }
-            
-            // Add debugging info
-            const urlParams = new URLSearchParams(window.location.search);
-            if (urlParams.get('debug') === 'true') {
-                container.innerHTML += `
-                    <div class="alert alert-info mb-3">
-                        <strong>Drag-and-Drop Data:</strong><br>
-                        Subtype: ${subtype}<br>
-                        Words: ${JSON.stringify(words)}<br>
-                        Correct: ${JSON.stringify(correct)}<br>
-                        Text: ${text ? text.substring(0, 50) + '...' : 'None'}<br>
-                        Audio: ${audio || 'None'}
-                    </div>
-                `;
-            }
-            
-            // Validate required data
-            if (words.length === 0) {
-                container.innerHTML = `
-                    <div class="alert alert-danger">
-                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
-                        Error: No word bank provided for this drag-and-drop assessment.
-                    </div>
-                `;
-                return;
-            }
-
-            // For long-paragraph-fill-in-blank subtype, use the improved implementation
-            if (subtype === 'long-paragraph-fill-in-blank') {
-                console.log('Using special long paragraph implementation for subtype:', subtype);
-                
-                // First, clear any existing content except debug info
-                let debugInfo = container.querySelector('.alert-info');
-                container.innerHTML = '';
                 if (debugInfo) container.appendChild(debugInfo);
-                
-                // Create a div for the long paragraph exercise
-                const longParagraph = document.createElement('div');
-                longParagraph.className = 'long-paragraph-container';
-                container.appendChild(longParagraph);
-                
-                // Now render specifically into this container
-                renderLongParagraphDragAndDrop(longParagraph, text, words, correct);
-                return;
             }
 
-            // For other subtypes, implement as needed...
-            // (rest of the function content)
+            // Get the question (assume only one for drag-and-drop)
+            const question = assessment.questions[0];
+            const subtype = question.subtype || assessment.subtype || 'sequence';
+
+            // --- FIX: Build word bank for fill-in-blank subtype ---
+            if (
+                subtype === 'fill-in-blank' &&
+                (!question.wordBank || question.wordBank.length === 0)
+            ) {
+                let words = [];
+                (question.sentences || []).forEach(sentence => {
+                    if (Array.isArray(sentence.answers)) {
+                        words = words.concat(sentence.answers);
+                    }
+                });
+                if (Array.isArray(question.extraWords)) {
+                    words = words.concat(question.extraWords);
+                }
+                words = [...new Set(words)];
+                words = words.sort(() => Math.random() - 0.5);
+                question.wordBank = words;
+            }
+            // --- END FIX ---
+
+            // Now render the question
+            renderDragAndDropQuestion(question, container);
         }
 
         // New function to render long paragraph drag and drop
@@ -1683,22 +1763,15 @@
             
             // Build the paragraph with blanks
             for (let i = 0; i < parts.length; i++) {
-                html += parts[i];
-                
+                // Replace \n and \n with <br> for line breaks
+                html += parts[i].replace(/\\n/g, '<br>').replace(/\n/g, '<br>');
                 if (i < parts.length - 1) {
                     const correctAnswer = answers[i] || '';
                     html += `<span class="blank-space" 
                           id="blank-${i}" 
                           data-index="${i}" 
                           data-correct="${correctAnswer}"
-                          style="display: inline-block; 
-                                 min-width: 120px; 
-                                 height: 35px; 
-                                 border: 2px dashed #ced4da; 
-                                 border-radius: 4px; 
-                                 margin: 0 5px; 
-                                 vertical-align: middle; 
-                                 background-color: #f8f9fa;"></span>`;
+                          style="display: inline-flex; align-items: center; justify-content: center; min-width: 120px; height: 35px; border: 2px dashed #ced4da; border-radius: 4px; margin: 0 5px; vertical-align: middle; background-color: #f8f9fa;"></span>`;
                 }
             }
             
@@ -1745,8 +1818,11 @@
             html += `
                     </div>
                 </div>
-                
-                <button id="submit-btn" class="btn btn-primary">Submit</button>
+                <div class="d-flex gap-2">
+                    <button id="check-btn" class="btn btn-info">Check Answers</button>
+                    <button id="submit-btn" class="btn btn-primary">Submit</button>
+                </div>
+                <div id="feedback" class="mt-3"></div>
             `;
             
             // Set the HTML
@@ -1815,13 +1891,15 @@
                 });
             });
             
-            // Add submit button handler
-            document.getElementById('submit-btn').addEventListener('click', function() {
+            // Add submit and check button handlers
+            const checkBtn = document.getElementById('check-btn');
+            const submitBtn = document.getElementById('submit-btn');
+            const feedbackDiv = document.getElementById('feedback');
+
+            checkBtn.addEventListener('click', function() {
                 // Collect answers
-                const answers = [];
                 let correctCount = 0;
                 let totalCount = blankSpaces.length;
-                
                 blankSpaces.forEach((blank, index) => {
                     const userAnswer = blank.textContent;
                     const correctAnswer = blank.dataset.correct;
@@ -2388,7 +2466,10 @@
                     alert('Submission successful!');
                     // Once submitted, fetch submission data to update the attempts counter
                     await fetchSubmissionData();
-                    window.location.reload();
+                    setTimeout(function() {
+                        window.location.href = '/student/resources';
+                    }, 5000); // 5 seconds delay
+                    return;
                 } else {
                     alert('Submission failed: ' + (result.error || 'Unknown error'));
                 }
@@ -2443,6 +2524,7 @@
         }
 
         function setupRecording() {
+            const container = document.getElementById('assessmentContainer');
             const startBtn = document.getElementById('startRecordingBtn');
             const stopBtn = document.getElementById('stopRecordingBtn');
             const statusDiv = document.getElementById('recordingStatus');
@@ -2575,6 +2657,10 @@
                                 <i class="bi bi-arrow-left"></i> Back to Assessments
                             </a>
                         `;
+                        setTimeout(function() {
+                            window.location.href = '/student/resources';
+                        }, 5000); // 5 seconds delay
+                        return;
                     } else {
                         throw new Error(data.error || 'Unknown error');
                     }
@@ -2629,7 +2715,9 @@
             if (pairs.length > 0) {
                 // Create array of meanings and shuffle them
                 const meanings = pairs.map(pair => pair.meaning);
-                const shuffledMeanings = shuffleArray([...meanings]);
+                // To handle duplicates, create an array of {meaning, originalIndex}
+                const meaningObjs = meanings.map((meaning, idx) => ({ meaning, originalIndex: idx }));
+                const shuffledMeaningObjs = shuffleArray([...meaningObjs]);
                 
                 // Create the matching interface
                 const matchingTable = document.createElement('div');
@@ -2655,7 +2743,7 @@
                                 <div class="col-sm-6">
                                     <select class="form-select matching-select" id="option-${index}" style="font-size: 1.2rem;">
                                         <option value="">-- Select --</option>
-                                        ${shuffledMeanings.map((meaning, i) => `<option value="meaning-${meanings.indexOf(meaning)}">${meaning}</option>`).join('')}
+                                        ${shuffledMeaningObjs.map(obj => `<option value="meaning-${obj.originalIndex}">${obj.meaning}</option>`).join('')}
                                     </select>
                                 </div>
                             </div>
@@ -2804,6 +2892,10 @@
                     if (attemptCount) {
                         attemptCount.textContent = (parseInt(attemptCount.textContent) + 1).toString();
                     }
+                    setTimeout(function() {
+                        window.location.href = '/student/resources';
+                    }, 5000); // 5 seconds delay
+                    return;
                 } else {
                     alert('Failed to submit assessment. Please try again.');
                 }
@@ -3178,130 +3270,61 @@
                 questionTitle.textContent = `Question ${currentQuestionIndex + 1}`;
                 questionDiv.appendChild(questionTitle);
             }
-            
-            // Check if we need to add audio player for listening exercises or multiple choice assessments
-            const isListeningExercise = 
-                assessment.type === 'listening' || 
-                assessment.title.toLowerCase().includes('listening') ||
-                (assessment.type === 'multiple-choice' && assessment.title.toLowerCase().includes('listen'));
-                
+            // --- AUDIO PLAYER ALWAYS IF AUDIO FILE PRESENT ---
             let audioFound = false;
-            
-            if (isListeningExercise) {
+            const hasAudio = assessment.mediaFiles && assessment.mediaFiles.some(file =>
+                (file.url || file.filePath) && (
+                    (file.url && (file.url.endsWith('.mp3') || file.url.endsWith('.wav') || file.url.endsWith('.ogg')))
+                    || (file.filePath && (file.filePath.endsWith('.mp3') || file.filePath.endsWith('.wav') || file.filePath.endsWith('.ogg')))
+                    || (file.type && file.type.startsWith('audio/'))
+                )
+            );
+            if (hasAudio && (currentQuestionIndex === 0 || !window.audioPlayerShown)) {
+                window.audioPlayerShown = true;
                 const audioPlayer = document.createElement('div');
                 audioPlayer.className = 'audio-player mb-3';
-                
-                // Create info message
                 const infoMessage = document.createElement('div');
                 infoMessage.className = 'alert alert-info';
-                infoMessage.innerHTML = '<i class="bi bi-volume-up me-2"></i>Listen to the audio and choose the best answer.';
+                infoMessage.innerHTML = '<i class="bi bi-volume-up me-2"></i>Listen to the audio and answer the questions.';
                 audioPlayer.appendChild(infoMessage);
-                
-                            // Check if we already showed the audio player for this assessment
-            // Only show it once per assessment to avoid duplicate error messages
-            if (currentQuestionIndex === 0 || !window.audioPlayerShown) {
-                window.audioPlayerShown = true;
-                
-                // Add audio element
                 const audio = document.createElement('audio');
                 audio.controls = true;
                 audio.className = 'w-100';
-                
-                // Try to find audio sources in priority order
-                if (assessment.mediaFiles && assessment.mediaFiles.length > 0) {
-                    // Find audio files from mediaFiles array
-                    const audioFiles = assessment.mediaFiles.filter(file => 
-                        (file.url || file.filePath) && (
-                            (file.url && (file.url.endsWith('.mp3') || file.url.endsWith('.wav') || file.url.endsWith('.ogg'))) ||
-                            (file.filePath && (file.filePath.endsWith('.mp3') || file.filePath.endsWith('.wav') || file.filePath.endsWith('.ogg'))) ||
-                            (file.type && file.type.startsWith('audio/'))
-                        )
-                    );
-                    
-                    if (audioFiles.length > 0) {
-                        audioFound = true;
-                        console.log("Found audio files in mediaFiles:", audioFiles);
-                        // Add each audio source in priority order
-                        audioFiles.forEach(file => {
-                            const source = document.createElement('source');
-                            source.src = file.url || file.filePath; // Use url or filePath
-                            
-                            // Determine MIME type based on file extension
-                            const filePath = file.url || file.filePath;
-                            if (filePath.endsWith('.mp3')) {
-                                source.type = 'audio/mpeg';
-                            } else if (filePath.endsWith('.wav')) {
-                                source.type = 'audio/wav';
-                            } else if (filePath.endsWith('.ogg')) {
-                                source.type = 'audio/ogg';
-                            } else if (file.type && file.type.startsWith('audio/')) {
-                                source.type = file.type;
-                            }
-                            
-                            audio.appendChild(source);
-                        });
-                    } else {
-                        console.log("No audio files found in mediaFiles, trying default paths");
-                        // No audio files found in mediaFiles, add warning immediately
-                        const warningMsg = document.createElement('div');
-                        warningMsg.className = 'alert alert-warning mb-3';
-                        warningMsg.innerHTML = `
-                            <i class="bi bi-exclamation-triangle-fill me-2"></i>
-                            <strong>No audio found!</strong><br>
-                            This listening exercise requires an audio file that is missing. 
-                            Please contact your teacher and ask them to upload the audio file for this assessment (ID: ${assessment.id}).
-                        `;
-                        audioPlayer.appendChild(warningMsg);
-                    }
+                const audioFiles = assessment.mediaFiles.filter(file =>
+                    (file.url || file.filePath) && (
+                        (file.url && (file.url.endsWith('.mp3') || file.url.endsWith('.wav') || file.url.endsWith('.ogg')))
+                        || (file.filePath && (file.filePath.endsWith('.mp3') || file.filePath.endsWith('.wav') || file.filePath.endsWith('.ogg')))
+                        || (file.type && file.type.startsWith('audio/'))
+                    )
+                );
+                if (audioFiles.length > 0) {
+                    audioFound = true;
+                    audioFiles.forEach(file => {
+                        const source = document.createElement('source');
+                        source.src = file.url || file.filePath;
+                        const filePath = file.url || file.filePath;
+                        if (filePath.endsWith('.mp3')) source.type = 'audio/mpeg';
+                        else if (filePath.endsWith('.wav')) source.type = 'audio/wav';
+                        else if (filePath.endsWith('.ogg')) source.type = 'audio/ogg';
+                        else if (file.type && file.type.startsWith('audio/')) source.type = file.type;
+                        audio.appendChild(source);
+                    });
                 } else {
-                    console.log("No mediaFiles array, adding missing audio warning");
-                    // No media files available, add warning immediately
                     const warningMsg = document.createElement('div');
                     warningMsg.className = 'alert alert-warning mb-3';
                     warningMsg.innerHTML = `
                         <i class="bi bi-exclamation-triangle-fill me-2"></i>
                         <strong>No audio found!</strong><br>
-                        This listening exercise requires an audio file that is missing. 
+                        This assessment requires an audio file that is missing. 
                         Please contact your teacher and ask them to upload the audio file for this assessment (ID: ${assessment.id}).
                     `;
                     audioPlayer.appendChild(warningMsg);
                 }
-                
-                // Only add audio element if not showing the warning
                 if (!audioPlayer.querySelector('.alert-warning')) {
-                    // Add error text
                     audio.innerHTML += 'Your browser does not support the audio element.';
-                    
-                    // Add onerror handler to show message if audio cannot be loaded
-                    audio.onerror = function() {
-                        audioFound = false;
-                        if (!this.parentNode.querySelector('.alert-danger')) {
-                            const errorMsg = document.createElement('div');
-                            errorMsg.className = 'alert alert-danger mt-2';
-                            errorMsg.innerHTML = `
-                                <i class="bi bi-exclamation-triangle-fill me-2"></i>
-                                <strong>Audio file not found!</strong><br>
-                                This listening exercise requires an audio file that is missing. 
-                                Please contact your teacher and ask them to upload the audio file for this assessment (ID: ${assessment.id}).
-                            `;
-                            this.parentNode.appendChild(errorMsg);
-                            
-                            // Hide the audio element since it's not working
-                            this.style.display = 'none';
-                        }
-                    };
-                    
-                                        // Add onloadeddata handler to confirm audio was found
-                    audio.onloadeddata = function() {
-                        audioFound = true;
-                        console.log("Audio loaded successfully");
-                    };
-                    
                     audioPlayer.appendChild(audio);
                 }
-            }
-            
-            questionDiv.appendChild(audioPlayer);
+                questionDiv.appendChild(audioPlayer);
             }
             
             // Use the appropriate rendering function based on question type
@@ -3385,6 +3408,232 @@
                 console.error('Error submitting assessment:', error);
                 alert(`Error submitting assessment: ${error.message}`);
             }
+        }
+
+        // Add this new function:
+        function renderTrueFalseAssessment() {
+            const container = document.getElementById('assessmentContainer');
+            const questions = (assessment.questions && assessment.questions.length > 0 && assessment.questions[0].sentences)
+                ? assessment.questions[0].sentences : [];
+            let html = `
+                <div class="card mb-4">
+                    <div class="card-header bg-primary text-white">
+                        <h3 class="mb-0" id="assessmentTitle" style="font-size:2.2rem;">${assessment.title || 'True/False Quiz'}</h3>
+                    </div>
+                    <div class="card-body">
+                        <div id="audioPlayerTF"></div>
+                        <p class="mb-3" id="assessmentDescription" style="font-size:1.5rem;">${formatWithLineBreaks(assessment.description || 'Mark each statement as True or False.')}</p>
+                        ${assessment.criteria ? `
+                            <div class="alert alert-info mb-3" style="font-size:1.2rem;">
+                                <strong>Criteria:</strong> ${formatWithLineBreaks(assessment.criteria)}
+                            </div>
+                        ` : ''}
+                        <form id="trueFalseForm">
+                            <div class="list-group mb-4">
+                                ${questions.map((q, i) => `
+                                    <div class="list-group-item d-flex align-items-center justify-content-between" style="font-size:1.5rem; min-height:70px;">
+                                        <span style="font-size:1.5rem;">${q.text}</span>
+                                        <div>
+                                            <label class="me-3" style="font-size:1.3rem;">
+                                                <input type="radio" name="tf_${i}" value="true" required style="transform:scale(2); margin-right:10px;"> <span style="font-size:1.3rem;">True</span>
+                                            </label>
+                                            <label style="font-size:1.3rem;">
+                                                <input type="radio" name="tf_${i}" value="false" required style="transform:scale(2); margin-right:10px;"> <span style="font-size:1.3rem;">False</span>
+                                            </label>
+                                            <span class="tf-feedback ms-3" id="tf_feedback_${i}" style="font-size:1.3rem;"></span>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                            <div class="d-flex flex-row gap-3">
+                                <button type="button" id="checkTFBtn" class="btn btn-lg btn-info">Check</button>
+                                <button type="submit" class="btn btn-lg btn-primary">Submit</button>
+                            </div>
+                            <div id="tfScoreFeedback" class="mt-3"></div>
+                        </form>
+                    </div>
+                </div>
+            `;
+            container.innerHTML = html;
+            document.getElementById('trueFalseForm').addEventListener('submit', submitTrueFalseAssessment);
+            document.getElementById('checkTFBtn').addEventListener('click', checkTrueFalseAnswers);
+            // --- AUDIO PLAYER FOR TRUE/FALSE ---
+            const audioPlayerTF = document.getElementById('audioPlayerTF');
+            const hasAudioTF = assessment.mediaFiles && assessment.mediaFiles.some(file =>
+                (file.url || file.filePath) && (
+                    (file.url && (file.url.endsWith('.mp3') || file.url.endsWith('.wav') || file.url.endsWith('.ogg')))
+                    || (file.filePath && (file.filePath.endsWith('.mp3') || file.filePath.endsWith('.wav') || file.filePath.endsWith('.ogg')))
+                    || (file.type && file.type.startsWith('audio/'))
+                )
+            );
+            if (hasAudioTF) {
+                const audio = document.createElement('audio');
+                audio.controls = true;
+                audio.className = 'w-100';
+                const audioFiles = assessment.mediaFiles.filter(file =>
+                    (file.url || file.filePath) && (
+                        (file.url && (file.url.endsWith('.mp3') || file.url.endsWith('.wav') || file.url.endsWith('.ogg')))
+                        || (file.filePath && (file.filePath.endsWith('.mp3') || file.filePath.endsWith('.wav') || file.filePath.endsWith('.ogg')))
+                        || (file.type && file.type.startsWith('audio/'))
+                    )
+                );
+                audioFiles.forEach(file => {
+                    const source = document.createElement('source');
+                    source.src = file.url || file.filePath;
+                    const filePath = file.url || file.filePath;
+                    if (filePath.endsWith('.mp3')) source.type = 'audio/mpeg';
+                    else if (filePath.endsWith('.wav')) source.type = 'audio/wav';
+                    else if (filePath.endsWith('.ogg')) source.type = 'audio/ogg';
+                    else if (file.type && file.type.startsWith('audio/')) source.type = file.type;
+                    audio.appendChild(source);
+                });
+                audioPlayerTF.appendChild(audio);
+            }
+        }
+
+        async function checkTrueFalseAnswers() {
+            const form = document.getElementById('trueFalseForm');
+            const questions = (assessment.questions && assessment.questions.length > 0 && assessment.questions[0].sentences)
+                ? assessment.questions[0].sentences : [];
+            let correctCount = 0;
+            let total = questions.length;
+            let answers = [];
+            let allAnswered = true;
+            questions.forEach((q, i) => {
+                const radios = form.querySelectorAll(`[name="tf_${i}"]`);
+                let selected = null;
+                radios.forEach(r => { if (r.checked) selected = r.value; });
+                if (selected === null) allAnswered = false;
+                const isCorrect = (selected === 'true' && q.isTrue) || (selected === 'false' && !q.isTrue);
+                const feedbackSpan = document.getElementById(`tf_feedback_${i}`);
+                if (selected !== null) {
+                    if (isCorrect) {
+                        feedbackSpan.textContent = '✔';
+                        feedbackSpan.style.color = 'green';
+                        correctCount++;
+                    } else {
+                        feedbackSpan.textContent = '✘';
+                        feedbackSpan.style.color = 'red';
+                    }
+                } else {
+                    feedbackSpan.textContent = '';
+                }
+                answers.push(selected === 'true');
+            });
+            const score = Math.round((correctCount / total) * 100);
+            const feedbackDiv = document.getElementById('tfScoreFeedback');
+            feedbackDiv.innerHTML = `<div class="alert alert-${score === 100 ? 'success' : 'danger'}">Your score: ${score}% (${correctCount} out of ${total} correct)</div>`;
+            // Record the check as an attempt
+            try {
+                const urlParams = new URLSearchParams(window.location.search);
+                const assessmentId = urlParams.get('id');
+                const response = await fetch(`/api/assessments/${assessmentId}/submit`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ answers, score })
+                });
+                if (response.ok) {
+                    // Optionally show a toast or notification
+                    // (already shown in feedbackDiv)
+                } else {
+                    const error = await response.json();
+                    feedbackDiv.innerHTML += `<div class='alert alert-warning mt-2'>Failed to record attempt: ${error.error || 'Unknown error'}</div>`;
+                }
+            } catch (err) {
+                feedbackDiv.innerHTML += `<div class='alert alert-warning mt-2'>Failed to record attempt: ${err.message}</div>`;
+            }
+        }
+
+        async function submitTrueFalseAssessment(e) {
+            e.preventDefault();
+            const form = e.target;
+            const questions = (assessment.questions && assessment.questions.length > 0 && assessment.questions[0].sentences)
+                ? assessment.questions[0].sentences : [];
+            const answers = questions.map((q, i) => {
+                const val = form[`tf_${i}`].value;
+                return val === 'true';
+            });
+            let correctCount = 0;
+            questions.forEach((q, i) => {
+                if ((answers[i] && q.isTrue) || (!answers[i] && !q.isTrue)) correctCount++;
+            });
+            const score = Math.round((correctCount / questions.length) * 100);
+            try {
+                const urlParams = new URLSearchParams(window.location.search);
+                const assessmentId = urlParams.get('id');
+                const response = await fetch(`/api/assessments/${assessmentId}/submit`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ answers, score })
+                });
+                if (response.ok) {
+                    document.getElementById('assessmentContainer').innerHTML = `
+                        <div class="alert alert-success">
+                            <h4 class="alert-heading">Assessment Submitted Successfully!</h4>
+                            <p>Your score: ${score}%</p>
+                            <hr>
+                            <p class="mb-0">You can now return to your assessments page.</p>
+                        </div>
+                        <a href="/student/assessments" class="btn btn-primary btn-lg mt-3">
+                            <i class="bi bi-arrow-left"></i> Back to Assessments
+                        </a>
+                    `;
+                } else {
+                    const error = await response.json();
+                    alert('Submission failed: ' + (error.error || 'Unknown error'));
+                }
+            } catch (err) {
+                alert('Submission failed: ' + err.message);
+            }
+        }
+
+        // Add this function after setupRecording
+        function setupAudioUpload() {
+            const form = document.getElementById('audioUploadForm');
+            const input = document.getElementById('audioFileInput');
+            const statusDiv = document.getElementById('audioUploadStatus');
+            if (!form || !input) return;
+            form.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                if (!input.files || input.files.length === 0) {
+                    statusDiv.innerHTML = '<div class="text-danger">Please select an audio file to upload.</div>';
+                    return;
+                }
+                const file = input.files[0];
+                if (!file.type.startsWith('audio/')) {
+                    statusDiv.innerHTML = '<div class="text-danger">Invalid file type. Please upload an audio file.</div>';
+                    return;
+                }
+                statusDiv.innerHTML = '<div class="text-primary">Uploading...</div>';
+                const formData = new FormData();
+                formData.append('audio', file, file.name);
+                try {
+                    const response = await fetch(`/api/assessments/${assessment.id}/submit-speaking`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: formData
+                    });
+                    const data = await response.json();
+                    if (response.ok && data.success) {
+                        statusDiv.innerHTML = '<div class="alert alert-success">Audio file submitted successfully!</div>';
+                        setTimeout(function() {
+                            window.location.href = '/student/resources';
+                        }, 5000);
+                    } else {
+                        throw new Error(data.error || 'Unknown error');
+                    }
+                } catch (error) {
+                    statusDiv.innerHTML = `<div class='alert alert-danger'>Error uploading audio: ${error.message || 'Unknown error'}</div>`;
+                }
+            });
         }
     </script>
     <!-- Direct fix for drag and drop functionality -->
@@ -3498,158 +3747,6 @@
                     this.style.opacity = '1';
                 };
             });
-        });
-    </script>
-    <!-- Emergency fix for drag and drop exercise -->
-    <script>
-        // Wait for DOM to be fully loaded and assessment data to be available
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('DOM loaded, setting up emergency fix and monitoring');
-            
-            // Set up a MutationObserver to watch for the container being added to the DOM
-            const bodyObserver = new MutationObserver(function(mutations) {
-                mutations.forEach(function(mutation) {
-                    if (mutation.type === 'childList') {
-                        mutation.addedNodes.forEach(function(node) {
-                            if (node.nodeType === 1) { // Element node
-                                if (node.id === 'dragDropContainer') {
-                                    console.log('MutationObserver: dragDropContainer added to DOM');
-                                    setTimeout(attemptFix, 100); // Try fix when container is detected
-                                } else if (node.querySelector && node.querySelector('#dragDropContainer')) {
-                                    console.log('MutationObserver: Container with dragDropContainer inside added');
-                                    setTimeout(attemptFix, 100); // Try fix when container is detected
-                                }
-                            }
-                        });
-                    }
-                });
-            });
-            
-            // Start observing
-            bodyObserver.observe(document.body, { childList: true, subtree: true });
-            
-            // Check if container exists immediately
-            const initialCheck = document.getElementById('dragDropContainer');
-            console.log('Initial container check:', initialCheck ? 'exists' : 'does not exist');
-            
-            // Instead of a single timeout, let's use a retry mechanism
-            let retryCount = 0;
-            const maxRetries = 10; // Increase max retries
-            
-            // Define the fix function
-            function attemptFix() {
-                console.log(`Emergency fix: Attempt ${retryCount+1} to rebuild drag-and-drop exercise`);
-                
-                // Check if assessment data is available
-                console.log('Assessment data available:', !!window.assessment);
-                
-                if (!window.assessment) {
-                    console.warn('Assessment data not available yet, retrying...');
-                    if (retryCount < maxRetries) {
-                        retryCount++;
-                        // Exponential backoff to retry
-                        setTimeout(attemptFix, 500 * retryCount); // Use shorter initial timeout
-                    } else {
-                        console.error('Failed to get assessment data after multiple attempts');
-                        // Create a visible error message in the container
-                        const container = document.getElementById('dragDropContainer');
-                        if (container) {
-                            container.innerHTML = `
-                                <div class="alert alert-danger">
-                                    <strong>Error:</strong> Could not load the drag-and-drop exercise. 
-                                    Please try refreshing the page.
-                                </div>
-                            `;
-                        }
-                    }
-                    return;
-                }
-                
-                // Check if this is a drag-and-drop assessment
-                console.log('Assessment type:', window.assessment.type);
-                if (window.assessment.type !== 'drag-and-drop') {
-                    console.log('Not a drag-and-drop assessment, skipping fix');
-                    return;
-                }
-
-                // Get the drag and drop container - use the new structure
-                const dragDropContainer = document.getElementById('dragDropContainer');
-                
-                if (!dragDropContainer) {
-                    console.log('Container not found yet, will retry');
-                    if (retryCount < maxRetries) {
-                        retryCount++;
-                        setTimeout(attemptFix, 300 * retryCount);
-                    }
-                    return;
-                }
-                
-                // Check if we have questions data correctly
-                if (!window.assessment.questions || !window.assessment.questions.length) {
-                    // Try to detect questions from other properties if possible
-                    if (window.assessment.wordBank && window.assessment.answers) {
-                        console.log('No questions array but found wordBank and answers, creating question structure');
-                        window.assessment.questions = [{
-                            type: 'drag-and-drop',
-                            subtype: 'long-paragraph-fill-in-blank', 
-                            text: window.assessment.text || '',
-                            wordBank: window.assessment.wordBank || [],
-                            answers: window.assessment.answers || [],
-                            extraWords: window.assessment.extraWords || []
-                        }];
-                    }
-                }
-                
-                // Container exists, check if it's empty or just has loading spinner
-                if (container.children.length === 0 || 
-                    (container.children.length === 1 && container.firstChild.className === 'text-center')) {
-                    console.log('Container is empty or just has loading spinner, applying real fix');
-                    
-                    // Determine the question subtype
-                    let subtype = '';
-                    if (window.assessment.subtype) {
-                        subtype = window.assessment.subtype;
-                    } else if (window.assessment.questions && window.assessment.questions.length > 0) {
-                        subtype = window.assessment.questions[0].subtype;
-                    }
-                    
-                    if (subtype === 'long-paragraph-fill-in-blank' || !subtype) {
-                        console.log('Emergency fix: Rendering drag-and-drop properly');
-                        try {
-                            // Call the main rendering function
-                            if (typeof renderDragAndDropAssessment === 'function') {
-                                renderDragAndDropAssessment(container);
-                            } else {
-                                // If the function doesn't exist yet, try again later
-                                setTimeout(attemptFix, 500);
-                            }
-                        } catch (err) {
-                            console.error('Error rendering drag and drop:', err);
-                        }
-                    }
-                }
-            }
-            
-            // Make it globally accessible
-            window.attemptFix = attemptFix;
-            
-            // Try to apply the fix immediately
-            attemptFix();
-            
-            // Also listen for the assessment-loaded event
-            document.addEventListener('assessment-loaded', function(e) {
-                console.log('assessment-loaded event detected, applying fix');
-                // Update window.assessment if not already set
-                if (!window.assessment) {
-                    window.assessment = e.detail;
-                    console.log('Updated window.assessment from event');
-                }
-                // Wait a moment to ensure containers are in the DOM
-                setTimeout(attemptFix, 200);
-            });
-            
-            // One final safety check - try again after a few seconds
-            setTimeout(attemptFix, 2000);
         });
     </script>
 </body>

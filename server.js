@@ -1768,13 +1768,11 @@ app.get('/api/topics/:topicId/resources', auth, async (req, res) => {
                 where: { id: resource.id },
                 include: { assessments: true }
             });
-            
             // Extract audioPath from metadata if it exists
             let audioPath = null;
             if (resource.metadata && typeof resource.metadata === 'object' && resource.metadata.audioPath) {
                 audioPath = resource.metadata.audioPath;
             }
-            
             return {
                 ...resource,
                 audioPath: audioPath,
@@ -1785,6 +1783,9 @@ app.get('/api/topics/:topicId/resources', auth, async (req, res) => {
                 }))
             };
         }));
+
+        // Sort by order field
+        resourcesWithAssessments.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
         res.json(resourcesWithAssessments);
     } catch (error) {
@@ -1815,7 +1816,7 @@ app.get('/api/topics/:topicId/questions', auth, async (req, res) => {
 
         // Transform assessments into questions format
         const questions = topic.assessments
-            .filter(assessment => assessment.type === 'quiz')
+            .filter(assessment => assessment.type === 'quiz' || assessment.type === 'multiple-choice')
             .map(assessment => ({
                 id: assessment.id,
                 title: assessment.title,
@@ -1974,6 +1975,7 @@ app.post('/api/sections/:sectionId/assessments', auth, upload.any(), async (req,
     try {
         const { sectionId } = req.params;
         const { title, description, type, questions, dueDate, maxAttempts, category, topicId, weeklyScheduleId, criteria, audioFile } = req.body;
+        console.log('[CREATE ASSESSMENT] req.body:', req.body);
 
         if (!sectionId) {
             return res.status(400).json({ error: 'sectionId is required to create an assessment.' });
@@ -2121,7 +2123,7 @@ app.post('/api/sections/:sectionId/assessments', auth, upload.any(), async (req,
                 title: title.trim(),
                 description,
                 type,
-                category,
+                category: category,
                 criteria, // Ensure criteria is included
                 questions: parsedQuestions,
                 dueDate: dueDate ? new Date(dueDate) : null,
@@ -2168,8 +2170,9 @@ app.put('/api/assessments/:assessmentId', auth, upload.any(), async (req, res) =
     try {
         const { assessmentId } = req.params;
         const { title, description, type, questions, dueDate, maxAttempts, category, topicId, weeklyScheduleId, criteria } = req.body;
-
-        console.log(`[UPDATE] Updating assessment ${assessmentId}, type ${type}`);
+        console.log('[UPDATE ASSESSMENT] req.body:', req.body);
+        console.log('[UPDATE ASSESSMENT] Category value:', category);
+        console.log('[UPDATE ASSESSMENT] req.files:', req.files);
 
         // Validate required fields
         if (!title || !title.trim()) {
@@ -2265,7 +2268,7 @@ app.put('/api/assessments/:assessmentId', auth, upload.any(), async (req, res) =
                 title: title.trim(),
                 description,
                 type,
-                category,
+                category: category,
                 criteria, // Ensure criteria is included
                 questions: parsedQuestions,
                 dueDate: dueDate ? new Date(dueDate) : null,
@@ -2595,7 +2598,7 @@ app.post('/api/assessments/:assessmentId/submit', auth, async (req, res) => {
                     }
                     calculatedScore = Math.round((correct / total) * 100);
                 }
-            } else if (assessment.type === 'quiz' && Array.isArray(assessment.questions)) {
+            } else if ((assessment.type === 'quiz' || assessment.type === 'multiple-choice') && Array.isArray(assessment.questions)) {
                 // Multiple choice quiz
                 let correct = 0;
                 let total = assessment.questions.length;
@@ -2606,6 +2609,33 @@ app.post('/api/assessments/:assessmentId/submit', auth, async (req, res) => {
                     }
                 }
                 calculatedScore = Math.round((correct / total) * 100);
+            } else if (assessment.type === 'assignment' && Array.isArray(assessment.questions)) {
+                // Fill-in-the-blank text exercise
+                console.log('Grading assignment (fill-in-the-blank):', answers);
+                
+                const q = assessment.questions[0];
+                if (q && Array.isArray(q.answers) && answers && answers.studentAnswers) {
+                    const correctAnswers = q.answers;
+                    const studentAnswers = answers.studentAnswers;
+                    let correct = 0;
+                    let total = correctAnswers.length;
+                    
+                    // Compare each student answer with the corresponding correct answer
+                    for (let i = 0; i < total; i++) {
+                        const correctAnswer = correctAnswers[i];
+                        const studentAnswer = studentAnswers[i] || '';
+                        
+                        // Apply case sensitivity based on question settings
+                        if (q.caseSensitive) {
+                            if (studentAnswer === correctAnswer) correct++;
+                        } else {
+                            if (studentAnswer.toLowerCase() === correctAnswer.toLowerCase()) correct++;
+                        }
+                    }
+                    
+                    calculatedScore = Math.round((correct / total) * 100);
+                    console.log('Assignment grading result:', { total, correct, score: calculatedScore });
+                }
             } else if (assessment.type === 'drag-and-drop' && Array.isArray(assessment.questions)) {
                 // Support all subtypes: sequence, fill-in-blank, image-fill-in-blank, long-paragraph-fill-in-blank
                 const q = assessment.questions[0];
@@ -2680,6 +2710,20 @@ app.post('/api/assessments/:assessmentId/submit', auth, async (req, res) => {
                         }
                         
                         console.log('Image-fill-in-blank grading result:', { total, correct });
+                    }
+                }
+                if (total > 0) {
+                    calculatedScore = Math.round((correct / total) * 100);
+                }
+            } else if (assessment.type === 'change-sequence' && Array.isArray(assessment.questions)) {
+                // Grading logic for change-sequence
+                const q = assessment.questions[0];
+                let correct = 0;
+                let total = 0;
+                if (q && Array.isArray(q.correctSequence) && Array.isArray(answers[0])) {
+                    total = q.correctSequence.length;
+                    for (let i = 0; i < total; i++) {
+                        if (answers[0][i] === q.correctSequence[i]) correct++;
                     }
                 }
                 if (total > 0) {
@@ -2814,6 +2858,7 @@ app.get('/api/student/assessments', auth, async (req, res) => {
                                     id: assessment.id,
                                     title: assessment.title || assessment.name,
                                     description: assessment.description || '',
+                                    type: assessment.type,
                                     attempts,
                                     maxAttempts: assessment.maxAttempts || '-',
                                     bestScore,
@@ -3315,5 +3360,211 @@ app.get('/api/assessments/:assessmentId/audio-status', auth, async (req, res) =>
     } catch (error) {
         console.error('Error checking audio status:', error);
         res.status(500).json({ error: 'Error checking audio status' });
+    }
+});
+
+// Update the order of resources for a topic
+app.put('/api/topics/:topicId/resources/order', auth, async (req, res) => {
+    try {
+        const { topicId } = req.params;
+        const { resourceIds } = req.body;
+        if (!Array.isArray(resourceIds)) {
+            return res.status(400).json({ error: 'resourceIds must be an array' });
+        }
+        // Update each resource's order field
+        const updatePromises = resourceIds.map((id, idx) =>
+            prisma.resource.update({
+                where: { id },
+                data: { order: idx },
+            })
+        );
+        await Promise.all(updatePromises);
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Error updating resource order:', error);
+        res.status(500).json({ error: 'Failed to update resource order' });
+    }
+});
+
+// Get all resources (for orphaned resources page)
+app.get('/api/resources', auth, async (req, res) => {
+    try {
+        const resources = await prisma.resource.findMany({
+            include: {
+                assessments: true,
+                createdBy: true
+            }
+        });
+        // Add filePath and audioPath for compatibility
+        const formatted = resources.map(resource => {
+            let audioPath = null;
+            if (resource.metadata && typeof resource.metadata === 'object' && resource.metadata.audioPath) {
+                audioPath = resource.metadata.audioPath;
+            }
+            return {
+                ...resource,
+                filePath: resource.url,
+                audioPath,
+                assessments: resource.assessments.map(a => ({
+                    id: a.id,
+                    title: a.title,
+                    type: a.type
+                }))
+            };
+        });
+        res.json(formatted);
+    } catch (error) {
+        console.error('Error fetching all resources:', error);
+        res.status(500).json({ error: 'Failed to fetch resources' });
+    }
+});
+
+// Delete all resources (admin only)
+app.delete('/api/resources/all', auth, async (req, res) => {
+    try {
+        // First check if user is admin
+        const user = await prisma.user.findUnique({
+            where: { id: req.user.userId },
+            select: { role: true }
+        });
+
+        if (!user || user.role !== 'ADMIN') {
+            return res.status(403).json({ error: 'Only administrators can delete all resources' });
+        }
+
+        // First, disconnect all resources from assessments
+        await prisma.assessment.updateMany({
+            data: {
+                resources: {
+                    set: []
+                }
+            }
+        });
+
+        // Then delete all media files associated with resources
+        await prisma.mediaFile.deleteMany({
+            where: {
+                resourceId: {
+                    not: null
+                }
+            }
+        });
+
+        // Finally delete all resources
+        const deletedResources = await prisma.resource.deleteMany({});
+
+        res.json({ 
+            success: true, 
+            message: `Successfully deleted ${deletedResources.count} resources`,
+            count: deletedResources.count
+        });
+    } catch (error) {
+        console.error('Error deleting all resources:', error);
+        res.status(500).json({ error: 'Failed to delete resources' });
+    }
+});
+
+// Delete all assessments (admin only)
+app.delete('/api/assessments/all', auth, async (req, res) => {
+    try {
+        // First check if user is admin
+        const user = await prisma.user.findUnique({
+            where: { id: req.user.userId },
+            select: { role: true }
+        });
+
+        if (!user || user.role !== 'ADMIN') {
+            return res.status(403).json({ error: 'Only administrators can delete all assessments' });
+        }
+
+        // First delete all assessment submissions
+        const deletedSubmissions = await prisma.assessmentSubmission.deleteMany({});
+        console.log(`Deleted ${deletedSubmissions.count} submissions`);
+
+        // Then delete all media files associated with assessments
+        const deletedMediaFiles = await prisma.mediaFile.deleteMany({
+            where: {
+                assessmentId: {
+                    not: null
+                }
+            }
+        });
+        console.log(`Deleted ${deletedMediaFiles.count} media files`);
+
+        // Disconnect assessments from resources
+        await prisma.assessment.updateMany({
+            data: {
+                resources: {
+                    set: []
+                }
+            }
+        });
+
+        // Finally delete all assessments
+        const deletedAssessments = await prisma.assessment.deleteMany({});
+
+        res.json({ 
+            success: true, 
+            message: `Successfully deleted ${deletedAssessments.count} assessments`,
+            details: {
+                assessments: deletedAssessments.count,
+                submissions: deletedSubmissions.count,
+                mediaFiles: deletedMediaFiles.count
+            }
+        });
+    } catch (error) {
+        console.error('Error deleting all assessments:', error);
+        res.status(500).json({ error: 'Failed to delete assessments' });
+    }
+});
+
+// Get all submissions for an assessment (for teacher grading)
+app.get('/api/assessments/:assessmentId/all-submissions', auth, async (req, res) => {
+    try {
+        // Only allow teachers/admins
+        const user = await prisma.user.findUnique({
+            where: { id: req.user.userId }
+        });
+        if (!user || (user.role !== 'TEACHER' && user.role !== 'ADMIN')) {
+            return res.status(403).json({ error: 'Not authorized' });
+        }
+
+        const { assessmentId } = req.params;
+        const submissions = await prisma.assessmentSubmission.findMany({
+            where: { assessmentId },
+            include: {
+                student: {
+                    select: { id: true, name: true, nickname: true, class: true }
+                }
+            },
+            orderBy: { submittedAt: 'desc' }
+        });
+        res.json(submissions);
+    } catch (error) {
+        console.error('Error fetching all submissions:', error);
+        res.status(500).json({ error: 'Failed to fetch submissions' });
+    }
+});
+
+// Un-enroll from a subject
+app.delete('/api/subjects/:subjectId/unenroll', auth, async (req, res) => {
+    try {
+        const { subjectId } = req.params;
+        const userId = req.user.userId;
+        // Delete the StudentCourse record for this user and subject
+        const result = await prisma.studentCourse.deleteMany({
+            where: {
+                studentId: userId,
+                subjectId: subjectId
+            }
+        });
+        if (result.count > 0) {
+            res.json({ success: true, message: 'Un-enrolled from subject.' });
+        } else {
+            res.status(404).json({ success: false, message: 'Not enrolled in this subject.' });
+        }
+    } catch (error) {
+        console.error('Error un-enrolling from subject:', error);
+        res.status(500).json({ success: false, message: 'Failed to un-enroll from subject.' });
     }
 });

@@ -121,6 +121,8 @@ model Resource {
   metadata    Json?    // For additional metadata like video quality, file size, etc.
   weeklySchedules WeeklySchedule[]
   assessments Assessment[] @relation("ResourceAssessments")
+
+  order       Int      @default(0) // Order for drag-and-drop sequencing
 }
 
 model ResourceUsage {

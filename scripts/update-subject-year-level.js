@@ -34,7 +34,7 @@ async function listAndUpdateSubjects() {
 async function updateStudentYearLevel() {
     try {
         // Define the email and new year level/class
-        const studentEmail = 'bunma@gmail.com';
+        const studentEmail = 'ptest@gmail.com';
         const newYearLevel = 8; // 8 corresponds to M1
         const newClass = 'M2/1';
 

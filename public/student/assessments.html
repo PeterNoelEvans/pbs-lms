@@ -151,8 +151,8 @@
                             <span id="totalAssessments">0</span>
                         </div>
                         <div class="d-flex justify-content-between mb-3">
-                            <span>Multi choice:</span>
-                            <span id="count-multichoice">0</span>
+                            <span>Multiple Choice:</span>
+                            <span id="count-multiplechoice">0</span>
                         </div>
                         <div class="d-flex justify-content-between mb-3">
                             <span>Listening Comprehension:</span>
@@ -177,6 +177,18 @@
                         <div class="d-flex justify-content-between mb-3">
                             <span>True/False:</span>
                             <span id="count-truefalse">0</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-3">
+                            <span>Writing:</span>
+                            <span id="count-writing">0</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-3">
+                            <span>Writing (Long):</span>
+                            <span id="count-writinglong">0</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-3">
+                            <span>Change-Sequence:</span>
+                            <span id="count-changesequence">0</span>
                         </div>
                         <div class="d-flex justify-content-between">
                             <span>Completed:</span>
@@ -221,7 +233,7 @@
                 assessments.forEach(assessment => {
                     // Ensure type property
                     if (!assessment.type) {
-                        assessment.type = 'quiz'; // Default to quiz
+                        assessment.type = 'multiple-choice'; // Default to multiple-choice
                     }
 
                     // Ensure section name exists
@@ -235,34 +247,44 @@
                 document.getElementById('totalAssessments').textContent = assessments.length;
                 // Count each type
                 const typeMap = {
-                    'quiz': 'multichoice',
+                    'quiz': 'multiplechoice',
+                    'multiple-choice': 'multiplechoice',
                     'listening': 'listening',
                     'speaking': 'speaking',
                     'mixed': 'mixed',
                     'matching': 'matching',
                     'drag-and-drop': 'dragdrop',
-                    'true-false': 'truefalse'
+                    'true-false': 'truefalse',
+                    'writing': 'writing',
+                    'writing-long': 'writinglong',
+                    'change-sequence': 'changesequence'
                 };
                 const typeCounts = {
-                    multichoice: 0,
+                    multiplechoice: 0,
                     listening: 0,
                     speaking: 0,
                     mixed: 0,
                     matching: 0,
                     dragdrop: 0,
-                    truefalse: 0
+                    truefalse: 0,
+                    writing: 0,
+                    writinglong: 0,
+                    changesequence: 0
                 };
                 assessments.forEach(a => {
                     const key = typeMap[a.type && a.type.toLowerCase()] || null;
                     if (key && typeCounts.hasOwnProperty(key)) typeCounts[key]++;
                 });
-                document.getElementById('count-multichoice').textContent = typeCounts.multichoice;
+                document.getElementById('count-multiplechoice').textContent = typeCounts.multiplechoice;
                 document.getElementById('count-listening').textContent = typeCounts.listening;
                 document.getElementById('count-speaking').textContent = typeCounts.speaking;
                 document.getElementById('count-mixed').textContent = typeCounts.mixed;
                 document.getElementById('count-matching').textContent = typeCounts.matching;
                 document.getElementById('count-dragdrop').textContent = typeCounts.dragdrop;
                 document.getElementById('count-truefalse').textContent = typeCounts.truefalse;
+                document.getElementById('count-writing').textContent = typeCounts.writing;
+                document.getElementById('count-writinglong').textContent = typeCounts.writinglong;
+                document.getElementById('count-changesequence').textContent = typeCounts.changesequence;
                 document.getElementById('completedAssessments').textContent = assessments.filter(a => a.status === 'Completed').length;
 
                 // Add average score for completed assessments
@@ -360,8 +382,8 @@
                                         <div>
                                             <h5 class="mb-0">${assessment.title}</h5>
                                             <span class="badge-row">
-                                            <span class="badge ${assessment.type === 'quiz' ? 'badge-quiz text-white' : 'badge-assignment text-white'}">
-                                                ${assessment.type === 'quiz' ? 'Quiz' : 'Assignment'}
+                                            <span class="badge ${(assessment.type === 'multiple-choice' || assessment.type === 'quiz') ? 'badge-quiz text-white' : 'badge-assignment text-white'}">
+                                                ${(assessment.type === 'multiple-choice' || assessment.type === 'quiz') ? 'Multiple Choice' : 'Assignment'}
                                             </span>
                                             ${statusBadge}
                                             </span>
@@ -373,7 +395,7 @@
                                             <span>${assessment.subjectName} > ${assessment.unitName} > ${assessment.partName} > ${assessment.sectionName}</span>
                                         </div>
                                         <button class="btn btn-primary view-assignment-btn" onclick="takeAssessment('${assessment.id}')">
-                                                ${assessment.type === 'quiz' ? 'Take Quiz' : 'View Assignment'}
+                                                ${(assessment.type === 'multiple-choice' || assessment.type === 'quiz') ? 'Take Quiz' : 'View Assignment'}
                                             </button>
                                     </div>
                                 `;

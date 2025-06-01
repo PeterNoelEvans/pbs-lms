@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Assessments</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.3/font/bootstrap-icons.css">
+    <style>
+        .assessment-card {
+            border: 1px solid #e9ecef;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            background-color: white;
+            transition: transform 0.2s;
+            width: 100%;
+            min-width: 250px;
+            max-width: 350px;
+            min-height: 220px;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            margin: 10px;
+            position: relative;
+        }
+        .assessment-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        .card-header {
+            background-color: #f8f9fa;
+            border-bottom: 1px solid #e9ecef;
+            padding: 15px 20px;
+        }
+        .card-body {
+            padding: 20px;
+            flex: 1 1 auto;
+        }
+        .badge {
+            font-weight: 500;
+            font-size: 0.75rem;
+            padding: 5px 10px;
+        }
+        .badge-quiz {
+            background-color: #6f42c1;
+        }
+        .badge-assignment {
+            background-color: #20c997;
+        }
+        .path-info {
+            font-size: 0.85rem;
+            color: #6c757d;
+            margin-top: 5px;
+        }
+        .assessments-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            justify-content: flex-start;
+        }
+        @media (max-width: 900px) {
+            .assessment-card {
+                max-width: 100%;
+            }
+            .assessments-grid {
+                gap: 10px;
+            }
+        }
+        @media (max-width: 600px) {
+            .assessments-grid {
+                flex-direction: column;
+                gap: 0;
+            }
+            .assessment-card {
+                margin: 0 0 15px 0;
+                max-width: 100%;
+            }
+        }
+        .badge-row {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            margin-top: 6px;
+        }
+        .assessment-card .card-body {
+            flex: 1 1 auto;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            padding-bottom: 60px; /* space for button */
+        }
+        .assessment-card .view-assignment-btn {
+            position: absolute;
+            left: 20px;
+            bottom: 20px;
+            margin-top: 0;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="/student/dashboard">Student Portal</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/student/dashboard">Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/student/resources">Resources</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/student/assessments">Assessments</a>
+                    </li>
+                </ul>
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <button class="btn btn-outline-light" onclick="logout()">Logout</button>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <h1>My Assessments</h1>
+        <p class="text-muted">Take quizzes and complete assignments for your enrolled subjects.</p>
+
+        <div class="row mt-4">
+            <div class="col-md-8">
+                <div id="assessmentsContainer">
+                    <!-- Assessments will be loaded here -->
+                    <div class="d-flex justify-content-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Assessment Stats</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between mb-3">
+                            <span>Total Assessments:</span>
+                            <span id="totalAssessments">0</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-3">
+                            <span>Multi choice:</span>
+                            <span id="count-multichoice">0</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-3">
+                            <span>Listening Comprehension:</span>
+                            <span id="count-listening">0</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-3">
+                            <span>Speaking Assessment:</span>
+                            <span id="count-speaking">0</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-3">
+                            <span>Mixed Assessment:</span>
+                            <span id="count-mixed">0</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-3">
+                            <span>Matching:</span>
+                            <span id="count-matching">0</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-3">
+                            <span>Drag-and-Drop:</span>
+                            <span id="count-dragdrop">0</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-3">
+                            <span>True/False:</span>
+                            <span id="count-truefalse">0</span>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span>Completed:</span>
+                            <span id="completedAssessments">0</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-3">
+                            <span>Average Score:</span>
+                            <span id="averageScore">-</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const token = localStorage.getItem('token');
+        
+        // Check authentication
+        if (!token) {
+            window.location.href = '/login';
+        }
+
+        document.addEventListener('DOMContentLoaded', loadAssessments);
+
+        async function loadAssessments() {
+            try {
+                const response = await fetch('/api/student/assessments', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                const data = await response.json();
+                console.log('Assessments loaded:', data);
+                
+                const container = document.getElementById('assessmentsContainer');
+                const assessments = Array.isArray(data) ? data : (data.assessments || []);
+                
+                // Ensure each assessment has required properties to prevent errors
+                assessments.forEach(assessment => {
+                    // Ensure type property
+                    if (!assessment.type) {
+                        assessment.type = 'quiz'; // Default to quiz
+                    }
+
+                    // Ensure section name exists
+                    if (!assessment.subjectName) assessment.subjectName = 'Unknown Subject';
+                    if (!assessment.unitName) assessment.unitName = 'Unknown Unit';
+                    if (!assessment.partName) assessment.partName = 'Unknown Part';
+                    if (!assessment.sectionName) assessment.sectionName = 'Unknown Section';
+                });
+                
+                // Update stats
+                document.getElementById('totalAssessments').textContent = assessments.length;
+                // Count each type
+                const typeMap = {
+                    'quiz': 'multichoice',
+                    'listening': 'listening',
+                    'speaking': 'speaking',
+                    'mixed': 'mixed',
+                    'matching': 'matching',
+                    'drag-and-drop': 'dragdrop',
+                    'true-false': 'truefalse'
+                };
+                const typeCounts = {
+                    multichoice: 0,
+                    listening: 0,
+                    speaking: 0,
+                    mixed: 0,
+                    matching: 0,
+                    dragdrop: 0,
+                    truefalse: 0
+                };
+                assessments.forEach(a => {
+                    const key = typeMap[a.type && a.type.toLowerCase()] || null;
+                    if (key && typeCounts.hasOwnProperty(key)) typeCounts[key]++;
+                });
+                document.getElementById('count-multichoice').textContent = typeCounts.multichoice;
+                document.getElementById('count-listening').textContent = typeCounts.listening;
+                document.getElementById('count-speaking').textContent = typeCounts.speaking;
+                document.getElementById('count-mixed').textContent = typeCounts.mixed;
+                document.getElementById('count-matching').textContent = typeCounts.matching;
+                document.getElementById('count-dragdrop').textContent = typeCounts.dragdrop;
+                document.getElementById('count-truefalse').textContent = typeCounts.truefalse;
+                document.getElementById('completedAssessments').textContent = assessments.filter(a => a.status === 'Completed').length;
+
+                // Add average score for completed assessments
+                const completedWithScores = assessments.filter(a => a.status === 'Completed' && typeof a.bestScore === 'number');
+                let avgScore = '-';
+                if (completedWithScores.length > 0) {
+                    const totalScore = completedWithScores.reduce((sum, a) => sum + a.bestScore, 0);
+                    avgScore = Math.round(totalScore / completedWithScores.length) + '%';
+                }
+                document.getElementById('averageScore').textContent = avgScore;
+                
+                if (assessments.length === 0) {
+                    container.innerHTML = `
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle me-2"></i>
+                            No assessments found for your enrolled subjects. Check back later or contact your teacher.
+                        </div>
+                    `;
+                    return;
+                }
+
+                container.innerHTML = '';
+                
+                // Group by subject, then by unit, then by part
+                const assessmentsBySubject = {};
+                
+                assessments.forEach(assessment => {
+                    if (!assessmentsBySubject[assessment.subjectName]) {
+                        assessmentsBySubject[assessment.subjectName] = {};
+                    }
+                    
+                    if (!assessmentsBySubject[assessment.subjectName][assessment.unitName]) {
+                        assessmentsBySubject[assessment.subjectName][assessment.unitName] = {};
+                    }
+                    
+                    if (!assessmentsBySubject[assessment.subjectName][assessment.unitName][assessment.partName]) {
+                        assessmentsBySubject[assessment.subjectName][assessment.unitName][assessment.partName] = [];
+                    }
+                    
+                    assessmentsBySubject[assessment.subjectName][assessment.unitName][assessment.partName].push(assessment);
+                });
+                
+                // Create HTML for grouped assessments
+                let unitIdCounter = 0;
+                for (const [subjectName, units] of Object.entries(assessmentsBySubject)) {
+                    const subjectDiv = document.createElement('div');
+                    subjectDiv.className = 'mb-4';
+                    subjectDiv.innerHTML = `<h3 class="mb-3">${subjectName}</h3>`;
+                    for (const [unitName, parts] of Object.entries(units)) {
+                        unitIdCounter++;
+                        const unitId = `unitCollapse${unitIdCounter}`;
+                        const unitDiv = document.createElement('div');
+                        unitDiv.className = 'mb-3';
+                        unitDiv.innerHTML = `
+                            <h4 class="mb-2">
+                                <a class="text-decoration-none" data-bs-toggle="collapse" href="#${unitId}" role="button" aria-expanded="false" aria-controls="${unitId}">
+                                    <i class="bi bi-caret-right-fill"></i> ${unitName}
+                                </a>
+                            </h4>
+                            <div class="collapse" id="${unitId}"></div>
+                        `;
+                        const unitCollapseDiv = unitDiv.querySelector('.collapse');
+                        let partIdCounter = 0;
+                        for (const [partName, partAssessments] of Object.entries(parts)) {
+                            partIdCounter++;
+                            const partId = `${unitId}-part${partIdCounter}`;
+                            const partDiv = document.createElement('div');
+                            partDiv.className = 'mb-3 ms-3';
+                            partDiv.innerHTML = `
+                                <h5 class="mb-2">
+                                    <a class="text-decoration-none" data-bs-toggle="collapse" href="#${partId}" role="button" aria-expanded="false" aria-controls="${partId}">
+                                        <i class="bi bi-caret-right-fill"></i> ${partName}
+                                    </a>
+                                </h5>
+                                <div class="collapse" id="${partId}"></div>
+                            `;
+                            const partCollapseDiv = partDiv.querySelector('.collapse');
+                            const gridDiv = document.createElement('div');
+                            gridDiv.className = 'assessments-grid';
+                            partAssessments.forEach(assessment => {
+                                let statusBadge = '';
+                                if (assessment.status === 'Completed') {
+                                    statusBadge = '<span class="badge bg-success ms-2">Completed</span>';
+                                } else if (assessment.status === 'In Progress') {
+                                    statusBadge = '<span class="badge bg-info ms-2">In Progress</span>';
+                                } else if (assessment.dueDate && new Date(assessment.dueDate) < new Date()) {
+                                    statusBadge = '<span class="badge bg-danger ms-2">Overdue</span>';
+                                } else {
+                                    statusBadge = '<span class="badge bg-warning ms-2">Pending</span>';
+                                }
+                                const card = document.createElement('div');
+                                card.className = 'assessment-card';
+                                card.innerHTML = `
+                                    <div class="card-header d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <h5 class="mb-0">${assessment.title}</h5>
+                                            <span class="badge-row">
+                                            <span class="badge ${assessment.type === 'quiz' ? 'badge-quiz text-white' : 'badge-assignment text-white'}">
+                                                ${assessment.type === 'quiz' ? 'Quiz' : 'Assignment'}
+                                            </span>
+                                            ${statusBadge}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <div class="card-body">
+                                        <p>${assessment.description || 'No description provided.'}</p>
+                                        <div class="path-info">
+                                            <span>${assessment.subjectName} > ${assessment.unitName} > ${assessment.partName} > ${assessment.sectionName}</span>
+                                        </div>
+                                        <button class="btn btn-primary view-assignment-btn" onclick="takeAssessment('${assessment.id}')">
+                                                ${assessment.type === 'quiz' ? 'Take Quiz' : 'View Assignment'}
+                                            </button>
+                                    </div>
+                                `;
+                                gridDiv.appendChild(card);
+                            });
+                            partCollapseDiv.appendChild(gridDiv);
+                            unitCollapseDiv.appendChild(partDiv);
+                        }
+                        subjectDiv.appendChild(unitDiv);
+                    }
+                    container.appendChild(subjectDiv);
+                }
+                
+            } catch (error) {
+                console.error('Error loading assessments:', error);
+                document.getElementById('assessmentsContainer').innerHTML = `
+                    <div class="alert alert-danger">
+                        Failed to load assessments. Please try again later.
+                    </div>
+                `;
+            }
+        }
+
+        function takeAssessment(assessmentId) {
+            window.location.href = `/student/assessment.html?id=${assessmentId}`;
+        }
+
+        function logout() {
+            localStorage.removeItem('token');
+            window.location.href = '/login';
+        }
+    </script>
+</body>
+</html> 

@@ -168,19 +168,59 @@
         });
         const students = Object.keys(studentStats).sort();
         const maxBar = 200;
-        let html = '<strong>Overall Class Progress</strong><br><div style="max-width:400px">';
-        students.forEach(name => {
+        // Split students into two columns
+        const mid = Math.ceil(students.length / 2);
+        const col1 = students.slice(0, mid);
+        const col2 = students.slice(mid);
+        let html = '<strong>Overall Class Progress</strong><br><div class="row" style="max-width:900px">';
+        html += '<div class="col-md-6"><div style="max-width:440px; padding-right:24px;">';
+        col1.forEach(name => {
             const stat = studentStats[name];
             const percent = stat.total ? Math.round((stat.completed / stat.total) * 100) : 0;
-            html += `<div style="margin-bottom:4px;"><span style="display:inline-block;width:120px;">${name}</span> <span style="display:inline-block;width:40px;">${percent}%</span> <div style="display:inline-block;width:${maxBar}px;background:#eee;height:16px;vertical-align:middle;"><div style="width:${percent * 2}px;background:#28a745;height:16px;"></div></div></div>`;
+            html += `<div style="margin-bottom:10px; display:flex; align-items:center; gap:8px;">
+                <span style="display:inline-block; width:180px; word-break:break-word; white-space:normal;">${name}</span>
+                <span style="display:inline-block; width:40px;">${percent}%</span>
+                <div style="flex:1; min-width:100px; max-width:200px; background:#eee; height:16px; vertical-align:middle;">
+                    <div style="width:${percent * 2}px; background:#28a745; height:16px;"></div>
+                </div>
+            </div>`;
         });
+        html += '</div></div>';
+        html += '<div class="col-md-6"><div style="max-width:440px; padding-left:24px;">';
+        col2.forEach(name => {
+            const stat = studentStats[name];
+            const percent = stat.total ? Math.round((stat.completed / stat.total) * 100) : 0;
+            html += `<div style="margin-bottom:10px; display:flex; align-items:center; gap:8px;">
+                <span style="display:inline-block; width:180px; word-break:break-word; white-space:normal;">${name}</span>
+                <span style="display:inline-block; width:40px;">${percent}%</span>
+                <div style="flex:1; min-width:100px; max-width:200px; background:#eee; height:16px; vertical-align:middle;">
+                    <div style="width:${percent * 2}px; background:#28a745; height:16px;"></div>
+                </div>
+            </div>`;
+        });
+        html += '</div></div>';
         html += '</div>';
         graphDiv.innerHTML = html;
     }
     document.getElementById('downloadCsvBtn').onclick = function() {
         if (!filteredProgress.length) return;
         const headers = ['Student','Nickname','Class','Assessment','Attempts','Best Score','Last Score','Last Attempt','Status'];
-        const csv = [headers.join(',')].concat(filteredProgress.map(row => headers.map(h => '"' + (row[h.replace(' ', '')] || row[h] || '') + '"').join(','))).join('\n');
+        const propertyMap = {
+            "Student": "studentName",
+            "Nickname": "studentNickname",
+            "Class": "studentClass",
+            "Assessment": "assessmentTitle",
+            "Attempts": "attempts",
+            "Best Score": "bestScore",
+            "Last Score": "lastScore",
+            "Last Attempt": "lastAttempt",
+            "Status": "status"
+        };
+        const csv = [headers.join(',')].concat(
+            filteredProgress.map(row =>
+                headers.map(h => '"' + (row[propertyMap[h]] ?? '') + '"').join(',')
+            )
+        ).join('\n');
         const blob = new Blob([csv], { type: 'text/csv' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');

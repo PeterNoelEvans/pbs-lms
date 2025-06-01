@@ -116,10 +116,11 @@
                                     <option value="true-false">True/False</option>
                                     <option value="matching">Matching</option>
                                     <option value="drag-and-drop">Drag and Drop</option>
+                                    <option value="change-sequence">Change-Sequence</option>
                                     <option value="writing">Writing</option>
                                     <option value="writing-long">Writing (Long)</option>
                                     <option value="speaking">Speaking</option>
-                                    <option value="assignment">Assignment</option>
+                                    <option value="assignment">Fill-in-the-Blank Text</option>
                                     <option value="listening">Listening Comprehension</option>
                                 </select>
                             </div>
@@ -167,6 +168,7 @@
                                             <input type="hidden" id="audioUrl" name="audioUrl">
                                             <div class="form-text">Supported formats: MP3, WAV, OGG</div>
                                         </div>
+                                        <button type="button" class="btn btn-outline-danger btn-sm mt-2" id="removeAudioBtn" style="display:none;">Remove Audio</button>
                                     </div>
                                 </div>
                             </div>
@@ -234,7 +236,8 @@
                             </div>
 
                             <div class="mt-4">
-                                <button type="submit" class="btn btn-primary">Create Assessment</button>
+                                <button type="submit" class="btn btn-primary" id="createAssessmentBtn">Create Assessment</button>
+                                <button type="button" class="btn btn-success" id="saveAssessmentBtn" style="display:none;">Save Changes</button>
                             </div>
                         </form>
                     </div>
@@ -533,6 +536,18 @@
                             <i class="bi bi-upload"></i> Bulk Import Questions
                         </button>`;
                     break;
+                case 'assignment':
+                    buttonsContainer.innerHTML = `
+                        <button type="button" class="btn btn-outline-primary" onclick="addQuestion('assignment')">
+                            <i class="bi bi-input-cursor-text"></i> Add Fill-in-the-Blank Text
+                        </button>`;
+                    break;
+                case 'change-sequence':
+                    buttonsContainer.innerHTML = `
+                        <button type="button" class="btn btn-outline-primary" onclick="addQuestion('change-sequence')">
+                            <i class="bi bi-arrow-down-up"></i> Add Change-Sequence
+                        </button>`;
+                    break;
                 default:
                     buttonsContainer.innerHTML = '';
             }
@@ -549,9 +564,15 @@
             // Always set questionsSection display at the end
             const questionsSection = document.getElementById('questionsSection');
             if (questionsSection) {
-                const showQuestions = ['multiple-choice', 'drag-and-drop', 'matching', 'true-false', 'mixed'].includes(type);
+                const showQuestions = ['multiple-choice', 'drag-and-drop', 'matching', 'true-false', 'mixed', 'assignment', 'change-sequence'].includes(type);
                 questionsSection.style.display = showQuestions ? 'block' : 'none';
-                console.log('[updateQuestionOptions] questionsSection display set to', showQuestions ? 'block' : 'none', 'at', new Date());
+            }
+            // Always show Create Assessment button for true-false
+            const createBtn = document.getElementById('createAssessmentBtn');
+            if (createBtn) {
+                if (type === 'true-false') {
+                    createBtn.style.display = 'inline-block';
+                }
             }
             // Log all event listeners on assessmentType (if possible)
             const at = document.getElementById('type');
@@ -569,6 +590,14 @@
         }
 
         function addQuestion(type, questionData) {
+            // Prevent duplicate change-sequence cards
+            if (type === 'change-sequence') {
+                const existing = document.querySelector('.question-card[data-type="change-sequence"]');
+                if (existing) {
+                    alert('Only one Change-Sequence question is allowed per assessment.');
+                    return;
+                }
+            }
             console.log('addQuestion called with type:', type, 'data:', questionData);
             const questionsList = document.getElementById('questionsList');
             if (!questionsList) {
@@ -787,11 +816,15 @@
                 case 'true-false':
                     questionHtml += `
                         <div class="true-false-sentences">
-                            <div class="tf-sentence-row mb-2 d-flex align-items-center">
-                                <input type="text" class="form-control me-2" placeholder="Enter sentence" required style="max-width: 70%">
-                                <button type="button" class="btn btn-outline-secondary tf-toggle" data-state="" onclick="toggleTfButton(this)">?</button>
-                                <button type="button" class="btn btn-outline-danger ms-2" onclick="removeTfSentence(this)"><i class="bi bi-trash"></i></button>
-                            </div>
+                            ${questionData && Array.isArray(questionData.sentences) && questionData.sentences.length > 0
+                                ? questionData.sentences.map((sentence, idx) => `
+                                    <div class="tf-sentence-row mb-2 d-flex align-items-center">
+                                        <input type="text" class="form-control me-2" placeholder="Enter sentence" required style="max-width: 70%" value="${sentence.text ? sentence.text.replace(/"/g, '&quot;') : ''}">
+                                        <button type="button" class="btn btn-outline-secondary tf-toggle ${sentence.isTrue === true ? 'btn-success' : sentence.isTrue === false ? 'btn-danger' : ''}" data-state="${sentence.isTrue === true ? 'T' : sentence.isTrue === false ? 'F' : ''}" onclick="toggleTfButton(this)">${sentence.isTrue === true ? 'T' : sentence.isTrue === false ? 'F' : '?'}</button>
+                                        <button type="button" class="btn btn-outline-danger ms-2" onclick="removeTfSentence(this)"><i class="bi bi-trash"></i></button>
+                                    </div>
+                                `).join('')
+                                : `<div class=\"tf-sentence-row mb-2 d-flex align-items-center\">\n<input type=\"text\" class=\"form-control me-2\" placeholder=\"Enter sentence\" required style=\"max-width: 70%\">\n<button type=\"button\" class=\"btn btn-outline-secondary tf-toggle\" data-state=\"\" onclick=\"toggleTfButton(this)\">?</button>\n<button type=\"button\" class=\"btn btn-outline-danger ms-2\" onclick=\"removeTfSentence(this)\"><i class=\"bi bi-trash\"></i></button>\n</div>`}
                         </div>
                         <button type="button" class="btn btn-outline-primary btn-sm mt-2" onclick="addTfSentence(this)"><i class="bi bi-plus"></i> Add Sentence</button>
                     `;
@@ -821,6 +854,73 @@
                             <div class="form-text">Students can type their answer, upload a file, or both.</div>
                         </div>`;
                     break;
+
+                case 'assignment':
+                    questionHtml += `
+                        <div class="card mb-3 question-card" data-type="assignment">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h5 class="mb-0">Fill-in-the-Blank Text</h5>
+                                <button type="button" class="btn-close" aria-label="Close" onclick="removeQuestion(this)"></button>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label class="form-label">Text with Blanks</label>
+                                    <p class="text-muted small">Use [BLANK:answer] where you want blanks to appear. Example: My name is [BLANK:John].</p>
+                                    <textarea class="form-control text-with-blanks" rows="10" required>${questionData?.text || ''}</textarea>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Instructions</label>
+                                    <textarea class="form-control assignment-instructions" rows="2">${questionData?.instructions || 'Fill in the blanks with the correct words.'}</textarea>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Audio File (optional)</label>
+                                    <input type="file" class="form-control assignment-audio" accept="audio/*">
+                                    <div class="audio-preview mt-2" style="display: none;"></div>
+                                    <input type="hidden" class="audio-file-path">
+                                    <small class="form-text text-muted">Students can listen to this audio while completing the fill-in-the-blank exercise.</small>
+                                </div>
+                                <div class="mb-3 form-check">
+                                    <input type="checkbox" class="form-check-input case-sensitive" id="caseSensitive_${questionId}" ${questionData?.caseSensitive ? 'checked' : ''}>
+                                    <label class="form-check-label" for="caseSensitive_${questionId}">Case Sensitive Answers</label>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    break;
+                case 'change-sequence':
+                    // Only insert the inner fields, not a nested card
+                    questionHtml += `
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">Change-Sequence Question</h5>
+                            <button type="button" class="btn-close" aria-label="Close" onclick="removeQuestion('${questionId}')"></button>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label class="form-label">Instructions</label>
+                                <textarea class="form-control sequence-instructions" rows="2" required>${questionData?.instructions || 'Arrange the items in the correct sequence.'}</textarea>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Items (one per line)</label>
+                                <textarea class="form-control sequence-items" rows="5" required placeholder="Enter items to be sequenced, one per line">${questionData?.items ? questionData.items.join('\n') : ''}</textarea>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Correct Sequence (comma-separated)</label>
+                                <input type="text" class="form-control sequence-correct" required placeholder="Enter the correct sequence, comma-separated" value="${questionData?.correctSequence ? questionData.correctSequence.join(', ') : ''}">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Audio File (optional)</label>
+                                <input type="file" class="form-control sequence-audio" accept="audio/*" onchange="handleSequenceAudioUpload(this)">
+                                <div class="audio-preview mt-2" style="display: none;"></div>
+                                <input type="hidden" class="audio-file-path">
+                                <small class="form-text text-muted">Students can listen to this audio while completing the sequence exercise.</small>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Audio Display Name (optional)</label>
+                                <input type="text" class="form-control sequence-audio-display-name" placeholder="e.g. Months of the Year Audio" value="${questionData?.audioDisplayName || ''}">
+                            </div>
+                        </div>
+                    `;
+                    break;
             }
 
             questionHtml += `
@@ -838,6 +938,8 @@
             audioInputs.forEach(input => {
                 input.addEventListener('change', function() {
                     const preview = this.parentElement.querySelector('.audio-preview');
+                    const audioFilePathInput = this.parentElement.querySelector('.audio-file-path');
+                    
                     if (preview && this.files && this.files.length > 0) {
                         const file = this.files[0];
                         // Create audio element
@@ -849,6 +951,9 @@
                             </audio>
                             <p class="text-muted small mt-1">${file.name}</p>
                         `;
+                        
+                        // Upload the audio file to server and store path
+                        uploadAssignmentAudio(file, audioFilePathInput);
                     }
                 });
             });
@@ -1134,6 +1239,9 @@
                                     ${assessment.section.name}
                                 </p>
                                 <p class="card-text small">
+                                    Category: ${assessment.category || 'N/A'}
+                                </p>
+                                <p class="card-text small">
                                     Questions: ${questionDisplay}
                                 </p>
                                 <div class="btn-group">
@@ -1268,6 +1376,9 @@
                 // Store assessment ID for update
                 document.getElementById('assessmentForm').dataset.assessmentId = assessmentId;
 
+                // Show Save button, hide Create button
+                showEditMode();
+
                 // Scroll to form
                 document.querySelector('.card-header').scrollIntoView({ behavior: 'smooth' });
             } catch (error) {
@@ -1275,6 +1386,79 @@
                 alert('Failed to load assessment for editing: ' + error.message);
             }
         }
+
+        // Save Changes button logic
+        document.getElementById('saveAssessmentBtn').addEventListener('click', async function() {
+            const form = document.getElementById('assessmentForm');
+            const assessmentId = form.dataset.assessmentId;
+            if (!assessmentId) {
+                alert('No assessment selected for editing.');
+                return;
+            }
+            // Gather form data (similar to submit handler)
+            const formData = new FormData(form);
+            // Add questions as JSON string
+            // (You may need to gather questions from the UI as in your submit handler)
+            // For simplicity, let's call getDragAndDropQuestions, getMultipleChoiceQuestions, etc. as needed
+            const type = document.getElementById('type').value;
+            let questions = [];
+            if (type === 'multiple-choice') {
+                questions = getMultipleChoiceQuestions();
+            } else if (type === 'true-false') {
+                questions = getTrueFalseQuestions();
+            } else if (type === 'drag-and-drop') {
+                const subtype = document.getElementById('subtype').value;
+                questions = getDragAndDropQuestions(subtype);
+            } else if (type === 'matching') {
+                questions = getMatchingQuestions();
+            } else if (type === 'change-sequence') {
+                // Gather all change-sequence question cards
+                const questionCards = document.querySelectorAll('.question-card[data-type="change-sequence"]');
+                questions = Array.from(questionCards).map(card => getQuestionData(card));
+            }
+            formData.set('questions', JSON.stringify(questions));
+            // Add subtype if drag-and-drop
+            if (type === 'drag-and-drop') {
+                formData.set('subtype', document.getElementById('subtype').value);
+            }
+            // Add category field
+            const categoryValue = document.getElementById('assessmentCategory').value;
+            console.log('Category value:', categoryValue);
+            formData.set('category', categoryValue);
+            // Add maxAttempts if set
+            const maxAttemptsValue = document.getElementById('maxAttempts').value;
+            if (maxAttemptsValue) {
+                formData.append('maxAttempts', maxAttemptsValue);
+            }
+            // Log form data for debugging
+            for (let pair of formData.entries()) {
+                console.log(pair[0] + ': ' + pair[1]);
+            }
+            // Send PUT request to update assessment
+            try {
+                const response = await fetch(`/api/assessments/${assessmentId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: formData
+                });
+                if (response.ok) {
+                    alert('Assessment updated successfully!');
+                    // Reset form and switch to create mode
+                    form.reset();
+                    document.getElementById('questionsList').innerHTML = '';
+                    showCreateMode();
+                    await loadExistingAssessments();
+                } else {
+                    const error = await response.json();
+                    alert('Error updating assessment: ' + (error.message || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Error updating assessment:', error);
+                alert('Failed to update assessment. Please try again.');
+            }
+        });
 
         async function setSelectors(section) {
             // Set subject
@@ -1311,234 +1495,90 @@
             
             // Get current assessment type and subtype
             const type = document.getElementById('type').value;
-            const subtype = document.getElementById('subtype').value;
+            const subtype = document.getElementById('subtype') ? document.getElementById('subtype').value : null;
             
-            // For drag-and-drop long paragraph, we need to bypass HTML5 validation
-            // and handle it manually to avoid the "invalid form control not focusable" issue
-            if (type === 'drag-and-drop' && subtype === 'long-paragraph-fill-in-blank') {
-                // Validate drag-and-drop long paragraph fields manually
-                const validationPassed = validateDragAndDropFields();
-                if (!validationPassed) {
-                    return; // Stop form submission if validation fails
-                }
-                
-                // Proceed with form data gathering
-                const formData = new FormData();
-                formData.append('title', document.getElementById('title').value);
-                formData.append('type', document.getElementById('type').value);
-                formData.append('description', document.getElementById('description').value);
-                formData.append('dueDate', document.getElementById('dueDate').value);
-                formData.append('criteria', document.getElementById('criteria').value);  // Add criteria to form data
-                
-                // Add maxAttempts if set
-                const maxAttemptsValue = document.getElementById('maxAttempts').value;
-                if (maxAttemptsValue) {
-                    formData.append('maxAttempts', maxAttemptsValue);
-                }
-                
-                // Gather question data manually
-                const questions = [];
-                let topLevelSubtype = subtype;
-                
-                // Loop through question cards to build questions array
-                document.querySelectorAll('.question-card').forEach((questionCard, index) => {
-                    const cardType = questionCard.getAttribute('data-type');
-                    if (cardType === 'drag-and-drop') {
-                        // Get the long paragraph data
-                        const longParagraphFields = questionCard.querySelector('.dragdrop-long-paragraph-fields');
-                        if (longParagraphFields && longParagraphFields.style.display !== 'none') {
-                            const paragraphText = longParagraphFields.querySelector('.long-paragraph-text').value;
-                            const wordBank = longParagraphFields.querySelector('.long-paragraph-wordbank').value.split(',').map(w => w.trim()).filter(w => w);
-                            const answers = longParagraphFields.querySelector('.long-paragraph-answers').value.split(',').map(a => a.trim()).filter(a => a);
-                            const extraWords = longParagraphFields.querySelector('.long-paragraph-extra').value.split(',').map(w => w.trim()).filter(w => w);
-                            
-                            // Handle audio files
-                            const audioInput = longParagraphFields.querySelector('.long-paragraph-audio');
-                            const audioFilePathInput = longParagraphFields.querySelector('.audio-file-path');
-                            const audioDisplayNameInput = longParagraphFields.querySelector('.long-paragraph-audio-display-name');
-                            
-                            // Create the question object
-                            const questionObj = {
-                                type: 'drag-and-drop',
-                                subtype: 'long-paragraph-fill-in-blank',
-                                text: paragraphText,
-                                wordBank: wordBank,
-                                answers: answers,
-                                extraWords: extraWords
-                            };
-                            
-                            // Add audio information if present
-                            if (audioInput && audioInput.files && audioInput.files.length > 0) {
-                                // New file uploaded
-                                const audioFile = audioInput.files[0];
-                                const audioFileName = `audio_${index}_${Date.now()}`;
-                                formData.append(audioFileName, audioFile);
-                                questionObj.audioFileName = audioFileName;
-                                questionObj.audioDisplayName = audioDisplayNameInput ? audioDisplayNameInput.value.trim() : '';
-                            } else if (audioFilePathInput && audioFilePathInput.value) {
-                                // Existing file path (from editing)
-                                questionObj.audioPath = audioFilePathInput.value;
-                                questionObj.audioDisplayName = audioDisplayNameInput ? audioDisplayNameInput.value.trim() : '';
-                            }
-                            
-                            questions.push(questionObj);
-                        }
-                    } else {
-                        // Other question types handled by existing getQuestionData function
-                        questions.push(getQuestionData(questionCard));
-                    }
-                });
-                
-                formData.append('questions', JSON.stringify(questions));
-                formData.append('subtype', topLevelSubtype);
-                
-                // Skip the rest of the function and submit directly
-                try {
-                    const assessmentId = this.dataset.assessmentId;
-                    const url = assessmentId 
-                        ? `/api/assessments/${assessmentId}`
-                        : `/api/sections/${document.getElementById('sectionSelect').value}/assessments`;
-                        
-                    const response = await fetch(url, {
-                        method: assessmentId ? 'PUT' : 'POST',
-                        headers: {
-                            'Authorization': `Bearer ${token}`
-                        },
-                        body: formData
-                    });
-                    
-                    if (response.ok) {
-                        alert(assessmentId ? 'Assessment updated successfully!' : 'Assessment created successfully!');
-                        await loadExistingAssessments();
-                        if (!assessmentId) {
-                            this.reset();
-                            document.getElementById('questionsList').innerHTML = '';
-                        }
-                    } else {
-                        const error = await response.json();
-                        alert(assessmentId ? 'Error updating assessment: ' : 'Error creating assessment: ' + error.message);
-                    }
-                } catch (error) {
-                    console.error('Error:', error);
-                    alert('Failed to save assessment. Please try again.');
-                }
-                
-                return; // Exit the function early
-            }
-            
-            // For other assessment types, use the normal validation approach
             // Validate drag-and-drop long paragraph fields before submission
-            const validationPassed = validateDragAndDropFields();
-            if (!validationPassed) {
-                return; // Stop form submission if validation fails
+            if (type === 'drag-and-drop' && subtype === 'long-paragraph-fill-in-blank') {
+                const validationPassed = validateDragAndDropFields();
+                if (!validationPassed) return;
             }
             
+            // Gather questions based on type
+            let questions = [];
+            if (type === 'multiple-choice') {
+                questions = getMultipleChoiceQuestions();
+            } else if (type === 'true-false') {
+                questions = getTrueFalseQuestions();
+            } else if (type === 'drag-and-drop') {
+                questions = getDragAndDropQuestions(subtype);
+            } else if (type === 'matching') {
+                questions = getMatchingQuestions();
+            } else if (type === 'change-sequence') {
+                const questionCards = document.querySelectorAll('.question-card[data-type="change-sequence"]');
+                questions = Array.from(questionCards).map(card => getQuestionData(card));
+            } else if (type === 'writing') {
+                // Add writing question gathering if needed
+            }
+            // ... add other types as needed ...
+
+            // Build form data
             const formData = new FormData();
             formData.append('title', document.getElementById('title').value);
-            formData.append('type', document.getElementById('type').value);
+            formData.append('type', type);
             formData.append('description', document.getElementById('description').value);
             formData.append('dueDate', document.getElementById('dueDate').value);
-            formData.append('criteria', document.getElementById('criteria').value);  // Add criteria to form data
-            
-            // Add maxAttempts if set
+            formData.append('criteria', document.getElementById('criteria').value);
+            formData.set('category', document.getElementById('assessmentCategory').value);
             const maxAttemptsValue = document.getElementById('maxAttempts').value;
             if (maxAttemptsValue) {
                 formData.append('maxAttempts', maxAttemptsValue);
             }
-            
-            const questions = [];
-            let topLevelSubtype = null;
-            // Loop through question cards to build questions array
-            document.querySelectorAll('.question-card').forEach((questionCard, index) => {
-                const type = questionCard.getAttribute('data-type');
-                const question = { type };
-                
-                if (type === 'matching') {
-                    // Process matching pairs
-                    const expressionInputs = questionCard.querySelectorAll('.matching-pair input[placeholder="Enter expression"]');
-                    const meaningInputs = questionCard.querySelectorAll('.matching-pair input[placeholder="Enter meaning"]');
-                    
-                    if (expressionInputs.length > 0 && meaningInputs.length > 0) {
-                        const expressions = Array.from(expressionInputs).map(input => input.value.trim()).filter(val => val !== '');
-                        const meanings = Array.from(meaningInputs).map(input => input.value.trim()).filter(val => val !== '');
-                        
-                        // Create pairs array
-                        const pairs = [];
-                        for (let i = 0; i < Math.min(expressions.length, meanings.length); i++) {
-                            if (expressions[i] && meanings[i]) {
-                                pairs.push({
-                                    expression: expressions[i],
-                                    meaning: meanings[i]
-                                });
-                            }
-                        }
-                        
-                        // Store all formats to ensure compatibility
-                        question.pairs = pairs;
-                        question.expressions = expressions;
-                        question.meanings = meanings;
-                        
-                        console.log('[DEBUG] Matching pairs data:', {
-                            pairs: pairs,
-                            expressions: expressions,
-                            meanings: meanings
-                        });
-                    }
-                }
-                else if (type === 'drag-and-drop') {
-                    const subtypeSelect = questionCard.querySelector('.dragdrop-subtype-select');
-                    if (subtypeSelect) {
-                        question.subtype = subtypeSelect.value;
-                        if (!topLevelSubtype) topLevelSubtype = subtypeSelect.value;
-                    }
-                    // ... rest of drag-and-drop handling ...
-                }
-                // ... rest of question building logic ...
-                
-                questions.push(question);
-            });
-            
+            if (type === 'drag-and-drop' && subtype) {
+                formData.append('subtype', subtype);
+            }
             formData.append('questions', JSON.stringify(questions));
-            
-            // If drag-and-drop, add top-level subtype
-            if (topLevelSubtype) {
-                formData.append('subtype', topLevelSubtype);
+            // Audio file handling
+            const audioUrl = document.getElementById('audioUrl') ? document.getElementById('audioUrl').value : '';
+            if (audioUrl) {
+                // Add as a field for backend to add to mediaFiles
+                formData.append('audioFile', audioUrl);
             }
-            
-            // Debug log
-            console.log('[DEBUG] Submitting assessment:');
-            console.log('questions:', questions);
-            for (let pair of formData.entries()) {
-                console.log('formData:', pair[0], pair[1]);
+            // Section ID
+            const sectionId = document.getElementById('sectionSelect').value;
+            if (!sectionId) {
+                alert('Please select a section.');
+                return;
             }
-            
+            // Show loading state
+            const submitBtn = document.querySelector('#assessmentForm button[type="submit"]');
+            const originalText = submitBtn.textContent;
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Creating...';
+            // Send request
             try {
-                const assessmentId = this.dataset.assessmentId;
-                const url = assessmentId 
-                    ? `/api/assessments/${assessmentId}`
-                    : `/api/sections/${document.getElementById('sectionSelect').value}/assessments`;
-                const response = await fetch(url, {
-                    method: assessmentId ? 'PUT' : 'POST',
+                const response = await fetch(`/api/sections/${sectionId}/assessments`, {
+                    method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${token}`
                     },
                     body: formData
                 });
+                submitBtn.disabled = false;
+                submitBtn.textContent = originalText;
                 if (response.ok) {
-                    alert(assessmentId ? 'Assessment updated successfully!' : 'Assessment created successfully!');
-                    // Reload assessments but don't reset form if updating
-                    await loadExistingAssessments();
-                    if (!assessmentId) {
-                        this.reset();
-                        document.getElementById('questionsList').innerHTML = '';
-                    }
+                    alert('Assessment created successfully!');
+                    document.getElementById('assessmentForm').reset();
+                    clearQuestionsUi();
+                    loadExistingAssessments();
                 } else {
                     const error = await response.json();
-                    alert(assessmentId ? 'Error updating assessment: ' : 'Error creating assessment: ' + error.message);
+                    alert(`Failed to create assessment: ${error.error || error.message || 'Unknown error'}`);
                 }
             } catch (error) {
-                console.error('Error:', error);
-                alert('Failed to save assessment. Please try again.');
+                submitBtn.disabled = false;
+                submitBtn.textContent = originalText;
+                console.error('Error creating assessment:', error);
+                alert(`Error creating assessment: ${error.message}`);
             }
         });
 
@@ -2279,38 +2319,27 @@ Ooh, exciting!|That sounds fun.</pre>
         function handleTypeChange() {
             const type = document.getElementById('type').value;
             const subtypeContainer = document.getElementById('subtypeContainer');
-            const audioUploadContainer = document.getElementById('audioUploadContainer');
-            
-            // Hide/show subtype container based on drag-and-drop type
-            if (type === 'drag-and-drop') {
-                subtypeContainer.style.display = 'block';
-            } else {
-                subtypeContainer.style.display = 'none';
+            const subtypeSelect = document.getElementById('subtype');
+            // Remove questionButtonsContainer logic from here
+            // Clear existing options
+            if (subtypeSelect) {
+                subtypeSelect.innerHTML = '<option value="">Select Subtype</option>';
             }
-            
-            // Show audio upload section prominently for listening/audio related assessments
-            if (type === 'multiple-choice' || type === 'listening') {
-                audioUploadContainer.style.display = 'block';
-                // If it's specifically a listening type, add an alert/highlight
-                if (type === 'listening' || document.getElementById('title').value.toLowerCase().includes('listening')) {
-                    audioUploadContainer.querySelector('.card').classList.add('border-danger');
-                    // If there's no existing warning, add one
-                    if (!audioUploadContainer.querySelector('.audio-upload-warning')) {
-                        const warningDiv = document.createElement('div');
-                        warningDiv.className = 'alert alert-warning mt-2 audio-upload-warning';
-                        warningDiv.innerHTML = '<strong>Important:</strong> Audio file is required for listening exercises. Students will not be able to complete the assessment without it.';
-                        audioUploadContainer.querySelector('.card-body').appendChild(warningDiv);
-                    }
-                } else {
-                    audioUploadContainer.querySelector('.card').classList.remove('border-danger');
-                    const warning = audioUploadContainer.querySelector('.audio-upload-warning');
-                    if (warning) warning.remove();
-                }
-            } else {
-                audioUploadContainer.style.display = 'none';
+            // Show/hide subtype container based on type
+            if (subtypeContainer) {
+                subtypeContainer.style.display = ['drag-and-drop'].includes(type) ? 'block' : 'none';
             }
-            
-            // Update question options based on type
+            // Update subtype options based on type
+            if (type === 'drag-and-drop' && subtypeSelect) {
+                subtypeSelect.innerHTML = `
+                    <option value="">Select Subtype</option>
+                    <option value="fill-in-blank">Fill-in-the-blank</option>
+                    <option value="image-fill-blank">Image Fill-in-the-blank</option>
+                    <option value="long-paragraph-fill-in-blank">Long Paragraph Fill-in-the-blank</option>
+                    <option value="matching">Matching</option>
+                `;
+            }
+            // Always call updateQuestionOptions at the end
             updateQuestionOptions();
         }
 
@@ -2329,6 +2358,7 @@ Ooh, exciting!|That sounds fun.</pre>
                 audioPreview.style.display = 'none';
                 audioPreview.src = '';
             }
+            document.getElementById('removeAudioBtn').style.display = 'inline-block';
         }
         
         // Function to upload audio file
@@ -2461,6 +2491,10 @@ Ooh, exciting!|That sounds fun.</pre>
                     questions = getDragAndDropQuestions(subtype);
                 } else if (type === 'matching') {
                     questions = getMatchingQuestions();
+                } else if (type === 'change-sequence') {
+                    // Gather all change-sequence question cards
+                    const questionCards = document.querySelectorAll('.question-card[data-type="change-sequence"]');
+                    questions = Array.from(questionCards).map(card => getQuestionData(card));
                 }
                 
                 // Build form data
@@ -2468,7 +2502,7 @@ Ooh, exciting!|That sounds fun.</pre>
                 formData.append('title', title);
                 formData.append('description', description);
                 formData.append('type', type);
-                formData.append('category', category);
+                formData.set('category', category);
                 
                 // Add subtype for drag-and-drop
                 if (type === 'drag-and-drop' && subtype) {
@@ -2547,11 +2581,51 @@ Ooh, exciting!|That sounds fun.</pre>
             const type = card.getAttribute('data-type');
             const cardBody = card.querySelector('.card-body');
             if (!cardBody) return {};
-            
             const question = { type };
-            
             // Handle different question types
             switch(type) {
+                case 'assignment':
+                    const textWithBlanks = cardBody.querySelector('.text-with-blanks').value;
+                    const instructions = cardBody.querySelector('.assignment-instructions').value;
+                    const caseSensitive = cardBody.querySelector('.case-sensitive').checked;
+                    
+                    // Extract the blanks and answers from the format [BLANK:answer]
+                    const blanksRegex = /\[BLANK:(.*?)\]/g;
+                    const matches = [...textWithBlanks.matchAll(blanksRegex)];
+                    
+                    const answers = matches.map(match => match[1]);
+                    
+                    // Replace [BLANK:answer] with [BLANK] for display
+                    const displayText = textWithBlanks.replace(blanksRegex, '[BLANK]');
+                    
+                    question.text = displayText;
+                    question.rawText = textWithBlanks; // Store the original text with answers
+                    question.instructions = instructions;
+                    question.caseSensitive = caseSensitive;
+                    
+                    // Handle audio file if present
+                    const audioFilePathInput = cardBody.querySelector('.audio-file-path');
+                    if (audioFilePathInput && audioFilePathInput.value) {
+                        question.audioPath = audioFilePathInput.value;
+                    }
+                    break;
+                case 'change-sequence':
+                    // Read items from textarea (one per line)
+                    const itemsElem = cardBody.querySelector('.sequence-items');
+                    const correctElem = cardBody.querySelector('.sequence-correct');
+                    const itemsRaw = itemsElem?.value || '';
+                    const items = itemsRaw.split(/\r?\n/).map(item => item.trim()).filter(Boolean);
+                    const correctRaw = correctElem?.value || '';
+                    const correctSequence = correctRaw.split(',').map(item => item.trim()).filter(Boolean);
+                    question.instructions = cardBody.querySelector('.sequence-instructions')?.value || '';
+                    question.items = items;
+                    question.correctSequence = correctSequence;
+                    question.audioDisplayName = cardBody.querySelector('.sequence-audio-display-name')?.value || '';
+                    const audioPathInput = cardBody.querySelector('.audio-file-path');
+                    if (audioPathInput && audioPathInput.value) {
+                        question.audioPath = audioPathInput.value;
+                    }
+                    break;
                 case 'drag-and-drop':
                     let subtype = 'sequence';
                     const subtypeSelect = cardBody.querySelector('.dragdrop-subtype-select');
@@ -2794,32 +2868,28 @@ Ooh, exciting!|That sounds fun.</pre>
         function getTrueFalseQuestions() {
             const questions = [];
             const questionCards = document.querySelectorAll('.question-card[data-type="true-false"]');
-            
             questionCards.forEach(card => {
-                // Get sentences and their T/F values
                 const sentenceRows = card.querySelectorAll('.tf-sentence-row');
                 const sentences = [];
-                
                 sentenceRows.forEach(row => {
                     const sentenceText = row.querySelector('input[type="text"]').value.trim();
                     const tfButton = row.querySelector('.tf-toggle');
-                    const isTrue = tfButton.dataset.state === 'T';
-                    
+                    let isTrue = null;
+                    if (tfButton.dataset.state === 'T') isTrue = true;
+                    else if (tfButton.dataset.state === 'F') isTrue = false;
                     sentences.push({
                         text: sentenceText,
                         isTrue: isTrue
                     });
                 });
-                
-                // Create question object
-                const question = {
-                    type: 'true-false',
-                    sentences: sentences
-                };
-                
-                questions.push(question);
+                // Only add if at least one sentence
+                if (sentences.length > 0) {
+                    questions.push({
+                        type: 'true-false',
+                        sentences: sentences
+                    });
+                }
             });
-            
             return questions;
         }
         
@@ -2888,7 +2958,28 @@ Ooh, exciting!|That sounds fun.</pre>
                     if (audioDisplayName) {
                         question.audioDisplayName = audioDisplayName;
                     }
+                } 
+                    else if (subtype === 'fill-in-blank') {
+        // Collect sentences and answers
+        const sentences = [];
+        const sentenceRows = cardBody.querySelectorAll('.fillblank-sentences-list .fillblank-sentence-row');
+        sentenceRows.forEach(row => {
+            const sentenceInput = row.querySelector('input[type="text"]:nth-child(1)');
+            const answersInput = row.querySelector('input[type="text"]:nth-child(2)');
+            if (sentenceInput && answersInput) {
+                const text = sentenceInput.value.trim();
+                const answers = answersInput.value.split(',').map(a => a.trim()).filter(Boolean);
+                if (text && answers.length > 0) {
+                    sentences.push({ text, answers });
                 }
+            }
+        });
+        // Collect extra word bank words
+        const extraInput = cardBody.querySelector('.fillblank-extra');
+        const extraWords = extraInput ? extraInput.value.split(',').map(a => a.trim()).filter(Boolean) : [];
+        question.sentences = sentences;
+        question.extraWords = extraWords;
+    }
                 
                 questions.push(question);
             });
@@ -2953,6 +3044,116 @@ Ooh, exciting!|That sounds fun.</pre>
                 const noQuestionsMsg = document.getElementById('noQuestionsMsg');
                 if (noQuestionsMsg) {
                     noQuestionsMsg.style.display = 'block';
+                }
+            }
+        }
+
+        // Upload audio file specifically for assignment questions
+        async function uploadAssignmentAudio(file, audioFilePathInput) {
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            try {
+                const response = await fetch('/api/assessments/upload-audio', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to upload audio');
+                }
+                
+                const result = await response.json();
+                
+                // Store the file path in the hidden input
+                if (audioFilePathInput) {
+                    audioFilePathInput.value = result.filePath;
+                    console.log('Audio file path saved:', result.filePath);
+                }
+            } catch (error) {
+                console.error('Error uploading assignment audio:', error);
+                alert('Failed to upload audio file: ' + error.message);
+            }
+        }
+
+        // Show/hide buttons based on mode
+        function showEditMode() {
+            document.getElementById('createAssessmentBtn').style.display = 'none';
+            document.getElementById('saveAssessmentBtn').style.display = 'inline-block';
+        }
+        function showCreateMode() {
+            document.getElementById('createAssessmentBtn').style.display = 'inline-block';
+            document.getElementById('saveAssessmentBtn').style.display = 'none';
+        }
+        // Example usage: call showEditMode() when editing, showCreateMode() when resetting form
+        // You should call showEditMode() inside your editAssessment(assessmentId) function after loading data
+        // And call showCreateMode() after saving or when resetting the form
+
+        document.getElementById('removeAudioBtn').addEventListener('click', function() {
+            const audioInput = document.getElementById('assessmentAudio');
+            const audioPreview = document.getElementById('audioPreview');
+            const audioUrl = document.getElementById('audioUrl');
+            if (audioInput) audioInput.value = '';
+            if (audioPreview) {
+                audioPreview.src = '';
+                audioPreview.style.display = 'none';
+            }
+            if (audioUrl) audioUrl.value = '';
+            this.style.display = 'none';
+            const audioContainer = document.getElementById('audioUploadContainer');
+            if (audioContainer) {
+                const oldFeedback = audioContainer.querySelector('.upload-feedback');
+                if (oldFeedback) oldFeedback.remove();
+            }
+        });
+
+        // Add this function after the existing functions
+        async function handleSequenceAudioUpload(input) {
+            const file = input.files[0];
+            if (!file) return;
+
+            const preview = input.parentElement.querySelector('.audio-preview');
+            const audioFilePathInput = input.parentElement.querySelector('.audio-file-path');
+            
+            if (preview && file) {
+                // Create audio element
+                preview.style.display = 'block';
+                preview.innerHTML = `
+                    <audio controls class="w-100">
+                        <source src="${URL.createObjectURL(file)}" type="${file.type}">
+                        Your browser does not support the audio element.
+                    </audio>
+                    <p class="text-muted small mt-1">${file.name}</p>
+                `;
+                
+                // Upload the audio file to server and store path
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                try {
+                    const response = await fetch('/api/assessments/upload-audio', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: formData
+                    });
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (audioFilePathInput) {
+                            audioFilePathInput.value = data.filePath;
+                            console.log('Audio file path saved:', data.filePath);
+                        }
+                    } else {
+                        throw new Error('Failed to upload audio');
+                    }
+                } catch (error) {
+                    console.error('Error uploading audio:', error);
+                    alert('Failed to upload audio file: ' + error.message);
                 }
             }
         }

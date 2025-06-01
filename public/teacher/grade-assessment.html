@@ -82,49 +82,43 @@
                 });
                 if (!res.ok) throw new Error('Failed to load grading data');
                 const data = await res.json();
-                renderCriteria(data.criteria);
-                renderTable(data.students);
+                // Defensive: ensure data is always an array
+                const submissions = Array.isArray(data) ? data : [];
+                renderTable(submissions);
             } catch (err) {
                 document.getElementById('gradingTableBody').innerHTML = `<tr><td colspan="7"><div class="alert alert-danger">${err.message}</div></td></tr>`;
             }
         }
-        function renderCriteria(criteria) {
-            const box = document.getElementById('criteriaBox');
-            if (criteria) {
-                box.innerHTML = `<div class="criteria-box"><strong>Evaluation Criteria:</strong><br>${criteria.replace(/\n/g, '<br>')}</div>`;
-            } else {
-                box.innerHTML = '';
-            }
-        }
-        function renderTable(students) {
+        function renderTable(submissions) {
             const tbody = document.getElementById('gradingTableBody');
-            if (!students.length) {
-                tbody.innerHTML = '<tr><td colspan="7">No students found.</td></tr>';
+            if (!Array.isArray(submissions) || submissions.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7">No submissions found.</td></tr>';
                 return;
             }
-            tbody.innerHTML = students.map((s, i) => `
+            tbody.innerHTML = submissions.map((s, i) => {
+                const student = s.student || {};
+                const audioFile = s.answers && s.answers.audioFile ? s.answers.audioFile : null;
+                return `
                 <tr>
                     <td>${i + 1}</td>
-                    <td>${s.name || ''}</td>
-                    <td>${s.nickname || ''}</td>
-                    <td>${s.submitted ? '<span class="badge bg-success">Submitted</span>' : '<span class="badge bg-secondary">Not Submitted</span>'}</td>
+                    <td>${student.name || ''}</td>
+                    <td>${student.nickname || ''}</td>
+                    <td><span class="badge bg-success">Submitted</span></td>
                     <td>
-                        ${s.mediaFile ?
-                            (s.mediaFile.type.startsWith('audio') ?
-                                `<audio controls class="media-preview"><source src="${s.mediaFile.url}" type="${s.mediaFile.type}"></audio>` :
-                                `<video controls class="media-preview"><source src="${s.mediaFile.url}" type="${s.mediaFile.type}"></video>`
-                            ) :
+                        ${audioFile ?
+                            `<audio controls class="media-preview"><source src="${audioFile}" type="audio/webm"></audio>` :
                             '<span class="text-muted">No file</span>'
                         }
                     </td>
                     <td>
-                        <input type="number" class="form-control score-input" min="0" max="100" step="1" value="${s.score !== null && s.score !== undefined ? s.score : ''}" id="score-${s.studentId}" ${s.submitted ? '' : 'disabled'}>
+                        <input type="number" class="form-control score-input" min="0" max="100" step="1" value="${s.score !== null && s.score !== undefined ? s.score : ''}" id="score-${student.id}" >
                     </td>
                     <td>
-                        <button class="btn btn-primary btn-sm" onclick="saveScore('${s.studentId}')" ${s.submitted ? '' : 'disabled'}>Save</button>
+                        <button class="btn btn-primary btn-sm" onclick="saveScore('${student.id}')">Save</button>
                     </td>
                 </tr>
-            `).join('');
+                `;
+            }).join('');
         }
         async function saveScore(studentId) {
             const input = document.getElementById('score-' + studentId);
