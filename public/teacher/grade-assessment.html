@@ -97,24 +97,51 @@
             }
             tbody.innerHTML = submissions.map((s, i) => {
                 const student = s.student || {};
-                const audioFile = s.answers && s.answers.audioFile ? s.answers.audioFile : null;
+                // Collect all files and audio (support multiple)
+                let files = [];
+                let audios = [];
+                if (s.answers) {
+                    // Support array or single file/audio
+                    if (Array.isArray(s.answers.file)) files = s.answers.file;
+                    else if (s.answers.file) files = [s.answers.file];
+                    if (Array.isArray(s.answers.audioFile)) audios = s.answers.audioFile;
+                    else if (s.answers.audioFile) audios = [s.answers.audioFile];
+                }
+                let mediaHtml = '';
+                if (audios.length > 0 || files.length > 0) {
+                    mediaHtml = '<ul class="list-unstyled mb-0">';
+                    audios.forEach(audio => {
+                        mediaHtml += `<li class="mb-1 d-flex align-items-center"><audio controls class="media-preview me-2"><source src="${audio}" type="audio/webm"></audio><button class="btn btn-sm btn-danger ms-2" title="Delete audio" onclick="deleteSubmissionFile('${s.id}','audio','${audio}')"><i class="bi bi-trash"></i></button></li>`;
+                    });
+                    files.forEach(file => {
+                        const ext = file.split('.').pop().toLowerCase();
+                        let filePreview = '';
+                        if (["jpg","jpeg","png","gif","bmp","webp"].includes(ext)) {
+                            filePreview = `<a href="${file}" target="_blank"><img src="${file}" class="media-preview img-thumbnail" style="max-width:120px;max-height:80px;"></a>`;
+                        } else if (["pdf"].includes(ext)) {
+                            filePreview = `<a href="${file}" target="_blank" class="btn btn-outline-secondary btn-sm">View PDF</a>`;
+                        } else {
+                            filePreview = `<a href="${file}" target="_blank" class="btn btn-outline-secondary btn-sm">Download File</a>`;
+                        }
+                        mediaHtml += `<li class="mb-1 d-flex align-items-center">${filePreview}<button class="btn btn-sm btn-danger ms-2" title="Delete file" onclick="deleteSubmissionFile('${s.id}','file','${file}')"><i class="bi bi-trash"></i></button></li>`;
+                    });
+                    mediaHtml += '</ul>';
+                } else {
+                    mediaHtml = '<span class="text-muted">No file</span>';
+                }
                 return `
                 <tr>
                     <td>${i + 1}</td>
                     <td>${student.name || ''}</td>
                     <td>${student.nickname || ''}</td>
                     <td><span class="badge bg-success">Submitted</span></td>
-                    <td>
-                        ${audioFile ?
-                            `<audio controls class="media-preview"><source src="${audioFile}" type="audio/webm"></audio>` :
-                            '<span class="text-muted">No file</span>'
-                        }
-                    </td>
+                    <td>${mediaHtml}</td>
                     <td>
                         <input type="number" class="form-control score-input" min="0" max="100" step="1" value="${s.score !== null && s.score !== undefined ? s.score : ''}" id="score-${student.id}" >
                     </td>
                     <td>
                         <button class="btn btn-primary btn-sm" onclick="saveScore('${student.id}')">Save</button>
+                        <button class="btn btn-danger btn-sm ms-2" onclick="deleteEntireSubmission('${s.id}')"><i class="bi bi-trash"></i> Delete Submission</button>
                     </td>
                 </tr>
                 `;
@@ -144,6 +171,35 @@
             } catch (err) {
                 input.classList.add('is-invalid');
                 alert('Failed to save score: ' + err.message);
+            }
+        }
+        async function deleteSubmissionFile(submissionId, fileType, filePath) {
+            if (!confirm('Are you sure you want to delete this file? This cannot be undone.')) return;
+            try {
+                const res = await fetch(`/api/assessments/submissions/${submissionId}/delete-file`, {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ fileType, filePath })
+                });
+                if (!res.ok) throw new Error('Failed to delete file');
+                alert('File deleted.');
+                loadGradingData();
+            } catch (err) {
+                alert('Failed to delete file: ' + err.message);
+            }
+        }
+        async function deleteEntireSubmission(submissionId) {
+            if (!confirm('Are you sure you want to delete this entire submission? This cannot be undone.')) return;
+            try {
+                const res = await fetch(`/api/assessments/submissions/${submissionId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                if (!res.ok) throw new Error('Failed to delete submission');
+                alert('Submission deleted.');
+                loadGradingData();
+            } catch (err) {
+                alert('Failed to delete submission: ' + err.message);
             }
         }
         function logout() {

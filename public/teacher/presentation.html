@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Progress Presentation - Teacher Portal</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css">
+    <style>
+        body { background: #f8f9fa; }
+        .progress-table th, .progress-table td { vertical-align: middle; }
+        .status-completed { color: #28a745; font-weight: bold; }
+        .status-inprogress { color: #ffc107; font-weight: bold; }
+        .status-notstarted { color: #dc3545; font-weight: bold; }
+        .student-selector {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .student-card {
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            transition: transform 0.2s;
+        }
+        .student-card:hover {
+            transform: translateY(-2px);
+        }
+        .student-card.selected {
+            border: 2px solid #0d6efd;
+        }
+        .presentation-view {
+            display: none;
+        }
+        .presentation-view.active {
+            display: block;
+        }
+        .progress-summary-card { padding: 6px 0 2px 0; margin-bottom: 2px; background: none; box-shadow: none; border: none; }
+        .progress-summary-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .progress-summary-nameblock {
+            width: 140px;
+            min-width: 140px;
+            max-width: 140px;
+            flex-shrink: 0;
+        }
+        .progress-summary-name {
+            font-size: 1em;
+            font-weight: 500;
+            line-height: 1.1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: block;
+            max-width: 100%;
+        }
+        .progress-summary-nickname { font-size: 0.92em; color: #666; line-height: 1.1; }
+        .progress-summary-percent {
+            width: 36px;
+            min-width: 36px;
+            max-width: 36px;
+            text-align: right;
+            flex-shrink: 0;
+        }
+        .progress-summary-bar-bg {
+            flex:1;
+            min-width:180px;
+            max-width:220px;
+            background:#e0e0e0;
+            height:14px;
+            margin-left:6px;
+            border-radius: 6px;
+        }
+        .progress-summary-bar {
+            height:14px;
+            background:#198754;
+            border-radius: 6px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid mt-5">
+        <h1 class="mb-4">Student Progress Presentation</h1>
+        <div class="row">
+            <!-- Left: Selection Panel -->
+            <div class="col-md-4">
+                <div class="student-selector">
+                    <div class="mb-3">
+                        <label for="classSelect" class="form-label"><strong>Class:</strong></label>
+                        <select id="classSelect" class="form-select"></select>
+                    </div>
+                    <div class="mb-3">
+                        <label for="subjectSelect" class="form-label"><strong>Subject:</strong></label>
+                        <select id="subjectSelect" class="form-select"></select>
+                    </div>
+                    <div class="mb-3">
+                        <button id="selectAllBtn" class="btn btn-outline-primary me-2">Select All</button>
+                        <button id="deselectAllBtn" class="btn btn-outline-secondary">Deselect All</button>
+                    </div>
+                    <div id="studentsGrid" class="row">
+                        <!-- Student cards will be inserted here -->
+                    </div>
+                </div>
+            </div>
+            <!-- Right: Presentation Panel -->
+            <div class="col-md-8">
+                <div id="presentationContent">
+                    <!-- Progress bars for selected students will be inserted here -->
+                </div>
+            </div>
+        </div>
+        <a href="/teacher/dashboard" class="btn btn-secondary mt-4">
+            <i class="bi bi-arrow-left"></i> Back to Dashboard
+        </a>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let allStudents = [];
+        let selectedStudents = new Set();
+        let currentClass = '';
+        let currentSubject = '';
+        let allProgress = [];
+
+        // Fetch classes for dropdown
+        fetch('/api/teacher/classes', {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        })
+        .then(res => res.json())
+        .then(data => {
+            const classSelect = document.getElementById('classSelect');
+            classSelect.innerHTML = '';
+            data.classes.forEach(cls => {
+                const opt = document.createElement('option');
+                opt.value = cls;
+                opt.textContent = cls;
+                classSelect.appendChild(opt);
+            });
+            if (data.classes.length > 0) {
+                classSelect.value = data.classes[0];
+                loadStudentsForClass(data.classes[0]);
+            }
+        });
+
+        // Load subjects for dropdown
+        fetch('/api/subjects', {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        })
+        .then(res => res.json())
+        .then(subjects => {
+            const subjectSelect = document.getElementById('subjectSelect');
+            subjectSelect.innerHTML = '<option value="">All Subjects</option>';
+            subjects.sort((a, b) => {
+                if (a.coreSubject.name === b.coreSubject.name) {
+                    return a.yearLevel - b.yearLevel;
+                }
+                return a.coreSubject.name.localeCompare(b.coreSubject.name);
+            });
+            subjects.forEach(subject => {
+                const option = document.createElement('option');
+                option.value = subject.id;
+                let yearLevelStr = '';
+                if (subject.yearLevel <= 6) {
+                    yearLevelStr = `P${subject.yearLevel}`;
+                } else {
+                    yearLevelStr = `M${subject.yearLevel - 6}`;
+                }
+                option.textContent = `${subject.coreSubject.name} (${yearLevelStr}) - ${subject.name}`;
+                subjectSelect.appendChild(option);
+            });
+        })
+        .catch(error => {
+            console.error('Error loading subjects:', error);
+        });
+
+        document.getElementById('classSelect').onchange = function() {
+            loadStudentsForClass(this.value);
+        };
+        document.getElementById('subjectSelect').onchange = function() {
+            currentSubject = this.value;
+            loadStudentsForClass(currentClass);
+        };
+        document.getElementById('selectAllBtn').onclick = function() {
+            document.querySelectorAll('.student-card').forEach(card => {
+                card.classList.add('selected');
+                selectedStudents.add(card.dataset.studentId);
+            });
+            renderPresentation();
+        };
+        document.getElementById('deselectAllBtn').onclick = function() {
+            document.querySelectorAll('.student-card').forEach(card => {
+                card.classList.remove('selected');
+            });
+            selectedStudents.clear();
+            renderPresentation();
+        };
+
+        function loadStudentsForClass(className) {
+            currentClass = className;
+            const selectedSubject = document.getElementById('subjectSelect').value;
+            fetch(`/api/teacher/progress?class=${encodeURIComponent(className)}`, {
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+            })
+            .then(res => res.json())
+            .then(data => {
+                allProgress = data.progress;
+                let filteredProgress = data.progress;
+                if (selectedSubject) {
+                    filteredProgress = data.progress.filter(p => p.subjectId === selectedSubject);
+                }
+                allStudents = Array.from(new Set(filteredProgress.map(r => r.studentName + '|' + (r.studentNickname || ''))))
+                    .map(key => {
+                        const [name, nickname] = key.split('|');
+                        const student = filteredProgress.find(r => r.studentName === name && (r.studentNickname || '') === nickname);
+                        return {
+                            id: name + '|' + (nickname || ''),
+                            name: name,
+                            nickname: nickname,
+                            class: student ? student.studentClass : ''
+                        };
+                    });
+                updateStudentCards();
+                renderPresentation();
+            });
+        }
+
+        function updateStudentCards() {
+            const grid = document.getElementById('studentsGrid');
+            grid.innerHTML = '';
+            allStudents.forEach(student => {
+                const card = document.createElement('div');
+                card.className = 'col-12 col-md-4 mb-3';
+                card.innerHTML = `
+                    <div class="student-card ${selectedStudents.has(student.id) ? 'selected' : ''}" 
+                         data-student-id="${student.id}">
+                        <h5 class="mb-1">${student.name}</h5>
+                        <p class="text-muted mb-2">Nickname: ${student.nickname || '-'}</p>
+                        <p class="mb-0">Class: ${student.class}</p>
+                    </div>
+                `;
+                card.querySelector('.student-card').onclick = function() {
+                    this.classList.toggle('selected');
+                    if (this.classList.contains('selected')) {
+                        selectedStudents.add(student.id);
+                    } else {
+                        selectedStudents.delete(student.id);
+                    }
+                    renderPresentation();
+                };
+                grid.appendChild(card);
+            });
+        }
+
+        function renderPresentation() {
+            const content = document.getElementById('presentationContent');
+            if (selectedStudents.size === 0) {
+                content.innerHTML = '<div class="alert alert-info">Select students to view their progress summary.</div>';
+                return;
+            }
+            // Calculate overall progress for each selected student
+            let html = '<h4>Selected Students Progress</h4><div class="row g-0">';
+            const selectedKeys = Array.from(selectedStudents);
+            selectedKeys.forEach(key => {
+                const [name, nickname] = key.split('|');
+                // Get all progress records for this student
+                const studentProgress = allProgress.filter(p => p.studentName === name && (p.studentNickname || '') === nickname);
+                const total = studentProgress.length;
+                const completed = studentProgress.filter(p => p.status === 'Completed').length;
+                const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+                html += `
+                    <div class="col-12 col-md-4">
+                        <div class="progress-summary-card">
+                            <div class="progress-summary-row">
+                                <div class="progress-summary-nameblock">
+                                    <div class="progress-summary-name">${name}</div>
+                                    <div class="progress-summary-nickname">${nickname ? nickname : ''}</div>
+                                </div>
+                                <div class="progress-summary-percent">${percent}%</div>
+                                <div class="progress-summary-bar-bg">
+                                    <div class="progress-summary-bar" style="width:${percent * 2}px;"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            content.innerHTML = html;
+        }
+    </script>
+</body>
+</html> 

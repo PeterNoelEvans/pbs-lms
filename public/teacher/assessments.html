@@ -725,6 +725,12 @@
 
                 case 'drag-and-drop':
                     questionHtml += `
+                        <div class="mb-3 optional-image-upload">
+                            <label class="form-label">Optional Picture (shown above word bank)</label>
+                            <input type="file" class="form-control optional-image-input" accept="image/*">
+                            <input type="hidden" class="optional-image-server-path">
+                            <div class="optional-image-preview mt-2" style="max-width: 200px;"></div>
+                        </div>
                         <div class="dragdrop-sequence-fields" style="display:none;">
                             <label class="form-label">Audio File (optional)</label>
                             <input type="file" class="form-control sequence-audio" accept="audio/*">
@@ -1289,9 +1295,13 @@
                 // Handle subtype for drag-and-drop
                 if (assessment.type === 'drag-and-drop') {
                     document.getElementById('subtypeContainer').style.display = 'block';
-                    // Set the subtype if it exists
-                    if (assessment.subtype) {
-                        document.getElementById('subtype').value = assessment.subtype;
+                    // Set the subtype if it exists at the top level or in the first question
+                    let subtype = assessment.subtype;
+                    if (!subtype && assessment.questions && assessment.questions.length > 0) {
+                        subtype = assessment.questions[0].subtype;
+                    }
+                    if (subtype) {
+                        document.getElementById('subtype').value = subtype;
                     }
                 } else {
                     document.getElementById('subtypeContainer').style.display = 'none';
@@ -1419,7 +1429,13 @@
             formData.set('questions', JSON.stringify(questions));
             // Add subtype if drag-and-drop
             if (type === 'drag-and-drop') {
-                formData.set('subtype', document.getElementById('subtype').value);
+                const subtypeValue = document.getElementById('subtype').value;
+                formData.set('subtype', subtypeValue);
+                // Also set subtype in all drag-and-drop questions
+                if (questions && questions.length > 0) {
+                    questions.forEach(q => { q.subtype = subtypeValue; });
+                    formData.set('questions', JSON.stringify(questions));
+                }
             }
             // Add category field
             const categoryValue = document.getElementById('assessmentCategory').value;
@@ -1535,8 +1551,12 @@
             }
             if (type === 'drag-and-drop' && subtype) {
                 formData.append('subtype', subtype);
+                // Also set subtype in all drag-and-drop questions
+                if (questions && questions.length > 0) {
+                    questions.forEach(q => { q.subtype = subtype; });
+                }
             }
-            formData.append('questions', JSON.stringify(questions));
+            formData.set('questions', JSON.stringify(questions));
             // Audio file handling
             const audioUrl = document.getElementById('audioUrl') ? document.getElementById('audioUrl').value : '';
             if (audioUrl) {
@@ -2180,6 +2200,7 @@ Ooh, exciting!|That sounds fun.</pre>
                     <div class="mb-3">
                         <label class="form-label">Image</label>
                         <input type="file" class="form-control image-input" accept="image/*" required>
+                        <input type="hidden" class="image-server-path">
                         <div class="image-preview mt-2" style="max-width: 200px;"></div>
                     </div>
                     <div class="mb-3">
@@ -2193,16 +2214,37 @@ Ooh, exciting!|That sounds fun.</pre>
                 </div>
             `;
             
-            // Add image preview functionality
+            // Add image preview and upload functionality
             const imageInput = pairDiv.querySelector('.image-input');
             const previewDiv = pairDiv.querySelector('.image-preview');
-            imageInput.addEventListener('change', function() {
+            const serverPathInput = pairDiv.querySelector('.image-server-path');
+            imageInput.addEventListener('change', async function() {
                 if (this.files && this.files[0]) {
                     const reader = new FileReader();
                     reader.onload = function(e) {
                         previewDiv.innerHTML = `<img src="${e.target.result}" class="img-fluid">`;
                     };
                     reader.readAsDataURL(this.files[0]);
+                    // Upload image to server
+                    const formData = new FormData();
+                    formData.append('file', this.files[0]);
+                    try {
+                        const response = await fetch('/api/assessments/upload-audio', { // Use the same endpoint as audio for now
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${localStorage.getItem('token')}`
+                            },
+                            body: formData
+                        });
+                        if (response.ok) {
+                            const data = await response.json();
+                            serverPathInput.value = data.filePath;
+                        } else {
+                            alert('Failed to upload image.');
+                        }
+                    } catch (error) {
+                        alert('Error uploading image: ' + error.message);
+                    }
                 }
             });
             
@@ -2510,7 +2552,7 @@ Ooh, exciting!|That sounds fun.</pre>
                 }
                 
                 // Add questions as JSON string
-                formData.append('questions', JSON.stringify(questions));
+                formData.set('questions', JSON.stringify(questions));
                 
                 // Add criteria if provided
                 if (criteria) {
@@ -2669,7 +2711,7 @@ Ooh, exciting!|That sounds fun.</pre>
                         // Get correct answers in order
                         const correctAnswers = cardBody.querySelector('.long-paragraph-answers').value
                             .split(',').map(item => item.trim()).filter(Boolean);
-                        question.correct = correctAnswers;
+                        question.answers = correctAnswers;
                         
                         // Get extra word bank items
                         const extraWords = cardBody.querySelector('.long-paragraph-extra').value
@@ -2981,6 +3023,40 @@ Ooh, exciting!|That sounds fun.</pre>
         question.extraWords = extraWords;
     }
                 
+                else if (subtype === 'image-fill-blank') {
+                    // Collect image-sentence pairs
+                    const pairs = [];
+                    let allAnswers = [];
+                    const pairRows = cardBody.querySelectorAll('.image-fillblank-pairs-list .card');
+                    pairRows.forEach(row => {
+                        let image = '';
+                        const serverPathInput = row.querySelector('input.image-server-path');
+                        const fileInput = row.querySelector('input[type="file"].image-input');
+                        const textInput = row.querySelector('input[type="text"].image-input');
+                        if (serverPathInput && serverPathInput.value) {
+                            image = serverPathInput.value;
+                        } else if (fileInput && fileInput.files && fileInput.files[0]) {
+                            // fallback, should not be used if upload worked
+                            image = '/uploads/resources/' + fileInput.files[0].name;
+                        } else if (textInput && textInput.value) {
+                            image = textInput.value.trim();
+                        }
+                        const text = row.querySelector('input.sentence-input')?.value.trim() || '';
+                        const answer = row.querySelector('input.answer-input')?.value.trim() || '';
+                        if (image && text && answer) {
+                            pairs.push({ image, text, answers: [answer] });
+                            allAnswers.push(answer); // collect for word bank
+                        }
+                    });
+                    // Collect extra word bank words
+                    const extraInput = cardBody.querySelector('.imagefillblank-extra');
+                    const extraWords = extraInput ? extraInput.value.split(',').map(a => a.trim()).filter(Boolean) : [];
+                    question.sentences = pairs;
+                    question.extraWords = extraWords;
+                    // Build the word bank: all correct answers (with duplicates) + extra words
+                    question.words = allAnswers.concat(extraWords);
+                }
+                
                 questions.push(question);
             });
             
@@ -3157,6 +3233,50 @@ Ooh, exciting!|That sounds fun.</pre>
                 }
             }
         }
+
+        // After rendering the drag-and-drop question card, add preview/upload logic for the optional image:
+        document.querySelectorAll('.optional-image-input').forEach(input => {
+            const previewDiv = input.parentElement.querySelector('.optional-image-preview');
+            const serverPathInput = input.parentElement.querySelector('.optional-image-server-path');
+            input.addEventListener('change', async function() {
+                if (this.files && this.files[0]) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        previewDiv.innerHTML = `<img src="${e.target.result}" class="img-fluid">`;
+                    };
+                    reader.readAsDataURL(this.files[0]);
+                    // Upload image to server
+                    const formData = new FormData();
+                    formData.append('file', this.files[0]);
+                    try {
+                        const response = await fetch('/api/assessments/upload-audio', {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${localStorage.getItem('token')}`
+                            },
+                            body: formData
+                        });
+                        if (response.ok) {
+                            const data = await response.json();
+                            serverPathInput.value = data.filePath;
+                        } else {
+                            alert('Failed to upload image.');
+                        }
+                    } catch (error) {
+                        alert('Error uploading image: ' + error.message);
+                    }
+                }
+            });
+        });
+        // In getDragAndDropQuestions, save the optional image path:
+        // ... existing code ...
+        if (subtype === 'sequence' || subtype === 'fill-in-blank' || subtype === 'image-fill-blank' || subtype === 'long-paragraph-fill-in-blank' || subtype === 'matching') {
+            const optionalImagePath = cardBody.querySelector('.optional-image-server-path')?.value;
+            if (optionalImagePath) {
+                question.optionalImage = optionalImagePath;
+            }
+        }
+        // ... existing code ...
     </script>
 </body>
 </html>

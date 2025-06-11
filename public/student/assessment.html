@@ -128,15 +128,19 @@
             cursor: grabbing;
         }
         .drop-target {
-            display: inline-block !important;
-            width: 120px !important;
-            height: 35px !important;
-            border: 2px dashed #ced4da !important;
-            border-radius: 4px !important;
-            margin: 0 5px !important;
-            vertical-align: middle !important;
-            background-color: #f8f9fa !important;
-            transition: all 0.2s;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            min-width: 100px;
+            height: 30px;
+            border: 2px dashed #ccc;
+            border-radius: 4px;
+            margin: 0 5px;
+            vertical-align: middle;
+            background-color: #f8f9fa;
+            font-size: 1.1rem;
+            font-weight: 500;
+            text-align: center;
         }
         .drop-target.highlight {
             border-color: #0d6efd !important;
@@ -958,7 +962,10 @@
                                 </div>
                             </div>
                         `;
-                        renderWritingAssessment();
+                        // Pass the .writing-assignment-container div as the container
+                        const question = assessment.questions && assessment.questions[0] ? assessment.questions[0] : {};
+                        const writingContainer = container.querySelector('.writing-assignment-container');
+                        renderWritingAssessment(writingContainer, question, assessment);
                         break;
                         
                     case 'change-sequence':
@@ -1202,11 +1209,72 @@
         }
         
         function renderDragAndDropQuestion(question, questionDiv) {
+            // Special handling for long-paragraph-fill-in-blank
+            if (question.subtype === 'long-paragraph-fill-in-blank' || assessment.subtype === 'long-paragraph-fill-in-blank') {
+                renderLongParagraphDragAndDrop(
+                    questionDiv,
+                    question.text || '',
+                    question.wordBank || [],
+                    question.answers || []
+                );
+                return;
+            }
+            // ... existing code for other subtypes ...
             // Support subtype: fill-in-blank, image-fill-blank, long-paragraph-fill-in-blank
             if (
                 question.subtype === 'fill-in-blank' || question.subtype === 'image-fill-blank' || question.subtype === 'long-paragraph-fill-in-blank' ||
                 (assessment.subtype === 'fill-in-blank') || (assessment.subtype === 'image-fill-blank') || (assessment.subtype === 'long-paragraph-fill-in-blank')
             ) {
+                // --- AUDIO PLAYER FOR DRAG-AND-DROP IF AUDIO FILE PRESENT ---
+                let audioFound = false;
+                const hasAudio = assessment.mediaFiles && assessment.mediaFiles.some(file =>
+                    (file.url || file.filePath) && (
+                        (file.url && (file.url.endsWith('.mp3') || file.url.endsWith('.wav') || file.url.endsWith('.ogg')))
+                        || (file.filePath && (file.filePath.endsWith('.mp3') || file.filePath.endsWith('.wav') || file.filePath.endsWith('.ogg')))
+                        || (file.type && file.type.startsWith('audio/'))
+                    )
+                );
+                if (hasAudio) {
+                    const audioPlayer = document.createElement('div');
+                    audioPlayer.className = 'audio-player mb-3';
+                    const infoMessage = document.createElement('div');
+                    infoMessage.className = 'alert alert-info';
+                    infoMessage.innerHTML = '<i class="bi bi-volume-up me-2"></i>Listen to the audio and answer the questions.';
+                    audioPlayer.appendChild(infoMessage);
+                    const audio = document.createElement('audio');
+                    audio.controls = true;
+                    audio.className = 'w-100';
+                    const audioFiles = assessment.mediaFiles.filter(file =>
+                        (file.url || file.filePath) && (
+                            (file.url && (file.url.endsWith('.mp3') || file.url.endsWith('.wav') || file.url.endsWith('.ogg')))
+                            || (file.filePath && (file.filePath.endsWith('.mp3') || file.filePath.endsWith('.wav') || file.filePath.endsWith('.ogg')))
+                            || (file.type && file.type.startsWith('audio/'))
+                        )
+                    );
+                    if (audioFiles.length > 0) {
+                        audioFound = true;
+                        audioFiles.forEach(file => {
+                            const source = document.createElement('source');
+                            source.src = file.url || file.filePath;
+                            const filePath = file.url || file.filePath;
+                            if (filePath.endsWith('.mp3')) source.type = 'audio/mpeg';
+                            else if (filePath.endsWith('.wav')) source.type = 'audio/wav';
+                            else if (filePath.endsWith('.ogg')) source.type = 'audio/ogg';
+                            else if (file.type && file.type.startsWith('audio/')) source.type = file.type;
+                            audio.appendChild(source);
+                        });
+                    }
+                    audio.innerHTML += 'Your browser does not support the audio element.';
+                    audioPlayer.appendChild(audio);
+                    questionDiv.appendChild(audioPlayer);
+                }
+                // --- OPTIONAL IMAGE ABOVE WORDBANK ---
+                if (question.optionalImage) {
+                    const imgDiv = document.createElement('div');
+                    imgDiv.className = 'mb-3 text-center';
+                    imgDiv.innerHTML = `<img src="${question.optionalImage}" class="img-fluid" style="max-height:220px;">`;
+                    questionDiv.appendChild(imgDiv);
+                }
                 // Add instructions
                 const instructionsDiv = document.createElement('div');
                 instructionsDiv.className = 'question-instructions';
@@ -1237,6 +1305,49 @@
                 sentencesContainer.style.margin = '0';
                 sentencesContainer.style.padding = '0';
                 (question.sentences || []).forEach((sentence, idx) => {
+                    // For image-fill-blank, show image and drop target vertically grouped
+                    if (question.subtype === 'image-fill-blank' || assessment.subtype === 'image-fill-blank') {
+                        const groupDiv = document.createElement('div');
+                        groupDiv.className = 'image-blank-group mb-4 text-center';
+                        groupDiv.style.display = 'inline-block';
+                        groupDiv.style.margin = '12px 16px';
+                        groupDiv.style.verticalAlign = 'top';
+                        // Image
+                        const img = document.createElement('img');
+                        img.src = sentence.image;
+                        img.alt = `Image for sentence ${idx + 1}`;
+                        img.className = 'img-fluid mb-2';
+                        img.style.maxHeight = '160px';
+                        img.style.objectFit = 'contain';
+                        img.style.display = 'block';
+                        img.style.margin = '0 auto 8px auto';
+                        groupDiv.appendChild(img);
+                        // Drop target (always one per image for this type)
+                        const dropTarget = document.createElement('div');
+                        dropTarget.className = 'drop-target';
+                        dropTarget.dataset.sentenceIndex = idx;
+                        dropTarget.dataset.blankIndex = 0;
+                        dropTarget.dataset.correctAnswer = sentence.answers ? sentence.answers[0] : sentence.answer;
+                        dropTarget.style.display = 'inline-flex';
+                        dropTarget.style.minWidth = '120px';
+                        dropTarget.style.height = '32px';
+                        dropTarget.style.margin = '0 auto';
+                        dropTarget.style.verticalAlign = 'middle';
+                        dropTarget.style.border = '2px dashed #ced4da';
+                        dropTarget.style.borderRadius = '4px';
+                        dropTarget.style.backgroundColor = '#f8f9fa';
+                        dropTarget.style.lineHeight = '1.2';
+                        dropTarget.style.justifyContent = 'center';
+                        dropTarget.style.alignItems = 'center';
+                        dropTarget.style.fontSize = '1.1rem';
+                        dropTarget.addEventListener('dragover', handleDragOver);
+                        dropTarget.addEventListener('dragenter', handleDragEnter);
+                        dropTarget.addEventListener('dragleave', handleDragLeave);
+                        dropTarget.addEventListener('drop', handleDrop);
+                        groupDiv.appendChild(dropTarget);
+                        sentencesContainer.appendChild(groupDiv);
+                        return;
+                    }
                     // Create a card for each sentence
                     const sentenceCard = document.createElement('div');
                     sentenceCard.className = 'card';
@@ -1246,10 +1357,10 @@
                     sentenceCard.style.boxShadow = 'none';
                     sentenceCard.style.background = '#fff';
                     sentenceCard.style.minHeight = 'unset';
-                    // If this is image-fill-blank, add the image
+                    // If this is image-fill-blank, add the image above the sentence (always stack)
                     if (question.subtype === 'image-fill-blank' || assessment.subtype === 'image-fill-blank') {
                         const imageDiv = document.createElement('div');
-                        imageDiv.className = 'card-img-top';
+                        imageDiv.className = 'card-img-top text-center';
                         const img = document.createElement('img');
                         img.src = sentence.image;
                         img.alt = `Image for sentence ${idx + 1}`;
@@ -2412,7 +2523,7 @@
         }
 
         function renderWritingAssessment(container, question, assessment) {
-            container.innerHTML = '';
+            // Always show file upload field, and show text area for short-answer
             const form = document.createElement('form');
             form.className = 'writing-form';
             let inputGroup = '';
@@ -2421,11 +2532,11 @@
                 inputGroup = `
                     <div class="mb-3">
                         <label for="writingImage" class="form-label">Upload a photo of your handwritten answer:</label>
-                        <input type="file" accept="image/*" class="form-control" id="writingImage" name="writingImage" required>
+                        <input type="file" accept="image/*" class="form-control" id="writingImage" name="file" required>
                     </div>
                 `;
             } else if (question.subtype === 'short-answer') {
-                // Allow text input and/or image upload
+                // Allow text input and image upload
                 inputGroup = `
                     <div class="mb-3">
                         <label for="writingText" class="form-label">Type your answer (optional):</label>
@@ -2433,7 +2544,15 @@
                     </div>
                     <div class="mb-3">
                         <label for="writingImage" class="form-label">Or upload a photo of your answer (optional):</label>
-                        <input type="file" accept="image/*" class="form-control" id="writingImage" name="writingImage">
+                        <input type="file" accept="image/*" class="form-control" id="writingImage" name="file">
+                    </div>
+                `;
+            } else {
+                // For any other or missing subtype, show file upload field (optional)
+                inputGroup = `
+                    <div class="mb-3">
+                        <label for="writingImage" class="form-label">Upload a photo of your answer (optional):</label>
+                        <input type="file" accept="image/*" class="form-control" id="writingImage" name="file">
                     </div>
                 `;
             }
@@ -2450,10 +2569,13 @@
                         alert('Please upload an image.');
                         return;
                     }
-                    formData.append('image', file);
+                    formData.append('file', file);
                 } else if (question.subtype === 'short-answer') {
                     if (form.writingText.value) formData.append('text', form.writingText.value);
-                    if (form.writingImage.files[0]) formData.append('image', form.writingImage.files[0]);
+                    if (form.writingImage.files[0]) formData.append('file', form.writingImage.files[0]);
+                } else {
+                    // For any other or missing subtype, allow file upload (optional)
+                    if (form.writingImage.files[0]) formData.append('file', form.writingImage.files[0]);
                 }
                 // Submit to backend
                 const res = await fetch(`/api/assessments/${assessment.id}/submit-writing`, {

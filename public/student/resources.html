@@ -225,7 +225,6 @@
     <div class="container mt-4">
         <h1>My Resources</h1>
         <p class="text-muted">Access learning materials for your enrolled subjects.</p>
-        <button id="unenrollBtn" class="btn btn-danger mb-3" style="display:none;">Un-enroll from this subject</button>
         <div id="resourcesGrid" class="row g-3"></div>
     </div>
 
@@ -250,37 +249,10 @@
                 resourcesGrid.innerHTML = '';
                 if (!userData.success || !userData.user.subjects || userData.user.subjects.length === 0) {
                     resourcesGrid.innerHTML = `<div class='alert alert-info'>You are not enrolled in any subjects yet. Please enroll in subjects from your dashboard.</div>`;
-                    document.getElementById('unenrollBtn').style.display = 'none';
                     return;
                 }
                 // For now, use the first subject
                 const subject = userData.user.subjects[0];
-                // Show the Un-enroll button
-                const unenrollBtn = document.getElementById('unenrollBtn');
-                unenrollBtn.style.display = 'inline-block';
-                unenrollBtn.onclick = async function() {
-                    if (!confirm('Are you sure you want to un-enroll from this subject?')) return;
-                    unenrollBtn.disabled = true;
-                    unenrollBtn.textContent = 'Un-enrolling...';
-                    try {
-                        const res = await fetch(`/api/subjects/${subject.id}/unenroll`, {
-                            method: 'DELETE',
-                            headers: { 'Authorization': `Bearer ${token}` }
-                        });
-                        const data = await res.json();
-                        if (data.success) {
-                            alert('You have been un-enrolled from this subject.');
-                            window.location.reload();
-                        } else {
-                            alert(data.message || 'Failed to un-enroll.');
-                        }
-                    } catch (err) {
-                        alert('Error un-enrolling.');
-                    } finally {
-                        unenrollBtn.disabled = false;
-                        unenrollBtn.textContent = 'Un-enroll from this subject';
-                    }
-                };
                 // Fetch all resources for this subject
                 const res = await fetch(`/api/subjects/${subject.id}/resources`, { headers: { 'Authorization': `Bearer ${token}` } });
                 const resources = await res.json();
@@ -308,7 +280,7 @@
                         for (const a of resource.assessments) {
                             const sa = studentAssessments.find(sa => sa.id === a.id);
                             if (sa) {
-                                if (sa.status === 'Completed' || sa.completed) completed++;
+                                if (sa.completed) completed++;
                                 else if (sa.status === 'In Progress') started++;
                             }
                         }

@@ -2851,8 +2851,10 @@ app.get('/api/student/assessments', auth, async (req, res) => {
                                 const bestScore = submissions.length > 0 ? Math.max(...submissions.map(s => s.score || 0)) : null;
                                 const lastScore = submissions.length > 0 ? submissions[0].score : null;
                                 const lastAttempt = submissions.length > 0 ? submissions[0].submittedAt : null;
+                                // New logic: completed if any submission is graded (score !== null)
+                                const hasGraded = submissions.some(s => s.score !== null && s.score !== undefined);
                                 let status = 'Not Started';
-                                if (attempts > 0 && bestScore === 100) status = 'Completed';
+                                if (hasGraded) status = 'Completed';
                                 else if (attempts > 0) status = 'In Progress';
                                 assessments.push({
                                     id: assessment.id,
@@ -2865,6 +2867,7 @@ app.get('/api/student/assessments', auth, async (req, res) => {
                                     lastScore,
                                     lastAttempt,
                                     status,
+                                    completed: hasGraded, // <-- new flag
                                     subjectName: subject.name || null,
                                     unitName: unit.name || null,
                                     partName: part.name || null,
@@ -2961,7 +2964,8 @@ app.get('/api/teacher/progress', auth, async (req, res) => {
                                         bestScore,
                                         lastScore,
                                         lastAttempt,
-                                        status
+                                        status,
+                                        subjectId: subject.id // Add subjectId for frontend filtering
                                     });
                                 }
                             }
@@ -3566,5 +3570,114 @@ app.delete('/api/subjects/:subjectId/unenroll', auth, async (req, res) => {
     } catch (error) {
         console.error('Error un-enrolling from subject:', error);
         res.status(500).json({ success: false, message: 'Failed to un-enroll from subject.' });
+    }
+});
+
+// Add this endpoint to allow teachers to grade student submissions
+app.post('/api/assessments/:assessmentId/grade', auth, async (req, res) => {
+    try {
+        // Only allow teachers/admins
+        const user = await prisma.user.findUnique({
+            where: { id: req.user.userId }
+        });
+        if (!user || (user.role !== 'TEACHER' && user.role !== 'ADMIN')) {
+            return res.status(403).json({ error: 'Not authorized' });
+        }
+        const { assessmentId } = req.params;
+        const { studentId, score } = req.body;
+        if (!studentId || typeof score !== 'number') {
+            return res.status(400).json({ error: 'Missing studentId or score' });
+        }
+        // Find the latest submission for this student and assessment
+        const latestSubmission = await prisma.assessmentSubmission.findFirst({
+            where: { assessmentId, studentId },
+            orderBy: { submittedAt: 'desc' }
+        });
+        if (!latestSubmission) {
+            return res.status(404).json({ error: 'Submission not found' });
+        }
+        // Update the score
+        const updated = await prisma.assessmentSubmission.update({
+            where: { id: latestSubmission.id },
+            data: { score }
+        });
+        res.json({ success: true, submission: updated });
+    } catch (error) {
+        console.error('Error grading submission:', error);
+        res.status(500).json({ error: 'Failed to save grade', details: error.message });
+    }
+});
+
+// Endpoint to delete a file or audio from a submission
+app.post('/api/assessments/submissions/:submissionId/delete-file', auth, async (req, res) => {
+    try {
+        const { submissionId } = req.params;
+        const { fileType, filePath } = req.body;
+        if (!fileType || !filePath) return res.status(400).json({ error: 'fileType and filePath are required' });
+        // Find the submission
+        const submission = await prisma.assessmentSubmission.findUnique({ where: { id: submissionId } });
+        if (!submission) return res.status(404).json({ error: 'Submission not found' });
+        let answers = submission.answers || {};
+        let changed = false;
+        // Remove file from disk
+        const absPath = path.join(__dirname, filePath.startsWith('/') ? filePath.slice(1) : filePath);
+        if (fs.existsSync(absPath)) {
+            try { fs.unlinkSync(absPath); } catch (e) { /* ignore */ }
+        }
+        // Remove from answers
+        if (fileType === 'file') {
+            if (Array.isArray(answers.file)) {
+                answers.file = answers.file.filter(f => f !== filePath);
+                changed = true;
+            } else if (answers.file === filePath) {
+                answers.file = null;
+                changed = true;
+            }
+        } else if (fileType === 'audio') {
+            if (Array.isArray(answers.audioFile)) {
+                answers.audioFile = answers.audioFile.filter(f => f !== filePath);
+                changed = true;
+            } else if (answers.audioFile === filePath) {
+                answers.audioFile = null;
+                changed = true;
+            }
+        }
+        if (changed) {
+            await prisma.assessmentSubmission.update({ where: { id: submissionId }, data: { answers } });
+        }
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Error deleting submission file:', error);
+        res.status(500).json({ error: 'Failed to delete file' });
+    }
+});
+
+// Endpoint to delete an entire submission and its files
+app.delete('/api/assessments/submissions/:submissionId', auth, async (req, res) => {
+    try {
+        const { submissionId } = req.params;
+        const submission = await prisma.assessmentSubmission.findUnique({ where: { id: submissionId } });
+        if (!submission) return res.status(404).json({ error: 'Submission not found' });
+        const answers = submission.answers || {};
+        // Delete all files from disk
+        const allFiles = [];
+        if (Array.isArray(answers.file)) allFiles.push(...answers.file);
+        else if (answers.file) allFiles.push(answers.file);
+        if (Array.isArray(answers.audioFile)) allFiles.push(...answers.audioFile);
+        else if (answers.audioFile) allFiles.push(answers.audioFile);
+        for (const filePath of allFiles) {
+            if (typeof filePath === 'string') {
+                const absPath = path.join(__dirname, filePath.startsWith('/') ? filePath.slice(1) : filePath);
+                if (fs.existsSync(absPath)) {
+                    try { fs.unlinkSync(absPath); } catch (e) { /* ignore */ }
+                }
+            }
+        }
+        // Delete the submission record
+        await prisma.assessmentSubmission.delete({ where: { id: submissionId } });
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Error deleting submission:', error);
+        res.status(500).json({ error: 'Failed to delete submission' });
     }
 });
