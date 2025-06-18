@@ -16,7 +16,8 @@
             margin-bottom: 15px;
             display: flex;
             flex-direction: column;
-            max-width: 300px;
+            width: 100%;
+            height: 100%;
         }
         .resource-type-badge {
             background-color: #e9ecef;
@@ -30,29 +31,15 @@
         .add-resource-btn {
             margin-bottom: 20px;
         }
-        .unit-section {
-            border-left: 3px solid #007bff;
-            padding-left: 15px;
-            margin-bottom: 25px;
-            background: #f8f9fa;
-            border-radius: 8px;
+        .unit-section, .part-section {
+            width: 100% !important;
+            max-width: none !important;
+            min-width: 0 !important;
         }
         .unit-section h3 {
             color: #007bff;
             font-size: 1.5rem;
             margin-bottom: 15px;
-        }
-        .part-section {
-            border-left: 2px solid #6c757d;
-            padding-left: 15px;
-            margin-bottom: 20px;
-            background: #f1f3f4;
-            border-radius: 8px;
-            width: max-content;
-            min-width: 340px;
-            max-width: 1000px;
-            margin-left: 0;
-            margin-right: 0;
         }
         .part-section h4 {
             color: #495057;
@@ -64,11 +51,8 @@
             grid-template-columns: repeat(3, 1fr);
             gap: 20px;
             margin-top: 10px;
-            width: max-content;
-            min-width: 320px;
-            max-width: 960px;
-            margin-left: 0;
-            margin-right: 0;
+            width: 100% !important;
+            box-sizing: border-box;
         }
         @media (max-width: 900px) {
             .sections-grid {
@@ -81,11 +65,7 @@
             }
         }
         .section-content, .section-resources {
-            width: auto;
-            min-width: 0;
-            max-width: 100%;
-            margin-left: 0;
-            margin-right: 0;
+            width: 100%;
             border-left: 2px dashed #adb5bd;
             padding-left: 15px;
             margin-bottom: 15px;
@@ -100,12 +80,8 @@
             grid-template-columns: repeat(3, 1fr);
             gap: 20px;
             margin-top: 20px;
-            justify-items: start;
-            width: max-content;
-            min-width: 320px;
-            max-width: 960px;
-            margin-left: 0;
-            margin-right: 0;
+            width: 100% !important;
+            box-sizing: border-box;
         }
         @media (max-width: 900px) {
             .resource-grid {
@@ -118,7 +94,7 @@
             }
         }
         .resource-container {
-            max-width: 1200px;
+            max-width: 100%;
             margin: 0 auto;
             padding: 20px;
         }

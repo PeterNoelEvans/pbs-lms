@@ -156,6 +156,13 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            cursor: pointer;
+        }
+        .unit-header:hover {
+            background-color: #e9ecef;
+        }
+        .unit-content {
+            margin-top: 1rem;
         }
         .part-header {
             padding: 0;
@@ -165,6 +172,13 @@
             align-items: center;
             flex-wrap: wrap;
             gap: 0.25rem;
+            cursor: pointer;
+        }
+        .part-header:hover {
+            background-color: #bbdefb;
+        }
+        .part-content {
+            margin-top: 0.5rem;
         }
         .part-header h6 {
             font-size: 0.9rem;
@@ -705,9 +719,142 @@
             units.forEach(unit => {
                 const unitCard = document.createElement('div');
                 unitCard.className = 'unit-card';
-                unitCard.innerHTML = `<div class="unit-header"><h5 class="mb-0"><i class="bi bi-grip-vertical drag-handle"></i>${unit.name}</h5><div class="btn-group"><button class="btn btn-sm btn-outline-primary" onclick="editUnit('${unit.id}')"><i class="bi bi-pencil"></i></button><button class="btn btn-sm btn-outline-danger" onclick="deleteUnit('${unit.id}')"><i class="bi bi-trash"></i></button></div></div>${unit.description ? `<div class="description-preview collapsed" onclick="toggleDescription(this)">${formatDescription(unit.description)}<span class="expand-button">Show more</span></div>` : ''}<div class="parts-container" id="parts-${unit.id}">${unit.parts.map(part => `<div class="part-card"><div class="part-header"><h6><i class="bi bi-grip-vertical drag-handle"></i>${part.name}</h6><div class="btn-group"><button class="btn btn-sm btn-outline-primary" onclick="editPart('${part.id}')"><i class="bi bi-pencil"></i></button><button class="btn btn-sm btn-outline-danger" onclick="deletePart('${part.id}')"><i class="bi bi-trash"></i></button></div></div>${part.description ? `<div class="description-preview collapsed" onclick="toggleDescription(this)">${formatDescription(part.description)}<span class="expand-button">Show more</span></div>` : ''}<ol class="sections-list">${part.sections.map(section => `<li><div class="section-card"><div class="section-header"><span>${section.name.replace(/^\d+\.\s*/, '')}</span><div class="btn-group"><button class="btn btn-sm btn-outline-primary" onclick="editSection('${section.id}')"><i class="bi bi-pencil"></i></button><button class="btn btn-sm btn-outline-danger" onclick="deleteSection('${section.id}')"><i class="bi bi-trash"></i></button></div></div>${section.description ? `<div class="description-preview collapsed" onclick="toggleDescription(this)">${formatDescription(section.description)}<span class="expand-button">Show more</span></div>` : ''}</div></li>`).join('')}</ol><button class="btn btn-sm btn-outline-primary mt-2" onclick="showAddSectionModal('${part.id}')"><i class="bi bi-plus"></i> Add Section</button></div>`).join('')}</div><button class="btn btn-sm btn-outline-primary mt-2" onclick="showAddPartModal('${unit.id}')"><i class="bi bi-plus"></i> Add Part</button>`;
+                unitCard.innerHTML = `
+                    <div class="unit-header" onclick="toggleUnit('${unit.id}')">
+                        <h5 class="mb-0">
+                            <i class="bi bi-grip-vertical drag-handle"></i>
+                            <i class="bi bi-caret-right-fill unit-caret" id="unit-caret-${unit.id}"></i>
+                            ${unit.name}
+                        </h5>
+                        <div class="btn-group">
+                            <button class="btn btn-sm btn-outline-primary" onclick="event.stopPropagation(); editUnit('${unit.id}')">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="event.stopPropagation(); deleteUnit('${unit.id}')">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="unit-content" id="unit-content-${unit.id}" style="display: none;">
+                        ${unit.description ? `<div class="description-preview collapsed" onclick="toggleDescription(this)">${formatDescription(unit.description)}<span class="expand-button">Show more</span></div>` : ''}
+                        <div class="parts-container" id="parts-${unit.id}">
+                            ${unit.parts.map(part => `
+                                <div class="part-card">
+                                    <div class="part-header" onclick="togglePart('${part.id}')">
+                                        <h6>
+                                            <i class="bi bi-grip-vertical drag-handle"></i>
+                                            <i class="bi bi-caret-right-fill part-caret" id="part-caret-${part.id}"></i>
+                                            ${part.name}
+                                        </h6>
+                                        <div class="btn-group">
+                                            <button class="btn btn-sm btn-outline-primary" onclick="event.stopPropagation(); editPart('${part.id}')">
+                                                <i class="bi bi-pencil"></i>
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-danger" onclick="event.stopPropagation(); deletePart('${part.id}')">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="part-content" id="part-content-${part.id}" style="display: none;">
+                                        ${part.description ? `<div class="description-preview collapsed" onclick="toggleDescription(this)">${formatDescription(part.description)}<span class="expand-button">Show more</span></div>` : ''}
+                                        <ol class="sections-list">
+                                            ${part.sections.map(section => `
+                                                <li>
+                                                    <div class="section-card">
+                                                        <div class="section-header">
+                                                            <span>${section.name.replace(/^\d+\.\s*/, '')}</span>
+                                                            <div class="btn-group">
+                                                                <button class="btn btn-sm btn-outline-primary" onclick="editSection('${section.id}')">
+                                                                    <i class="bi bi-pencil"></i>
+                                                                </button>
+                                                                <button class="btn btn-sm btn-outline-danger" onclick="deleteSection('${section.id}')">
+                                                                    <i class="bi bi-trash"></i>
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                        ${section.description ? `<div class="description-preview collapsed" onclick="toggleDescription(this)">${formatDescription(section.description)}<span class="expand-button">Show more</span></div>` : ''}
+                                                    </div>
+                                                </li>
+                                            `).join('')}
+                                        </ol>
+                                        <button class="btn btn-sm btn-outline-primary mt-2" onclick="showAddSectionModal('${part.id}')">
+                                            <i class="bi bi-plus"></i> Add Section
+                                        </button>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <button class="btn btn-sm btn-outline-primary mt-2" onclick="showAddPartModal('${unit.id}')">
+                            <i class="bi bi-plus"></i> Add Part
+                        </button>
+                    </div>
+                `;
                 unitsContainer.appendChild(unitCard);
             });
+
+            // Restore collapsed state from localStorage
+            restoreCollapsedState();
+        }
+
+        function toggleUnit(unitId) {
+            const content = document.getElementById(`unit-content-${unitId}`);
+            const caret = document.getElementById(`unit-caret-${unitId}`);
+            const isVisible = content.style.display !== 'none';
+            
+            content.style.display = isVisible ? 'none' : 'block';
+            caret.style.transform = isVisible ? 'rotate(0deg)' : 'rotate(90deg)';
+            
+            // Save state to localStorage
+            const subjectId = document.getElementById('subjectSelect').value;
+            const state = JSON.parse(localStorage.getItem(`course-structure-state-${subjectId}`) || '{}');
+            state.units = state.units || {};
+            state.units[unitId] = !isVisible;
+            localStorage.setItem(`course-structure-state-${subjectId}`, JSON.stringify(state));
+        }
+
+        function togglePart(partId) {
+            const content = document.getElementById(`part-content-${partId}`);
+            const caret = document.getElementById(`part-caret-${partId}`);
+            const isVisible = content.style.display !== 'none';
+            
+            content.style.display = isVisible ? 'none' : 'block';
+            caret.style.transform = isVisible ? 'rotate(0deg)' : 'rotate(90deg)';
+            
+            // Save state to localStorage
+            const subjectId = document.getElementById('subjectSelect').value;
+            const state = JSON.parse(localStorage.getItem(`course-structure-state-${subjectId}`) || '{}');
+            state.parts = state.parts || {};
+            state.parts[partId] = !isVisible;
+            localStorage.setItem(`course-structure-state-${subjectId}`, JSON.stringify(state));
+        }
+
+        function restoreCollapsedState() {
+            const subjectId = document.getElementById('subjectSelect').value;
+            const state = JSON.parse(localStorage.getItem(`course-structure-state-${subjectId}`) || '{}');
+            
+            // Restore unit states
+            if (state.units) {
+                Object.entries(state.units).forEach(([unitId, isExpanded]) => {
+                    const content = document.getElementById(`unit-content-${unitId}`);
+                    const caret = document.getElementById(`unit-caret-${unitId}`);
+                    if (content && caret) {
+                        content.style.display = isExpanded ? 'block' : 'none';
+                        caret.style.transform = isExpanded ? 'rotate(90deg)' : 'rotate(0deg)';
+                    }
+                });
+            }
+            
+            // Restore part states
+            if (state.parts) {
+                Object.entries(state.parts).forEach(([partId, isExpanded]) => {
+                    const content = document.getElementById(`part-content-${partId}`);
+                    const caret = document.getElementById(`part-caret-${partId}`);
+                    if (content && caret) {
+                        content.style.display = isExpanded ? 'block' : 'none';
+                        caret.style.transform = isExpanded ? 'rotate(90deg)' : 'rotate(0deg)';
+                    }
+                });
+            }
         }
 
         function toggleDescription(element) {

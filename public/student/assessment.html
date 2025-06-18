@@ -391,6 +391,14 @@
     </style>
 </head>
 <body class="bg-light">
+    <!-- Please Wait Modal -->
+    <div id="pleaseWaitModal" style="display:none; position:fixed; z-index:9999; top:0; left:0; width:100vw; height:100vh; background:rgba(255,255,255,0.85); align-items:center; justify-content:center;">
+        <div style="text-align:center;">
+            <div class="spinner-border text-primary mb-3" role="status" style="width:3rem; height:3rem;"></div>
+            <div style="font-size:1.5rem; font-weight:500; color:#333;">Please wait, uploading...</div>
+        </div>
+    </div>
+
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
         <div class="container">
             <a class="navbar-brand" href="/student/dashboard">Student Portal</a>
@@ -756,6 +764,7 @@
                                         </div>
                                     ` : ''}
                                     ${attemptsHtml}
+                                    <div id="audioPlayerMatching"></div>
                                     <div id="matchingContainer" class="mb-4">
                                         <div class="text-center my-3">
                                             <div class="spinner-border text-primary" role="status">
@@ -775,6 +784,40 @@
                         
                         // Set up matching functionality
                         setupMatchingAssessment();
+                        
+                        // Add audio player if audio file is present
+                        const audioPlayerMatching = document.getElementById('audioPlayerMatching');
+                        const hasAudioMatching = assessment.mediaFiles && assessment.mediaFiles.some(file =>
+                            (file.url || file.filePath) && (
+                                (file.url && (file.url.endsWith('.mp3') || file.url.endsWith('.wav') || file.url.endsWith('.ogg')))
+                                || (file.filePath && (file.filePath.endsWith('.mp3') || file.filePath.endsWith('.wav') || file.filePath.endsWith('.ogg')))
+                                || (file.type && file.type.startsWith('audio/'))
+                            )
+                        );
+                        
+                        if (hasAudioMatching) {
+                            const audio = document.createElement('audio');
+                            audio.controls = true;
+                            audio.className = 'w-100';
+                            const audioFiles = assessment.mediaFiles.filter(file =>
+                                (file.url || file.filePath) && (
+                                    (file.url && (file.url.endsWith('.mp3') || file.url.endsWith('.wav') || file.url.endsWith('.ogg')))
+                                    || (file.filePath && (file.filePath.endsWith('.mp3') || file.filePath.endsWith('.wav') || file.filePath.endsWith('.ogg')))
+                                    || (file.type && file.type.startsWith('audio/'))
+                                )
+                            );
+                            audioFiles.forEach(file => {
+                                const source = document.createElement('source');
+                                source.src = file.url || file.filePath;
+                                const filePath = file.url || file.filePath;
+                                if (filePath.endsWith('.mp3')) source.type = 'audio/mpeg';
+                                else if (filePath.endsWith('.wav')) source.type = 'audio/wav';
+                                else if (filePath.endsWith('.ogg')) source.type = 'audio/ogg';
+                                else if (file.type && file.type.startsWith('audio/')) source.type = file.type;
+                                audio.appendChild(source);
+                            });
+                            audioPlayerMatching.appendChild(audio);
+                        }
                         break;
                         
                     case 'drag-and-drop':
@@ -3243,11 +3286,11 @@
                             <h4 class="alert-heading">Assessment Submitted Successfully!</h4>
                             <p>Your score: ${data.score !== null ? data.score + '%' : 'Will be graded by your teacher'}</p>
                             <hr>
-                            <p class="mb-0">You can now return to your assessments page or review your work.</p>
+                            <p class="mb-0">You can now return to your resources page or review your work.</p>
                         </div>
                         <div class="d-flex gap-2">
-                            <a href="/student/assessments" class="btn btn-primary">
-                                <i class="bi bi-arrow-left"></i> Back to Assessments
+                            <a href="/student/resources" class="btn btn-primary">
+                                <i class="bi bi-arrow-left"></i> Back to Resources
                             </a>
                             <button onclick="window.location.reload()" class="btn btn-outline-secondary">
                                 <i class="bi bi-arrow-clockwise"></i> Review Your Work
@@ -3720,6 +3763,7 @@
             const form = document.getElementById('audioUploadForm');
             const input = document.getElementById('audioFileInput');
             const statusDiv = document.getElementById('audioUploadStatus');
+            const pleaseWaitModal = document.getElementById('pleaseWaitModal');
             if (!form || !input) return;
             form.addEventListener('submit', async function(e) {
                 e.preventDefault();
@@ -3732,7 +3776,9 @@
                     statusDiv.innerHTML = '<div class="text-danger">Invalid file type. Please upload an audio file.</div>';
                     return;
                 }
-                statusDiv.innerHTML = '<div class="text-primary">Uploading...</div>';
+                statusDiv.innerHTML = '';
+                pleaseWaitModal.style.display = 'flex';
+                document.body.style.overflow = 'hidden'; // Prevent scrolling
                 const formData = new FormData();
                 formData.append('audio', file, file.name);
                 try {
@@ -3744,6 +3790,8 @@
                         body: formData
                     });
                     const data = await response.json();
+                    pleaseWaitModal.style.display = 'none';
+                    document.body.style.overflow = '';
                     if (response.ok && data.success) {
                         statusDiv.innerHTML = '<div class="alert alert-success">Audio file submitted successfully!</div>';
                         setTimeout(function() {
@@ -3753,6 +3801,8 @@
                         throw new Error(data.error || 'Unknown error');
                     }
                 } catch (error) {
+                    pleaseWaitModal.style.display = 'none';
+                    document.body.style.overflow = '';
                     statusDiv.innerHTML = `<div class='alert alert-danger'>Error uploading audio: ${error.message || 'Unknown error'}</div>`;
                 }
             });

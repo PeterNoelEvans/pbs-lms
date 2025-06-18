@@ -2965,7 +2965,8 @@ app.get('/api/teacher/progress', auth, async (req, res) => {
                                         lastScore,
                                         lastAttempt,
                                         status,
-                                        subjectId: subject.id // Add subjectId for frontend filtering
+                                        subjectId: subject.id, // Add subjectId for frontend filtering
+                                        studentActive: student.active // <-- Add this line
                                     });
                                 }
                             }
@@ -3679,5 +3680,43 @@ app.delete('/api/assessments/submissions/:submissionId', auth, async (req, res) 
     } catch (error) {
         console.error('Error deleting submission:', error);
         res.status(500).json({ error: 'Failed to delete submission' });
+    }
+});
+
+// Add this endpoint after /api/teacher/classes
+app.post('/api/teacher/update-students-active', auth, async (req, res) => {
+    try {
+        // Only allow teachers
+        const user = await prisma.user.findUnique({ where: { id: req.user.userId } });
+        if (!user || user.role !== 'TEACHER') {
+            return res.status(403).json({ success: false, error: 'Not authorized' });
+        }
+        const updates = req.body.updates;
+        if (!Array.isArray(updates)) {
+            return res.status(400).json({ success: false, error: 'Invalid updates array' });
+        }
+        let updatedCount = 0;
+        for (const update of updates) {
+            const [name, nickname] = update.id.split('|');
+            // Find the student by name and nickname
+            const student = await prisma.user.findFirst({
+                where: {
+                    name: name,
+                    nickname: nickname || undefined,
+                    role: 'STUDENT'
+                }
+            });
+            if (student) {
+                await prisma.user.update({
+                    where: { id: student.id },
+                    data: { active: update.active }
+                });
+                updatedCount++;
+            }
+        }
+        res.json({ success: true, updated: updatedCount });
+    } catch (error) {
+        console.error('Error updating students active status:', error);
+        res.status(500).json({ success: false, error: error.message });
     }
 });
