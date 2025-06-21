@@ -27,15 +27,20 @@
 <body>
     <div class="container mt-5">
         <h1 class="mb-4">Manage Students</h1>
-        <div class="mb-3">
-            <label for="classSelect" class="form-label"><strong>Class:</strong></label>
-            <select id="classSelect" class="form-select d-inline-block w-auto"></select>
-            <label for="statusFilter" class="form-label ms-3"><strong>Show:</strong></label>
-            <select id="statusFilter" class="form-select d-inline-block w-auto">
-                <option value="all">All</option>
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-            </select>
+        <div class="mb-3 d-flex align-items-center">
+            <div>
+                <label for="classSelect" class="form-label"><strong>Class:</strong></label>
+                <select id="classSelect" class="form-select d-inline-block w-auto"></select>
+                <label for="statusFilter" class="form-label ms-3"><strong>Show:</strong></label>
+                <select id="statusFilter" class="form-select d-inline-block w-auto">
+                    <option value="all">All</option>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                </select>
+            </div>
+            <button id="refreshBtn" class="btn btn-outline-primary ms-3">
+                <i class="bi bi-arrow-clockwise"></i> Refresh
+            </button>
         </div>
         <div class="card">
             <div class="card-body">
@@ -91,42 +96,64 @@
     document.getElementById('statusFilter').onchange = function() {
         renderStudentsTable();
     };
+    document.getElementById('refreshBtn').onclick = function() {
+        const classSelect = document.getElementById('classSelect');
+        if (classSelect.value) {
+            // Show a loading indicator
+            const tbody = document.getElementById('studentsTableBody');
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center"><em><i class="bi bi-arrow-clockwise"></i> Refreshing...</em></td></tr>';
+            loadStudentsForClass(classSelect.value);
+        }
+    };
     function loadStudentsForClass(className) {
+        // We will use the progress endpoint as the reliable source of student data
+        // since the /api/teacher/students endpoint seems to be unreliable.
         fetch(`/api/teacher/progress?class=${encodeURIComponent(className)}`, {
             headers: { 'Authorization': `Bearer ${token}` }
         })
         .then(res => res.json())
-        .then(data => {
-            // Use studentName + '|' + (studentNickname || '') as unique key
-            const seen = new Set();
-            const progressData = data.progress || [];
-            students = progressData
-                .filter(r => {
-                    const key = r.studentName + '|' + (r.studentNickname || '');
-                    if (seen.has(key)) return false;
-                    seen.add(key);
-                    return true;
-                })
-                .map(r => {
-                    // Calculate progress for this student
-                    const key = r.studentName + '|' + (r.studentNickname || '');
-                    const studentProgress = progressData.filter(p => (p.studentName + '|' + (p.studentNickname || '')) === key);
-                    const total = studentProgress.length;
-                    const completed = studentProgress.filter(p => p.status === 'Completed').length;
-                    const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
-                    return {
-                        id: key,
-                        name: r.studentName,
-                        nickname: r.studentNickname,
-                        email: r.studentEmail,
-                        class: r.studentClass,
-                        active: r.studentActive !== false, // default to true if undefined
-                        progressPercent: percent,
-                        progressCompleted: completed,
-                        progressTotal: total
-                    };
-                });
+        .then(progressData => {
+            const progressList = progressData.progress || [];
+            
+            // Use the progress data to build a unique list of students
+            const studentMap = new Map();
+            progressList.forEach(p => {
+                const studentKey = p.studentName + '|' + (p.studentNickname || '');
+                if (!studentMap.has(studentKey)) {
+                    studentMap.set(studentKey, {
+                        id: studentKey, // Use composite key for now
+                        name: p.studentName,
+                        nickname: p.studentNickname,
+                        email: p.studentEmail, // This might be missing, but we'll try
+                        class: p.studentClass,
+                        active: p.studentActive !== false,
+                        progressCompleted: 0,
+                        progressTotal: 0,
+                    });
+                }
+            });
+
+            // Calculate progress for each unique student
+            studentMap.forEach(student => {
+                const studentProgress = progressList.filter(p => 
+                    p.studentName === student.name && 
+                    (p.studentNickname || '') === (student.nickname || '')
+                );
+                const total = studentProgress.length;
+                const completed = studentProgress.filter(p => p.status === 'Completed').length;
+                
+                student.progressTotal = total;
+                student.progressCompleted = completed;
+                student.progressPercent = total > 0 ? Math.round((completed / total) * 100) : 0;
+            });
+
+            window.students = Array.from(studentMap.values());
             renderStudentsTable();
+        })
+        .catch(error => {
+            console.error('Error loading student data:', error);
+            const tbody = document.getElementById('studentsTableBody');
+            tbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger">Failed to load student data.</td></tr>`;
         });
     }
     document.getElementById('sortName').onclick = function() {
@@ -140,7 +167,13 @@
     function renderStudentsTable() {
         const tbody = document.getElementById('studentsTableBody');
         tbody.innerHTML = '';
-        let sorted = [...students];
+        
+        if (!window.students || window.students.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center">No students found for this class.</td></tr>';
+            return;
+        }
+
+        let sorted = [...window.students];
         if (sortField) {
             sorted.sort((a, b) => {
                 let av = (a[sortField] || '').toLowerCase();
@@ -158,12 +191,18 @@
         if (status !== 'all') {
             sorted = sorted.filter(s => status === 'active' ? s.active : !s.active);
         }
-        sorted.forEach((student, idx) => {
+        
+        if (sorted.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center">No students match the current filter.</td></tr>';
+            return;
+        }
+
+        sorted.forEach(student => {
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td>${student.name}</td>
                 <td>${student.nickname || ''}</td>
-                <td>${student.email || ''}</td>
+                <td>${student.email || 'N/A'}</td>
                 <td>
                     <div class="progress" style="height: 22px;">
                         <div class="progress-bar ${student.progressPercent === 100 ? 'bg-success' : 'bg-info'}" role="progressbar" style="width: ${student.progressPercent}%;">
@@ -175,17 +214,20 @@
                 <td class="${student.active ? 'status-active' : 'status-inactive'}">${student.active ? 'Active' : 'Inactive'}</td>
                 <td>
                     <label class="action-label">
-                        <input type="checkbox" class="big-checkbox" ${!student.active ? 'checked' : ''} onchange="toggleStudentActive(${students.indexOf(student)}, this.checked)"> Put to sleep
+                        <input type="checkbox" class="big-checkbox" ${!student.active ? 'checked' : ''} onchange="toggleStudentActive('${student.id}', this.checked)"> Put to sleep
                     </label>
                 </td>
             `;
             tbody.appendChild(tr);
         });
     }
-    window.toggleStudentActive = function(idx, checked) {
-        students[idx].active = !checked; // checked means 'put to sleep', so active = !checked
-        changed[students[idx].id] = !checked;
-        renderStudentsTable();
+    window.toggleStudentActive = function(studentId, isChecked) {
+        const student = window.students.find(s => s.id === studentId);
+        if (student) {
+            student.active = !isChecked;
+            changed[student.id] = !isChecked; // The key for `changed` is the composite id
+            renderStudentsTable();
+        }
     };
     document.getElementById('saveBtn').onclick = function() {
         const updates = Object.entries(changed).map(([id, active]) => ({ id, active }));

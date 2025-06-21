@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Login Report - Teacher Portal</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.3/font/bootstrap-icons.css">
+    <style>
+        body { background: #f8f9fa; }
+        .progress-bar { font-weight: bold; }
+        .date-label { font-weight: 600; }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <h1 class="mb-4">Student Login Report</h1>
+        <div class="mb-3 d-flex align-items-center gap-3">
+            <label for="dateInput" class="form-label date-label mb-0">Select Date:</label>
+            <input type="date" id="dateInput" class="form-control w-auto">
+            <label for="subjectSelect" class="form-label date-label mb-0">Subject:</label>
+            <select id="subjectSelect" class="form-select w-auto"></select>
+            <label for="classSelect" class="form-label date-label mb-0">Class:</label>
+            <select id="classSelect" class="form-select w-auto"></select>
+            <button id="refreshBtn" class="btn btn-primary ms-2"><i class="bi bi-arrow-clockwise"></i> Refresh</button>
+        </div>
+        <div class="card">
+            <div class="card-body">
+                <table class="table table-bordered" id="reportTable">
+                    <thead class="table-light">
+                        <tr>
+                            <th id="sortName" style="cursor:pointer;">Name <span id="sortNameArrow"></span></th>
+                            <th id="sortClass" style="cursor:pointer;">Class <span id="sortClassArrow"></span></th>
+                            <th id="sortLogin" style="cursor:pointer;">Login Time <span id="sortLoginArrow"></span></th>
+                            <th id="sortProgress" style="cursor:pointer;">Progress <span id="sortProgressArrow"></span></th>
+                        </tr>
+                    </thead>
+                    <tbody id="reportTableBody">
+                        <tr>
+                            <td colspan="4" class="text-center text-muted">Please select a subject and click Refresh.</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div id="noDataMsg" class="text-center text-muted mt-3" style="display:none;">No students logged in on this date.</div>
+            </div>
+        </div>
+        <a href="/teacher/dashboard" class="btn btn-secondary mt-4"><i class="bi bi-arrow-left"></i> Back to Dashboard</a>
+    </div>
+    <script>
+    const token = localStorage.getItem('token');
+    if (!token) window.location.href = '/login';
+
+    function formatDate(date) {
+        return date.toISOString().split('T')[0];
+    }
+
+    let currentSort = { column: 'name', direction: 'asc' };
+    let lastData = [];
+
+    function renderTable(data) {
+        const tbody = document.getElementById('reportTableBody');
+        const noDataMsg = document.getElementById('noDataMsg');
+        tbody.innerHTML = '';
+        if (!data || data.length === 0) {
+            noDataMsg.style.display = '';
+            return;
+        }
+        noDataMsg.style.display = 'none';
+        data.forEach(student => {
+            const tr = document.createElement('tr');
+            const loginTime = new Date(student.lastLogin).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+            tr.innerHTML = `
+                <td>${student.name}</td>
+                <td>${student.class || ''}</td>
+                <td>${loginTime}</td>
+                <td>
+                    <div class="progress" style="height: 22px;">
+                        <div class="progress-bar ${student.progressPercent === 100 ? 'bg-success' : 'bg-info'}" role="progressbar" style="width: ${student.progressPercent}%;">
+                            ${student.progressPercent}%
+                        </div>
+                    </div>
+                    <small>${student.progressCompleted} / ${student.progressTotal} completed</small>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    function sortData(data) {
+        const { column, direction } = currentSort;
+        const sorted = [...data];
+        sorted.sort((a, b) => {
+            let valA, valB;
+            switch (column) {
+                case 'name':
+                    valA = a.name.toLowerCase();
+                    valB = b.name.toLowerCase();
+                    break;
+                case 'class':
+                    valA = (a.class || '').toLowerCase();
+                    valB = (b.class || '').toLowerCase();
+                    break;
+                case 'login':
+                    valA = new Date(a.lastLogin).getTime();
+                    valB = new Date(b.lastLogin).getTime();
+                    break;
+                case 'progress':
+                    valA = a.progressPercent;
+                    valB = b.progressPercent;
+                    break;
+                default:
+                    valA = a.name.toLowerCase();
+                    valB = b.name.toLowerCase();
+            }
+            if (valA < valB) return direction === 'asc' ? -1 : 1;
+            if (valA > valB) return direction === 'asc' ? 1 : -1;
+            return 0;
+        });
+        return sorted;
+    }
+
+    function updateSortArrows() {
+        document.getElementById('sortNameArrow').textContent = currentSort.column === 'name' ? (currentSort.direction === 'asc' ? '▲' : '▼') : '';
+        document.getElementById('sortClassArrow').textContent = currentSort.column === 'class' ? (currentSort.direction === 'asc' ? '▲' : '▼') : '';
+        document.getElementById('sortLoginArrow').textContent = currentSort.column === 'login' ? (currentSort.direction === 'asc' ? '▲' : '▼') : '';
+        document.getElementById('sortProgressArrow').textContent = currentSort.column === 'progress' ? (currentSort.direction === 'asc' ? '▲' : '▼') : '';
+    }
+
+    function handleSort(column) {
+        if (currentSort.column === column) {
+            currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+        } else {
+            currentSort.column = column;
+            currentSort.direction = 'asc';
+        }
+        updateSortArrows();
+        renderTable(sortData(lastData));
+    }
+
+    document.getElementById('sortName').onclick = () => handleSort('name');
+    document.getElementById('sortClass').onclick = () => handleSort('class');
+    document.getElementById('sortLogin').onclick = () => handleSort('login');
+    document.getElementById('sortProgress').onclick = () => handleSort('progress');
+
+    function loadReport(dateStr) {
+        const subjectVal = document.getElementById('subjectSelect').value;
+        if (!subjectVal) {
+            document.getElementById('reportTableBody').innerHTML = '';
+            document.getElementById('noDataMsg').textContent = 'Please select a subject.';
+            document.getElementById('noDataMsg').style.display = '';
+            return;
+        }
+        const classVal = document.getElementById('classSelect').value;
+        const classParam = classVal ? `&class=${encodeURIComponent(classVal)}` : '';
+        fetch(`/api/teacher/reports/logins?date=${dateStr}&subjectId=${encodeURIComponent(subjectVal)}${classParam}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        })
+        .then(res => res.json())
+        .then(data => {
+            lastData = data.students || [];
+            updateSortArrows();
+            renderTable(sortData(lastData));
+        })
+        .catch(err => {
+            alert('Error loading report: ' + err.message);
+        });
+    }
+
+    function loadClasses() {
+        fetch('/api/teacher/classes', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        })
+        .then(res => res.json())
+        .then(data => {
+            const classSelect = document.getElementById('classSelect');
+            classSelect.innerHTML = '<option value="">All Classes</option>';
+            (data.classes || []).forEach(cls => {
+                const opt = document.createElement('option');
+                opt.value = cls;
+                opt.textContent = cls;
+                classSelect.appendChild(opt);
+            });
+        });
+    }
+
+    function loadSubjects() {
+        fetch('/api/subjects', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        })
+        .then(res => res.json())
+        .then(subjects => {
+            const subjectSelect = document.getElementById('subjectSelect');
+            subjectSelect.innerHTML = '<option value="">Select Subject</option>';
+            (subjects || []).forEach(subject => {
+                const opt = document.createElement('option');
+                opt.value = subject.id;
+                let yearLevelStr = '';
+                if (subject.yearLevel <= 6) {
+                    yearLevelStr = `P${subject.yearLevel}`;
+                } else {
+                    yearLevelStr = `M${subject.yearLevel - 6}`;
+                }
+                opt.textContent = `${subject.coreSubject?.name || ''} (${yearLevelStr}) - ${subject.name}`;
+                subjectSelect.appendChild(opt);
+            });
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const dateInput = document.getElementById('dateInput');
+        const today = new Date();
+        dateInput.value = formatDate(today);
+        
+        loadSubjects();
+        loadClasses();
+
+        document.getElementById('refreshBtn').onclick = function() {
+            loadReport(dateInput.value);
+        };
+    });
+    </script>
+</body>
+</html> 

@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manual Grading - Teacher Portal</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.3/font/bootstrap-icons.css">
+    <style>
+        .assessment-card {
+            transition: transform 0.2s;
+            border-left: 4px solid #dc3545;
+        }
+        .assessment-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .ungraded-badge {
+            font-size: 0.8rem;
+        }
+        .subject-path {
+            font-size: 0.85rem;
+            color: #6c757d;
+        }
+        .filter-section {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="/teacher/dashboard">Teacher Portal</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/teacher/dashboard">Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/teacher/assessments">Assessments</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" href="/teacher/manual-grading.html">Manual Grading</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/teacher/subjects">Subjects</a>
+                    </li>
+                </ul>
+                <ul class="navbar-nav ms-auto">
+                    <li class="nav-item">
+                        <button class="btn btn-outline-light" onclick="logout()">Logout</button>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1><i class="bi bi-clipboard-check me-2"></i>Manual Grading</h1>
+            <button class="btn btn-primary" onclick="refreshData()">
+                <i class="bi bi-arrow-clockwise"></i> Refresh
+            </button>
+        </div>
+
+        <!-- Filters -->
+        <div class="filter-section">
+            <div class="row align-items-end">
+                <div class="col-md-4">
+                    <label for="subjectFilter" class="form-label">Filter by Subject:</label>
+                    <select class="form-select" id="subjectFilter">
+                        <option value="">All Subjects</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label for="typeFilter" class="form-label">Filter by Type:</label>
+                    <select class="form-select" id="typeFilter">
+                        <option value="">All Types</option>
+                        <option value="speaking">Speaking</option>
+                        <option value="writing">Writing</option>
+                        <option value="writing-long">Writing (Long)</option>
+                        <option value="assignment">Assignment</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <button class="btn btn-outline-secondary w-100" onclick="clearFilters()">
+                        <i class="bi bi-x-circle"></i> Clear Filters
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Summary Stats -->
+        <div class="row mb-4">
+            <div class="col-md-3">
+                <div class="card bg-primary text-white">
+                    <div class="card-body text-center">
+                        <h4 id="totalAssessments">0</h4>
+                        <p class="mb-0">Total Assessments</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-warning text-white">
+                    <div class="card-body text-center">
+                        <h4 id="totalUngraded">0</h4>
+                        <p class="mb-0">Ungraded Submissions</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-info text-white">
+                    <div class="card-body text-center">
+                        <h4 id="speakingCount">0</h4>
+                        <p class="mb-0">Speaking</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="card bg-success text-white">
+                    <div class="card-body text-center">
+                        <h4 id="writingCount">0</h4>
+                        <p class="mb-0">Writing</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Assessments List -->
+        <div id="assessmentsContainer">
+            <div class="text-center">
+                <div class="spinner-border" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        </div>
+
+        <div id="noAssessments" class="text-center mt-5" style="display: none;">
+            <i class="bi bi-check-circle text-success" style="font-size: 3rem;"></i>
+            <h3 class="mt-3">No Assessments Need Grading!</h3>
+            <p class="text-muted">All manual grading assessments have been completed.</p>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const token = localStorage.getItem('token');
+        if (!token) window.location.href = '/login';
+
+        let allAssessments = [];
+        let filteredAssessments = [];
+
+        document.addEventListener('DOMContentLoaded', function() {
+            loadSubjects();
+            loadAssessments();
+            
+            // Add event listeners for filters
+            document.getElementById('subjectFilter').addEventListener('change', filterAssessments);
+            document.getElementById('typeFilter').addEventListener('change', filterAssessments);
+        });
+
+        async function loadSubjects() {
+            try {
+                const response = await fetch('/api/subjects', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const subjects = await response.json();
+                
+                const subjectSelect = document.getElementById('subjectFilter');
+                subjects.forEach(subject => {
+                    const option = document.createElement('option');
+                    option.value = subject.id;
+                    let yearLevelStr = '';
+                    if (subject.yearLevel <= 6) {
+                        yearLevelStr = `P${subject.yearLevel}`;
+                    } else {
+                        yearLevelStr = `M${subject.yearLevel - 6}`;
+                    }
+                    option.textContent = `${subject.coreSubject?.name || ''} (${yearLevelStr}) - ${subject.name}`;
+                    subjectSelect.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading subjects:', error);
+            }
+        }
+
+        async function loadAssessments() {
+            try {
+                const subjectFilter = document.getElementById('subjectFilter').value;
+                const url = subjectFilter ? 
+                    `/api/teacher/assessments/ungraded?subjectId=${subjectFilter}` :
+                    '/api/teacher/assessments/ungraded';
+                
+                const response = await fetch(url, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (!response.ok) throw new Error('Failed to load assessments');
+                
+                allAssessments = await response.json();
+                filteredAssessments = [...allAssessments];
+                
+                updateStats();
+                renderAssessments();
+            } catch (error) {
+                console.error('Error loading assessments:', error);
+                document.getElementById('assessmentsContainer').innerHTML = 
+                    '<div class="alert alert-danger">Failed to load assessments: ' + error.message + '</div>';
+            }
+        }
+
+        function filterAssessments() {
+            const subjectFilter = document.getElementById('subjectFilter').value;
+            const typeFilter = document.getElementById('typeFilter').value;
+            
+            filteredAssessments = allAssessments.filter(assessment => {
+                const matchesSubject = !subjectFilter || 
+                    assessment.section.part.unit.subject.id.toString() === subjectFilter;
+                const matchesType = !typeFilter || assessment.type === typeFilter;
+                
+                return matchesSubject && matchesType;
+            });
+            
+            updateStats();
+            renderAssessments();
+        }
+
+        function clearFilters() {
+            document.getElementById('subjectFilter').value = '';
+            document.getElementById('typeFilter').value = '';
+            filteredAssessments = [...allAssessments];
+            updateStats();
+            renderAssessments();
+        }
+
+        function updateStats() {
+            const totalAssessments = filteredAssessments.length;
+            const totalUngraded = filteredAssessments.reduce((sum, assessment) => sum + assessment.ungradedCount, 0);
+            const speakingCount = filteredAssessments.filter(a => a.type === 'speaking').length;
+            const writingCount = filteredAssessments.filter(a => 
+                a.type === 'writing' || a.type === 'writing-long' || a.type === 'assignment'
+            ).length;
+            
+            document.getElementById('totalAssessments').textContent = totalAssessments;
+            document.getElementById('totalUngraded').textContent = totalUngraded;
+            document.getElementById('speakingCount').textContent = speakingCount;
+            document.getElementById('writingCount').textContent = writingCount;
+        }
+
+        function renderAssessments() {
+            const container = document.getElementById('assessmentsContainer');
+            const noAssessments = document.getElementById('noAssessments');
+            
+            if (filteredAssessments.length === 0) {
+                container.style.display = 'none';
+                noAssessments.style.display = 'block';
+                return;
+            }
+            
+            container.style.display = 'block';
+            noAssessments.style.display = 'none';
+            
+            const assessmentsHtml = filteredAssessments.map(assessment => {
+                const subjectPath = `${assessment.section.part.unit.subject.name} > ${assessment.section.part.unit.name} > ${assessment.section.part.name} > ${assessment.section.name}`;
+                
+                const typeBadgeClass = {
+                    'speaking': 'bg-info',
+                    'writing': 'bg-success',
+                    'writing-long': 'bg-success',
+                    'assignment': 'bg-warning'
+                }[assessment.type] || 'bg-secondary';
+                
+                const typeDisplayName = {
+                    'speaking': 'Speaking',
+                    'writing': 'Writing',
+                    'writing-long': 'Writing (Long)',
+                    'assignment': 'Assignment'
+                }[assessment.type] || assessment.type;
+                
+                return `
+                    <div class="card assessment-card mb-3">
+                        <div class="card-body">
+                            <div class="row align-items-center">
+                                <div class="col-md-8">
+                                    <h5 class="card-title mb-2">${assessment.title}</h5>
+                                    <p class="subject-path mb-2">${subjectPath}</p>
+                                    <div class="d-flex gap-2 align-items-center">
+                                        <span class="badge ${typeBadgeClass}">${typeDisplayName}</span>
+                                        <span class="badge bg-danger ungraded-badge">
+                                            <i class="bi bi-exclamation-triangle me-1"></i>
+                                            ${assessment.ungradedCount} ungraded submission${assessment.ungradedCount !== 1 ? 's' : ''}
+                                        </span>
+                                        ${assessment.category ? `<span class="badge bg-secondary">${assessment.category}</span>` : ''}
+                                    </div>
+                                </div>
+                                <div class="col-md-4 text-end">
+                                    <a href="/teacher/grade-assessment.html?assessmentId=${assessment.id}" 
+                                       class="btn btn-primary">
+                                        <i class="bi bi-clipboard-check me-2"></i>
+                                        Grade Now
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            container.innerHTML = assessmentsHtml;
+        }
+
+        function refreshData() {
+            loadAssessments();
+        }
+
+        function logout() {
+            localStorage.removeItem('token');
+            window.location.href = '/login';
+        }
+    </script>
+</body>
+</html> 

@@ -32,6 +32,7 @@
                 <table class="table table-bordered progress-table">
                     <thead class="table-light">
                         <tr>
+                            <th>Photo</th>
                             <th>Student</th>
                             <th>Nickname</th>
                             <th>Class</th>
@@ -62,17 +63,29 @@
     .then(res => res.json())
     .then(data => {
         const classSelect = document.getElementById('classSelect');
-        classSelect.innerHTML = '';
-        data.classes.forEach(cls => {
-            const opt = document.createElement('option');
-            opt.value = cls;
-            opt.textContent = cls;
-            classSelect.appendChild(opt);
-        });
-        if (data.classes.length > 0) {
-            classSelect.value = data.classes[0];
-            loadProgressForClass(data.classes[0]);
+        classSelect.innerHTML = '<option value="">All Classes</option>';
+
+        if (Array.isArray(data)) {
+            data.forEach(cls => {
+                const opt = document.createElement('option');
+                opt.value = cls;
+                opt.textContent = cls;
+                classSelect.appendChild(opt);
+            });
+            
+            if (data.length > 0) {
+                 loadProgressForClass(data[0]);
+            } else {
+                loadProgressForClass('');
+            }
+        } else {
+            console.error("Received data is not an array:", data);
+            loadProgressForClass('');
         }
+    })
+    .catch(error => {
+        console.error('Error fetching classes:', error);
+        loadProgressForClass('');
     });
     document.getElementById('classSelect').onchange = function() {
         loadProgressForClass(this.value);
@@ -114,7 +127,7 @@
         tbody.innerHTML = '';
         filteredProgress = allProgress.filter(row => !selectedStudent || row.studentName === selectedStudent);
         if (filteredProgress.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="9" class="text-center">No progress data found.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="10" class="text-center">No progress data found.</td></tr>';
             return;
         }
         // Group by student
@@ -131,8 +144,14 @@
                 const lastScore = (row.lastScore === null || row.lastScore === undefined) ? 'N/A' : row.lastScore + '%';
                 const lastAttempt = row.lastAttempt ? new Date(row.lastAttempt).toLocaleDateString() : '-';
                 const status = row.status || 'Not Started';
+                const studentPhoto = row.studentPhoto || '/images/default-avatar.png';
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
+                    <td class="text-center">
+                        <img src="${studentPhoto}" alt="${row.studentName}" 
+                             class="rounded-circle" 
+                             style="width: 40px; height: 40px; object-fit: cover; border: 2px solid #dee2e6;">
+                    </td>
                     <td>${row.studentName}</td>
                     <td>${row.studentNickname || '-'}</td>
                     <td>${row.studentClass || '-'}</td>

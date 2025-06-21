@@ -23,6 +23,7 @@ model User {
   lastLogin         DateTime?
   resetToken        String?
   resetTokenExpiry  DateTime?
+  profilePicture    String?             // Path to profile picture
   createdAt         DateTime            @default(now())
   updatedAt         DateTime            @updatedAt
   studentProgress   StudentProgress[]
@@ -287,6 +288,7 @@ model SubjectTeacher {
 model AssessmentSubmission {
   id           String   @id @default(uuid())
   answers      Json
+  comment      String?  // Teacher feedback/comment for manually graded assessments
   score        Float?
   submittedAt  DateTime @default(now())
   assessment   Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)

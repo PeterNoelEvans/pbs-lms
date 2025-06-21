@@ -55,6 +55,7 @@
                         <th>Status</th>
                         <th>Media</th>
                         <th>Score</th>
+                        <th>Comment</th>
                         <th>Save</th>
                     </tr>
                 </thead>
@@ -86,13 +87,13 @@
                 const submissions = Array.isArray(data) ? data : [];
                 renderTable(submissions);
             } catch (err) {
-                document.getElementById('gradingTableBody').innerHTML = `<tr><td colspan="7"><div class="alert alert-danger">${err.message}</div></td></tr>`;
+                document.getElementById('gradingTableBody').innerHTML = `<tr><td colspan="8"><div class="alert alert-danger">${err.message}</div></td></tr>`;
             }
         }
         function renderTable(submissions) {
             const tbody = document.getElementById('gradingTableBody');
             if (!Array.isArray(submissions) || submissions.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7">No submissions found.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8">No submissions found.</td></tr>';
                 return;
             }
             tbody.innerHTML = submissions.map((s, i) => {
@@ -140,6 +141,9 @@
                         <input type="number" class="form-control score-input" min="0" max="100" step="1" value="${s.score !== null && s.score !== undefined ? s.score : ''}" id="score-${student.id}" >
                     </td>
                     <td>
+                        <textarea class="form-control" rows="2" placeholder="Add a comment..." id="comment-${student.id}">${s.comment || ''}</textarea>
+                    </td>
+                    <td>
                         <button class="btn btn-primary btn-sm" onclick="saveScore('${student.id}')">Save</button>
                         <button class="btn btn-danger btn-sm ms-2" onclick="deleteEntireSubmission('${s.id}')"><i class="bi bi-trash"></i> Delete Submission</button>
                     </td>
@@ -149,7 +153,10 @@
         }
         async function saveScore(studentId) {
             const input = document.getElementById('score-' + studentId);
+            const commentInput = document.getElementById('comment-' + studentId);
             const score = parseFloat(input.value);
+            const comment = commentInput.value.trim();
+            
             if (isNaN(score) || score < 0 || score > 100) {
                 input.classList.add('is-invalid');
                 return;
@@ -163,13 +170,18 @@
                         'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ studentId, score })
+                    body: JSON.stringify({ studentId, score, comment })
                 });
                 if (!res.ok) throw new Error('Failed to save score');
                 input.classList.add('is-valid');
-                setTimeout(() => input.classList.remove('is-valid'), 1500);
+                commentInput.classList.add('is-valid');
+                setTimeout(() => {
+                    input.classList.remove('is-valid');
+                    commentInput.classList.remove('is-valid');
+                }, 1500);
             } catch (err) {
                 input.classList.add('is-invalid');
+                commentInput.classList.add('is-invalid');
                 alert('Failed to save score: ' + err.message);
             }
         }
