@@ -3734,7 +3734,18 @@ app.get('/api/user/profile', auth, async (req, res) => {
                 role: true,
                 class: true,
                 yearLevel: true,
-                profilePicture: true
+                profilePicture: true,
+                lastLogin: true, // Corrected from lastLoginAt
+                studentCourses: {
+                    select: {
+                        subject: {
+                            select: {
+                                id: true,
+                                name: true
+                            }
+                        }
+                    }
+                }
             }
         });
 
@@ -3742,7 +3753,15 @@ app.get('/api/user/profile', auth, async (req, res) => {
             return res.status(404).json({ error: 'User not found' });
         }
 
-        res.json(user);
+        // Remap subjects to a simpler array
+        const subjects = user.studentCourses ? user.studentCourses.map(sc => sc.subject) : [];
+
+        // Create a user object to send, excluding the nested studentCourses
+        const { studentCourses, ...userProfile } = user;
+
+        // Send a flat user object with subjects
+        res.json({ ...userProfile, subjects });
+
     } catch (error) {
         console.error('Error fetching user profile:', error);
         res.status(500).json({ error: 'Failed to fetch user profile' });
@@ -3798,13 +3817,35 @@ app.get('/api/teacher/students/photos', auth, async (req, res) => {
                 nickname: true,
                 class: true,
                 profilePicture: true,
+                email: true, // Add email to the selection
             },
             orderBy: {
                 name: 'asc',
             },
         });
 
-        res.json(students);
+        // Get a unique list of all classes for the filter
+        const allStudentClasses = await prisma.user.findMany({
+            where: {
+                role: 'STUDENT',
+                active: true,
+                class: {
+                    not: null
+                }
+            },
+            distinct: ['class'],
+            select: {
+                class: true
+            },
+            orderBy: {
+                class: 'asc'
+            }
+        });
+
+        const classes = allStudentClasses.map(s => s.class);
+
+        res.json({ students, classes }); // Return both students and classes
+
     } catch (error) {
         console.error('Error fetching student photos:', error);
         res.status(500).json({ error: 'Failed to fetch student photos' });

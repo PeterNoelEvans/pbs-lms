@@ -65,16 +65,18 @@
         const classSelect = document.getElementById('classSelect');
         classSelect.innerHTML = '<option value="">All Classes</option>';
 
-        if (Array.isArray(data)) {
-            data.forEach(cls => {
+        const classes = data.classes || [];
+
+        if (Array.isArray(classes)) {
+            classes.forEach(cls => {
                 const opt = document.createElement('option');
                 opt.value = cls;
                 opt.textContent = cls;
                 classSelect.appendChild(opt);
             });
             
-            if (data.length > 0) {
-                 loadProgressForClass(data[0]);
+            if (classes.length > 0) {
+                 loadProgressForClass(classes[0]);
             } else {
                 loadProgressForClass('');
             }
