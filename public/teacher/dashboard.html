@@ -91,7 +91,7 @@
     <!-- Main Content -->
             <div class="col-md-9 col-lg-10 main-content">
                 <div class="welcome-section">
-                    <h1>Welcome, <span id="teacherName">${localStorage.getItem('userName') || 'Teacher'}</span>!</h1>
+                    <h1>Welcome, <span id="teacherName">Teacher</span>!</h1>
                     <p>Here's your overview for today</p>
                 </div>
 
@@ -127,13 +127,14 @@
                                 <h4>Student Photos</h4>
                                 <div>
                                     <select id="classFilter" class="form-select d-inline-block w-auto me-2">
-                                        <option value="">All Classes</option>
+                                        <option value="">Select a Class...</option>
                                     </select>
                                     <button class="btn btn-outline-primary" onclick="refreshStudentPhotos()">
                                         <i class="bi bi-arrow-clockwise"></i> Refresh
                                     </button>
                                 </div>
                             </div>
+                            <div id="photosMessage" class="text-center text-muted mt-3" style="display: none;">Please select a class to view photos.</div>
                             <div class="row" id="studentPhotosContainer">
                                 <!-- Student photos will be loaded here -->
                             </div>
@@ -249,53 +250,189 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // Check if user is logged in and is a teacher
-        const token = localStorage.getItem('token');
-        const userRole = localStorage.getItem('userRole');
-        
-        if (!token) {
-            window.location.replace('/login');
-        } else if (userRole !== 'TEACHER') {
-            if (userRole === 'ADMIN') {
-                window.location.replace('/admin/dashboard');
-            } else if (userRole === 'STUDENT') {
-                window.location.replace('/student/dashboard');
-            } else {
-                window.location.replace('/login');
+        document.addEventListener('DOMContentLoaded', async function() {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                window.location.href = '/login.html';
+                return;
+            }
+            
+            document.getElementById('teacherName').textContent = localStorage.getItem('userName') || 'Teacher';
+            
+            await loadSubjects();
+            await loadCoreSubjects();
+            await loadClassFilter();
+            await loadDashboardStats();
+        });
+
+        async function loadDashboardStats() {
+            try {
+                const [subs, assessments] = await Promise.all([
+                    fetch('/api/subjects', { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } }),
+                    fetch('/api/teacher/assessments', { headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } })
+                ]);
+                const subjects = await subs.json();
+                const assessmentData = await assessments.json();
+
+                let topicCount = 0;
+                subjects.forEach(subject => {
+                    if (subject.topics) topicCount += subject.topics.length;
+                });
+                
+                document.getElementById('subjectCount').textContent = subjects.length;
+                document.getElementById('topicCount').textContent = topicCount;
+                document.getElementById('assessmentCount').textContent = assessmentData.length;
+
+            } catch (error) {
+                console.error('Error loading dashboard stats:', error);
             }
         }
 
-        // Get and display teacher info
-        document.addEventListener('DOMContentLoaded', () => {
-            const userName = localStorage.getItem('userName');
-            if (userName) {
-                document.getElementById('teacherName').textContent = userName;
+        // Load the class filter dropdown
+        async function loadClassFilter() {
+            try {
+                const response = await fetch('/api/teacher/students/photos', {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error('Failed to load classes');
+                
+                const classFilter = document.getElementById('classFilter');
+                const classes = data.classes || [];
+                
+                // Clear existing options except the placeholder
+                while (classFilter.options.length > 1) {
+                    classFilter.remove(1);
+                }
+                
+                classes.forEach(c => {
+                    const option = document.createElement('option');
+                    option.value = c;
+                    option.textContent = c;
+                    classFilter.appendChild(option);
+                });
+
+                // Set initial state
+                document.getElementById('studentPhotosContainer').innerHTML = '';
+                document.getElementById('photosMessage').style.display = 'block';
+
+            } catch (error) {
+                console.error('Error loading class filter:', error);
             }
+        }
+
+        // Load student photos for a given class
+        async function loadStudentPhotos(className) {
+            const container = document.getElementById('studentPhotosContainer');
+            const messageEl = document.getElementById('photosMessage');
+            
+            if (!className) {
+                container.innerHTML = '';
+                messageEl.style.display = 'block';
+                return;
+            }
+            
+            messageEl.style.display = 'none';
+            container.innerHTML = '<div class="text-center">Loading...</div>';
+
+            try {
+                const response = await fetch(`/api/teacher/students/photos?class=${encodeURIComponent(className)}`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || 'Failed to fetch photos');
+
+                const students = data.students || [];
+                container.innerHTML = ''; // Clear loading message
+                
+                if (students.length === 0) {
+                    messageEl.textContent = 'No active students found in this class with photos.';
+                    messageEl.style.display = 'block';
+                    return;
+                }
+
+                students.forEach(student => {
+                    const studentCard = `
+                        <div class="col-6 col-sm-4 col-md-3 col-lg-2 mb-4">
+                            <div class="card h-100 text-center">
+                                <img src="${student.profilePicture || '/images/default-avatar.png'}" class="card-img-top" alt="${student.name}" style="height: 120px; object-fit: cover;">
+                                <div class="card-body p-2">
+                                    <p class="card-text small mb-0">${student.name}</p>
+                                    <p class="card-text text-muted small">${student.email || ''}</p>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    container.innerHTML += studentCard;
+                });
+            } catch (error) {
+                console.error('Error fetching student photos:', error);
+                container.innerHTML = `<div class="alert alert-danger">${error.message}</div>`;
+            }
+        }
+
+        function refreshStudentPhotos() {
+            const selectedClass = document.getElementById('classFilter').value;
+            loadStudentPhotos(selectedClass);
+        }
+
+        document.getElementById('classFilter').addEventListener('change', function() {
+            loadStudentPhotos(this.value);
         });
 
-        // Load subjects and core subjects when page loads
-        document.addEventListener('DOMContentLoaded', async () => {
-            await loadSubjects();
-            await loadCoreSubjects();
-            await loadStudentPhotos();
-        });
+        // Other functions remain the same...
+        const token = localStorage.getItem('token');
+        if (!token) window.location.href = '/login';
+
+        document.getElementById('logoutBtn').onclick = function() {
+            localStorage.clear();
+            window.location.href = '/login';
+        };
+
+        async function loadSubjects() {
+            try {
+                const response = await fetch('/api/subjects', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const subjects = await response.json();
+                const container = document.getElementById('subjectsContainer');
+                container.innerHTML = '';
+                subjects.forEach(subject => {
+                    const card = document.createElement('div');
+                    card.className = 'col-md-4 mb-3';
+                    card.innerHTML = `
+                        <div class="card subject-card h-100">
+                            <div class="card-body">
+                                <h5 class="card-title">${subject.coreSubject.name} - ${subject.name}</h5>
+                                <p class="card-text">${subject.description || 'No description'}</p>
+                                <div class="action-buttons">
+                                    <a href="/teacher/subjects/topics.html?subjectId=${subject.id}" class="btn btn-sm btn-primary">View Topics</a>
+                                    <button class="btn btn-sm btn-info" onclick="editSubject('${subject.id}')">Edit</button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    container.appendChild(card);
+                });
+            } catch (error) {
+                console.error('Error fetching subjects:', error);
+            }
+        }
 
         async function loadCoreSubjects() {
             try {
                 const response = await fetch('/api/core-subjects', {
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
+                    headers: { 'Authorization': `Bearer ${token}` }
                 });
                 const coreSubjects = await response.json();
-                
-                const coreSubjectSelect = document.getElementById('coreSubject');
-                coreSubjectSelect.innerHTML = `
-                    <option value="">Choose the core subject...</option>
-                    ${coreSubjects.map(subject => `
-                        <option value="${subject.id}">${subject.name}</option>
-                    `).join('')}
-                `;
+                const select = document.getElementById('coreSubject');
+                select.innerHTML = '<option value="">Choose...</option>';
+                coreSubjects.forEach(cs => {
+                    const option = document.createElement('option');
+                    option.value = cs.id;
+                    option.textContent = cs.name;
+                    select.appendChild(option);
+                });
             } catch (error) {
                 console.error('Error loading core subjects:', error);
             }
@@ -304,243 +441,44 @@
         async function submitSubject() {
             const coreSubjectId = document.getElementById('coreSubject').value;
             const name = document.getElementById('subjectName').value;
-            const yearLevelStr = document.getElementById('yearLevel').value;
+            const yearLevelRaw = document.getElementById('yearLevel').value;
             const description = document.getElementById('description').value;
 
-            if (!coreSubjectId) {
-                alert('Please select a core subject');
+            if (!coreSubjectId || !name || !yearLevelRaw) {
+                alert('Please fill out all required fields.');
                 return;
             }
 
-            // Convert P1-P6 to 1-6 and M1-M3 to 7-9
-            const YEAR_LEVEL_MAP = {
-                'P1': 1, 'P2': 2, 'P3': 3, 'P4': 4, 'P5': 5, 'P6': 6,
-                'M1': 7, 'M2': 8, 'M3': 9
-            };
-            const yearLevel = YEAR_LEVEL_MAP[yearLevelStr];
-
-            if (!yearLevel) {
-                alert('Invalid year level selected');
-                return;
-            }
+            const yearLevel = parseInt(yearLevelRaw.replace('P', '').replace('M', '')) + (yearLevelRaw.startsWith('M') ? 6 : 0);
 
             try {
                 const response = await fetch('/api/subjects', {
                     method: 'POST',
                     headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
                     },
                     body: JSON.stringify({
                         name,
-                        yearLevel,
                         description,
+                        yearLevel,
                         coreSubjectId
                     })
                 });
 
                 if (response.ok) {
-                    const modal = bootstrap.Modal.getInstance(document.getElementById('addSubjectModal'));
+                    var modal = bootstrap.Modal.getInstance(document.getElementById('addSubjectModal'));
                     modal.hide();
-                    document.getElementById('addSubjectForm').reset();
                     loadSubjects();
                 } else {
                     const error = await response.json();
-                    alert(error.message || 'Failed to create subject');
+                    alert(`Error: ${error.error}`);
                 }
             } catch (error) {
-                console.error('Error creating subject:', error);
-                alert('Failed to create subject');
+                console.error('Error adding subject:', error);
+                alert('An error occurred. Please try again.');
             }
         }
-
-        // Load subjects
-        async function loadSubjects() {
-            try {
-                const response = await fetch('/api/subjects', {
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
-                });
-
-                if (response.ok) {
-                    const subjects = await response.json();
-                    displaySubjects(subjects);
-                }
-            } catch (error) {
-                console.error('Error loading subjects:', error);
-            }
-        }
-
-        function displaySubjects(subjects) {
-            const container = document.getElementById('subjectsContainer');
-            container.innerHTML = '';
-            
-            subjects.forEach(subject => {
-                const card = document.createElement('div');
-                card.className = 'col-md-4 mb-3';
-                card.innerHTML = `
-                    <div class="card h-100 subject-card">
-                        <div class="card-body">
-                            <h5 class="card-title">${subject.name}</h5>
-                            <p class="card-text">${subject.description || 'No description available'}</p>
-                            <div class="mb-2">
-                                <span class="badge bg-primary">${subject.coreSubject?.name || 'N/A'}</span>
-                                <span class="badge bg-secondary">Year ${subject.yearLevel}</span>
-                            </div>
-                            <div class="d-flex justify-content-between align-items-center">
-                                <a href="/teacher/course-structure?subjectId=${subject.id}" class="btn btn-primary">
-                                    <i class="bi bi-book"></i> Manage Structure
-                                </a>
-                                <div>
-                                    <span class="badge bg-info" title="Units">${subject.units?.length || 0} Units</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-                container.appendChild(card);
-            });
-
-            // Update counts
-            document.getElementById('subjectCount').textContent = subjects.length;
-            
-            // Calculate total units and sections
-            let unitCount = 0;
-            subjects.forEach(subject => {
-                const units = subject.units || [];
-                unitCount += units.length;
-            });
-            
-            document.getElementById('topicCount').textContent = unitCount;
-            
-            // Fetch actual assessment count instead of using section count
-            fetchAssessmentCount();
-        }
-        
-        // Add a function to get the actual assessment count
-        async function fetchAssessmentCount() {
-            try {
-                const response = await fetch('/api/teacher/assessments', {
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
-                });
-                
-                if (response.ok) {
-                    const assessments = await response.json();
-                    document.getElementById('assessmentCount').textContent = assessments.length;
-                } else {
-                    console.error('Failed to fetch assessments count');
-                }
-            } catch (error) {
-                console.error('Error fetching assessment count:', error);
-            }
-        }
-
-        // Load student photos
-        async function loadStudentPhotos() {
-            try {
-                const response = await fetch('/api/teacher/students/photos', {
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
-                });
-
-                if (response.ok) {
-                    const data = await response.json();
-                    displayStudentPhotos(data.students);
-                    populateClassFilter(data.classes);
-                }
-            } catch (error) {
-                console.error('Error loading student photos:', error);
-            }
-        }
-
-        function displayStudentPhotos(students) {
-            const container = document.getElementById('studentPhotosContainer');
-            container.innerHTML = '';
-            
-            if (students.length === 0) {
-                container.innerHTML = `
-                    <div class="col-12 text-center">
-                        <p class="text-muted">No students found or no photos uploaded yet.</p>
-                    </div>
-                `;
-                return;
-            }
-
-            students.forEach(student => {
-                const card = document.createElement('div');
-                card.className = 'col-md-3 col-lg-2 mb-3';
-                card.innerHTML = `
-                    <div class="card h-100 text-center">
-                        <div class="card-body p-2">
-                            <img src="${student.profilePicture || '/images/default-avatar.png'}" 
-                                 alt="${student.name}" 
-                                 class="rounded-circle mb-2" 
-                                 style="width: 80px; height: 80px; object-fit: cover; border: 2px solid #dee2e6;">
-                            <h6 class="card-title mb-1" style="font-size: 0.9rem;">${student.name}</h6>
-                            <p class="card-text mb-1" style="font-size: 0.8rem; color: #6c757d;">${student.nickname || ''}</p>
-                            <p class="card-text mb-1" style="font-size: 0.8rem; color: #6c757d;">${student.class || ''}</p>
-                            <small class="text-muted" style="font-size: 0.7rem;">${student.email}</small>
-                        </div>
-                        <div class="card-footer p-2">
-                            <a href="/teacher/progress.html?studentId=${student.id}" 
-                               class="btn btn-sm btn-outline-primary">
-                                <i class="bi bi-graph-up"></i> Progress
-                            </a>
-                        </div>
-                    </div>
-                `;
-                container.appendChild(card);
-            });
-        }
-
-        function populateClassFilter(classes) {
-            const classFilter = document.getElementById('classFilter');
-            classFilter.innerHTML = '<option value="">All Classes</option>';
-            
-            classes.forEach(className => {
-                const option = document.createElement('option');
-                option.value = className;
-                option.textContent = className;
-                classFilter.appendChild(option);
-            });
-        }
-
-        function refreshStudentPhotos() {
-            loadStudentPhotos();
-        }
-
-        // Class filter change handler
-        document.getElementById('classFilter').addEventListener('change', async function() {
-            const selectedClass = this.value;
-            try {
-                const url = selectedClass 
-                    ? `/api/teacher/students/photos?class=${encodeURIComponent(selectedClass)}`
-                    : '/api/teacher/students/photos';
-                
-                const response = await fetch(url, {
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
-                });
-
-                if (response.ok) {
-                    const data = await response.json();
-                    displayStudentPhotos(data.students);
-                }
-            } catch (error) {
-                console.error('Error filtering students by class:', error);
-            }
-        });
-
-        // Handle logout
-        document.getElementById('logoutBtn').addEventListener('click', () => {
-            localStorage.removeItem('token');
-            window.location.href = '/login';
-        });
     </script>
 </body>
 </html> 

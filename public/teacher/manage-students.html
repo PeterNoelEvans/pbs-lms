@@ -7,256 +7,307 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.3/font/bootstrap-icons.css">
     <style>
-        body { background: #f8f9fa; }
-        .status-active { color: #28a745; font-weight: bold; }
-        .status-inactive { color: #dc3545; font-weight: bold; }
-        .big-checkbox {
-            width: 1.5em;
-            height: 1.5em;
-            accent-color: #dc3545;
-            margin-right: 0.5em;
-            vertical-align: middle;
+        body {
+            background-color: #f0f2f5;
         }
-        .action-label {
-            font-size: 1.1em;
+        .sidebar {
+            min-height: 100vh;
+            background-color: #343a40;
+            padding-top: 20px;
+        }
+        .sidebar .nav-link {
+            color: #adb5bd;
+            font-size: 1.05rem;
+            padding: 10px 15px;
+            border-radius: 0.25rem;
+            margin-bottom: 5px;
+        }
+        .sidebar .nav-link:hover {
+            background-color: #495057;
+            color: #fff;
+        }
+        .sidebar .nav-link.active {
+            background-color: #0d6efd;
+            color: #fff;
+        }
+        .main-content {
+            padding: 2rem;
+        }
+        .status-active { color: #198754; font-weight: 500; }
+        .status-inactive { color: #dc3545; font-weight: 500; }
+        .table th {
             cursor: pointer;
-            user-select: none;
         }
     </style>
 </head>
 <body>
-    <div class="container mt-5">
-        <h1 class="mb-4">Manage Students</h1>
-        <div class="mb-3 d-flex align-items-center">
-            <div>
-                <label for="classSelect" class="form-label"><strong>Class:</strong></label>
-                <select id="classSelect" class="form-select d-inline-block w-auto"></select>
-                <label for="statusFilter" class="form-label ms-3"><strong>Show:</strong></label>
-                <select id="statusFilter" class="form-select d-inline-block w-auto">
-                    <option value="all">All</option>
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
-                </select>
-            </div>
-            <button id="refreshBtn" class="btn btn-outline-primary ms-3">
-                <i class="bi bi-arrow-clockwise"></i> Refresh
-            </button>
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <nav class="col-md-3 col-lg-2 d-md-block sidebar collapse">
+                <div class="position-sticky">
+                    <h3 class="text-white text-center my-3">Teacher Portal</h3>
+                    <ul class="nav flex-column">
+                        <li class="nav-item"><a class="nav-link" href="/teacher/dashboard.html"><i class="bi bi-grid-fill me-2"></i>Dashboard</a></li>
+                        <li class="nav-item"><a class="nav-link active" href="/teacher/manage-students.html"><i class="bi bi-people-fill me-2"></i>Manage Students</a></li>
+                        <li class="nav-item"><a class="nav-link" href="/teacher/progress.html"><i class="bi bi-graph-up me-2"></i>Student Progress</a></li>
+                        <li class="nav-item"><a class="nav-link" href="/teacher/subjects.html"><i class="bi bi-journal-bookmark-fill me-2"></i>Subjects</a></li>
+                        <li class="nav-item"><a class="nav-link" href="/teacher/resources.html"><i class="bi bi-folder-fill me-2"></i>Resources</a></li>
+                        <li class="nav-item"><a class="nav-link" href="/teacher/assessments.html"><i class="bi bi-pencil-square me-2"></i>Assessments</a></li>
+                         <li class="nav-item mt-auto pt-4"><button class="btn btn-danger w-100" id="logoutBtn">Logout</button></li>
+                    </ul>
+                </div>
+            </nav>
+
+            <!-- Main Content -->
+            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 main-content">
+                <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                    <h1 class="h2">Manage Students</h1>
+                    <div class="btn-toolbar mb-2 mb-md-0">
+                        <a href="/teacher/dashboard.html" class="btn btn-sm btn-outline-secondary">
+                            <i class="bi bi-arrow-left"></i>
+                            Back to Dashboard
+                        </a>
+                    </div>
+                </div>
+
+                <div class="card shadow-sm">
+                    <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                        <div class="d-flex align-items-center">
+                             <label for="classSelect" class="form-label me-2 mb-0"><strong>Class:</strong></label>
+                            <select id="classSelect" class="form-select form-select-sm d-inline-block w-auto me-3"></select>
+                            <label for="statusFilter" class="form-label me-2 mb-0"><strong>Show:</strong></label>
+                            <select id="statusFilter" class="form-select form-select-sm d-inline-block w-auto">
+                                <option value="all">All</option>
+                                <option value="active">Active</option>
+                                <option value="inactive">Inactive</option>
+                            </select>
+                        </div>
+                        <button id="refreshBtn" class="btn btn-sm btn-primary">
+                            <i class="bi bi-arrow-clockwise"></i> Refresh
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover align-middle" id="studentsTable">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th id="sortName" style="cursor:pointer;">Name <span id="sortNameArrow" class="small"></span></th>
+                                        <th id="sortNickname" style="cursor:pointer;">Nickname <span id="sortNicknameArrow" class="small"></span></th>
+                                        <th>Email</th>
+                                        <th>Progress</th>
+                                        <th>Status</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="studentsTableBody">
+                                    <!-- Student rows will be inserted here by JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="card-footer bg-light text-end">
+                        <button id="saveBtn" class="btn btn-success"><i class="bi bi-check-circle-fill me-2"></i>Save Changes</button>
+                    </div>
+                </div>
+            </main>
         </div>
-        <div class="card">
-            <div class="card-body">
-                <table class="table table-bordered" id="studentsTable">
-                    <thead class="table-light">
-                        <tr>
-                            <th id="sortName" style="cursor:pointer;">Name <span id="sortNameArrow"></span></th>
-                            <th id="sortNickname" style="cursor:pointer;">Nickname <span id="sortNicknameArrow"></span></th>
-                            <th>Email</th>
-                            <th>Progress</th>
-                            <th>Status</th>
-                            <th>Action</th>
-                        </tr>
-                    </thead>
-                    <tbody id="studentsTableBody">
-                        <!-- Student rows will be inserted here by JS -->
-                    </tbody>
-                </table>
-                <button id="saveBtn" class="btn btn-primary mt-3">Save Changes</button>
-            </div>
-        </div>
-        <a href="/teacher/dashboard" class="btn btn-secondary mt-4"><i class="bi bi-arrow-left"></i> Back to Dashboard</a>
     </div>
+
     <script>
     const token = localStorage.getItem('token');
     if (!token) window.location.href = '/login';
-    let students = [];
+    
+    let allStudents = [];
     let changed = {};
-    let sortField = null;
+    let sortField = 'name';
     let sortAsc = true;
-    // Fetch classes for dropdown
-    fetch('/api/teacher/classes', {
-        headers: { 'Authorization': `Bearer ${token}` }
-    })
-    .then(res => res.json())
-    .then(data => {
-        const classSelect = document.getElementById('classSelect');
-        classSelect.innerHTML = '';
-        data.classes.forEach(cls => {
-            const opt = document.createElement('option');
-            opt.value = cls;
-            opt.textContent = cls;
-            classSelect.appendChild(opt);
-        });
-        if (data.classes.length > 0) {
-            classSelect.value = data.classes[0];
-            loadStudentsForClass(data.classes[0]);
-        }
+    
+    document.addEventListener('DOMContentLoaded', async () => {
+        await loadClasses();
+        attachEventListeners();
     });
-    document.getElementById('classSelect').onchange = function() {
-        loadStudentsForClass(this.value);
-    };
-    document.getElementById('statusFilter').onchange = function() {
-        renderStudentsTable();
-    };
-    document.getElementById('refreshBtn').onclick = function() {
-        const classSelect = document.getElementById('classSelect');
-        if (classSelect.value) {
-            // Show a loading indicator
-            const tbody = document.getElementById('studentsTableBody');
-            tbody.innerHTML = '<tr><td colspan="6" class="text-center"><em><i class="bi bi-arrow-clockwise"></i> Refreshing...</em></td></tr>';
-            loadStudentsForClass(classSelect.value);
-        }
-    };
-    function loadStudentsForClass(className) {
-        // We will use the progress endpoint as the reliable source of student data
-        // since the /api/teacher/students endpoint seems to be unreliable.
-        fetch(`/api/teacher/progress?class=${encodeURIComponent(className)}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        })
-        .then(res => res.json())
-        .then(progressData => {
-            const progressList = progressData.progress || [];
-            
-            // Use the progress data to build a unique list of students
-            const studentMap = new Map();
-            progressList.forEach(p => {
-                const studentKey = p.studentName + '|' + (p.studentNickname || '');
-                if (!studentMap.has(studentKey)) {
-                    studentMap.set(studentKey, {
-                        id: studentKey, // Use composite key for now
-                        name: p.studentName,
-                        nickname: p.studentNickname,
-                        email: p.studentEmail, // This might be missing, but we'll try
-                        class: p.studentClass,
-                        active: p.studentActive !== false,
-                        progressCompleted: 0,
-                        progressTotal: 0,
-                    });
-                }
-            });
 
-            // Calculate progress for each unique student
-            studentMap.forEach(student => {
-                const studentProgress = progressList.filter(p => 
-                    p.studentName === student.name && 
-                    (p.studentNickname || '') === (student.nickname || '')
-                );
-                const total = studentProgress.length;
-                const completed = studentProgress.filter(p => p.status === 'Completed').length;
-                
-                student.progressTotal = total;
-                student.progressCompleted = completed;
-                student.progressPercent = total > 0 ? Math.round((completed / total) * 100) : 0;
-            });
-
-            window.students = Array.from(studentMap.values());
-            renderStudentsTable();
-        })
-        .catch(error => {
-            console.error('Error loading student data:', error);
-            const tbody = document.getElementById('studentsTableBody');
-            tbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger">Failed to load student data.</td></tr>`;
-        });
+    function attachEventListeners() {
+        document.getElementById('classSelect').onchange = () => renderStudentsTable();
+        document.getElementById('statusFilter').onchange = () => renderStudentsTable();
+        document.getElementById('refreshBtn').onclick = () => loadClasses();
+        document.getElementById('sortName').onclick = () => setSort('name');
+        document.getElementById('sortNickname').onclick = () => setSort('nickname');
+        document.getElementById('saveBtn').onclick = () => saveChanges();
     }
-    document.getElementById('sortName').onclick = function() {
-        if (sortField === 'name') { sortAsc = !sortAsc; } else { sortField = 'name'; sortAsc = true; }
+
+    async function loadClasses() {
+        try {
+            const res = await fetch('/api/teacher/classes', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            const classSelect = document.getElementById('classSelect');
+            classSelect.innerHTML = '';
+            data.classes.forEach(cls => {
+                const opt = document.createElement('option');
+                opt.value = cls;
+                opt.textContent = cls;
+                classSelect.appendChild(opt);
+            });
+            await loadAllStudents();
+        } catch (error) {
+            console.error('Error loading classes:', error);
+        }
+    }
+
+    async function loadAllStudents() {
+        const tbody = document.getElementById('studentsTableBody');
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center"><em>Loading students...</em></td></tr>';
+        try {
+            const res = await fetch('/api/teacher/students', {
+                headers: { 'Authorization': `Bearer ${token}` },
+                cache: 'no-store'
+            });
+            allStudents = await res.json();
+            renderStudentsTable();
+        } catch (error) {
+            console.error('Error loading student data:', error);
+            tbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger">Failed to load student data.</td></tr>`;
+        }
+    }
+
+    function setSort(field) {
+        if (sortField === field) {
+            sortAsc = !sortAsc;
+        } else {
+            sortField = field;
+            sortAsc = true;
+        }
         renderStudentsTable();
-    };
-    document.getElementById('sortNickname').onclick = function() {
-        if (sortField === 'nickname') { sortAsc = !sortAsc; } else { sortField = 'nickname'; sortAsc = true; }
-        renderStudentsTable();
-    };
+    }
+
     function renderStudentsTable() {
         const tbody = document.getElementById('studentsTableBody');
         tbody.innerHTML = '';
         
-        if (!window.students || window.students.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" class="text-center">No students found for this class.</td></tr>';
-            return;
+        const selectedClass = document.getElementById('classSelect').value;
+        const statusFilter = document.getElementById('statusFilter').value;
+
+        let filteredStudents = allStudents.filter(s => s.class === selectedClass);
+
+        if (statusFilter !== 'all') {
+            filteredStudents = filteredStudents.filter(s => (statusFilter === 'active') ? s.active : !s.active);
         }
 
-        let sorted = [...window.students];
         if (sortField) {
-            sorted.sort((a, b) => {
-                let av = (a[sortField] || '').toLowerCase();
-                let bv = (b[sortField] || '').toLowerCase();
-                if (av < bv) return sortAsc ? -1 : 1;
-                if (av > bv) return sortAsc ? 1 : -1;
+            filteredStudents.sort((a, b) => {
+                let valA = (a[sortField] || '').toLowerCase();
+                let valB = (b[sortField] || '').toLowerCase();
+                if (valA < valB) return sortAsc ? -1 : 1;
+                if (valA > valB) return sortAsc ? 1 : -1;
                 return 0;
             });
         }
-        // update arrows
-        document.getElementById('sortNameArrow').textContent = sortField === 'name' ? (sortAsc ? '▲' : '▼') : '';
-        document.getElementById('sortNicknameArrow').textContent = sortField === 'nickname' ? (sortAsc ? '▲' : '▼') : '';
-        // Filter by status
-        const status = document.getElementById('statusFilter').value;
-        if (status !== 'all') {
-            sorted = sorted.filter(s => status === 'active' ? s.active : !s.active);
-        }
         
-        if (sorted.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" class="text-center">No students match the current filter.</td></tr>';
+        updateSortArrows();
+
+        if (filteredStudents.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center">No students match the current criteria.</td></tr>';
             return;
         }
 
-        sorted.forEach(student => {
+        filteredStudents.forEach(student => {
             const tr = document.createElement('tr');
+            
+            const progressPercent = student.progressPercent !== undefined ? student.progressPercent : 'N/A';
+            const progressCompleted = student.progressCompleted !== undefined ? student.progressCompleted : 'N/A';
+            const progressTotal = student.progressTotal !== undefined ? student.progressTotal : 'N/A';
+            const progressText = progressPercent !== 'N/A' ? `${progressPercent}%` : 'N/A';
+            const progressWidth = progressPercent !== 'N/A' ? progressPercent : 0;
+
             tr.innerHTML = `
-                <td>${student.name}</td>
-                <td>${student.nickname || ''}</td>
-                <td>${student.email || 'N/A'}</td>
                 <td>
-                    <div class="progress" style="height: 22px;">
-                        <div class="progress-bar ${student.progressPercent === 100 ? 'bg-success' : 'bg-info'}" role="progressbar" style="width: ${student.progressPercent}%;">
-                            ${student.progressPercent}%
-                        </div>
-                    </div>
-                    <small>${student.progressCompleted} / ${student.progressTotal} completed</small>
+                    <img src="${student.profilePicture || '/images/default-avatar.png'}" class="rounded-circle me-2" alt="Photo" width="32" height="32" style="object-fit: cover;">
+                    ${student.name}
                 </td>
-                <td class="${student.active ? 'status-active' : 'status-inactive'}">${student.active ? 'Active' : 'Inactive'}</td>
+                <td>${student.nickname || ''}</td>
+                <td>${student.email}</td>
                 <td>
-                    <label class="action-label">
-                        <input type="checkbox" class="big-checkbox" ${!student.active ? 'checked' : ''} onchange="toggleStudentActive('${student.id}', this.checked)"> Put to sleep
-                    </label>
+                    <div class="progress" style="height: 20px;" title="${progressCompleted} / ${progressTotal} assessments completed">
+                        <div class="progress-bar" role="progressbar" style="width: ${progressWidth}%;" aria-valuenow="${progressWidth}" aria-valuemin="0" aria-valuemax="100">${progressText}</div>
+                    </div>
+                    <small>Completed: ${progressCompleted} / ${progressTotal}</small>
+                </td>
+                <td><span class="status-${student.active ? 'active' : 'inactive'}">${student.active ? 'Active' : 'Inactive'}</span></td>
+                <td>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" role="switch" id="statusSwitch-${student.id}" ${student.active ? 'checked' : ''} onchange="trackChange('${student.id}', this.checked)">
+                        <label class="form-check-label visually-hidden" for="statusSwitch-${student.id}">Toggle Status</label>
+                    </div>
                 </td>
             `;
             tbody.appendChild(tr);
         });
     }
-    window.toggleStudentActive = function(studentId, isChecked) {
-        const student = window.students.find(s => s.id === studentId);
-        if (student) {
-            student.active = !isChecked;
-            changed[student.id] = !isChecked; // The key for `changed` is the composite id
-            renderStudentsTable();
-        }
-    };
-    document.getElementById('saveBtn').onclick = function() {
-        const updates = Object.entries(changed).map(([id, active]) => ({ id, active }));
-        if (updates.length === 0) {
+    
+    function updateSortArrows() {
+        document.getElementById('sortNameArrow').textContent = sortField === 'name' ? (sortAsc ? '▲' : '▼') : '';
+        document.getElementById('sortNicknameArrow').textContent = sortField === 'nickname' ? (sortAsc ? '▲' : '▼') : '';
+    }
+
+    function trackChange(studentId, isChecked) {
+       const student = allStudents.find(s => s.id === studentId);
+       if (student) {
+           student.active = isChecked;
+           changed[studentId] = isChecked;
+           renderStudentsTable(); // Re-render to show immediate visual change
+           const saveBtn = document.getElementById('saveBtn');
+           saveBtn.classList.remove('btn-success');
+           saveBtn.classList.add('btn-warning');
+           saveBtn.innerHTML = '<i class="bi bi-exclamation-triangle-fill me-2"></i>Save Changes';
+       }
+    }
+    
+    async function saveChanges() {
+        const saveBtn = document.getElementById('saveBtn');
+        if (Object.keys(changed).length === 0) {
             alert('No changes to save.');
             return;
         }
-        fetch('/api/teacher/update-students-active', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify({ updates })
-        })
-        .then(res => res.json())
-        .then(data => {
-            if (data.success) {
-                alert('Student statuses updated successfully!');
-                changed = {};
-                loadStudentsForClass(document.getElementById('classSelect').value);
-            } else {
-                alert('Error updating students: ' + (data.error || 'Unknown error'));
+
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Saving...`;
+
+        try {
+            const response = await fetch('/api/teacher/students/status', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ changes: changed })
+            });
+
+            const result = await response.json();
+            if (!response.ok) {
+                throw new Error(result.error || 'Failed to save changes.');
             }
-        })
-        .catch(err => {
-            alert('Error updating students: ' + err.message);
-        });
+
+            alert('Changes saved successfully!');
+            changed = {}; // Reset changes
+            saveBtn.classList.remove('btn-warning');
+            saveBtn.classList.add('btn-success');
+            saveBtn.innerHTML = '<i class="bi bi-check-circle-fill me-2"></i>Save Changes';
+
+        } catch (error) {
+            console.error('Error saving changes:', error);
+            alert(`Error: ${error.message}`);
+        } finally {
+            saveBtn.disabled = false;
+        }
+    }
+
+    document.getElementById('logoutBtn').onclick = function() {
+        localStorage.clear();
+        window.location.href = '/login';
     };
     </script>
 </body>
-</html> 
+</html>

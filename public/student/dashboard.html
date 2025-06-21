@@ -50,6 +50,13 @@
                     <button class="w-6 h-6 rounded-full bg-fuchsia-700 border-2 border-white" onclick="setSidebarColor('#a21caf')"></button>
                 </div>
             </div>
+            <!-- Student Profile Picture -->
+            <div class="mt-8">
+                <p class="text-xs text-gray-300 mb-2">Your Photo:</p>
+                <div class="w-24 h-24 rounded-full overflow-hidden bg-gray-600 mx-auto">
+                    <img id="profilePicture" src="/images/default-avatar.png" alt="Profile Photo" class="w-full h-full object-cover">
+                </div>
+            </div>
         </div>
 
         <!-- Hamburger Button (mobile only) -->
@@ -174,6 +181,11 @@
                 if (!userRes.ok) throw new Error('Failed to load student data');
                 
                 document.getElementById('studentName').textContent = userData.name;
+
+                // Set profile picture
+                if (userData.profilePicture) {
+                    document.getElementById('profilePicture').src = userData.profilePicture;
+                }
 
                 // Completed Assessments
                 const assessments = assessmentsData.assessments || [];

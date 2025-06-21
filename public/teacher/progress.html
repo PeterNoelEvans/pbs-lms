@@ -16,7 +16,10 @@
 </head>
 <body>
     <div class="container mt-5">
-        <h1 class="mb-4">Student Progress</h1>
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1 class="mb-0">Student Progress</h1>
+            <a href="/teacher/dashboard.html" class="btn btn-outline-primary"><i class="bi bi-arrow-left"></i> Back to Dashboard</a>
+        </div>
         <div class="mb-3">
             <label for="classSelect" class="form-label"><strong>Class:</strong></label>
             <select id="classSelect" class="form-select d-inline-block w-auto"></select>
@@ -50,15 +53,17 @@
                 </table>
             </div>
         </div>
-        <a href="/teacher/dashboard" class="btn btn-secondary mt-4"><i class="bi bi-arrow-left"></i> Back to Dashboard</a>
     </div>
     <script>
     let allProgress = [];
     let filteredProgress = [];
     let allStudents = [];
+    let allStudentsWithProgress = []; // For the graph
+
     // Fetch classes for dropdown
     fetch('/api/teacher/classes', {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+        cache: 'no-store'
     })
     .then(res => res.json())
     .then(data => {
@@ -77,6 +82,7 @@
             
             if (classes.length > 0) {
                  loadProgressForClass(classes[0]);
+                 document.getElementById('classSelect').value = classes[0];
             } else {
                 loadProgressForClass('');
             }
@@ -97,13 +103,22 @@
         renderClassGraph();
     };
     function loadProgressForClass(className) {
-        fetch(`/api/teacher/progress?class=${encodeURIComponent(className)}`, {
-            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-        })
-        .then(res => res.json())
-        .then(data => {
-            allProgress = data.progress || [];
-            // Get unique students for dropdown
+        const studentsProgressPromise = fetch('/api/teacher/students', {
+             headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+             cache: 'no-store'
+        }).then(res => res.json());
+
+        const detailedProgressPromise = fetch(`/api/teacher/progress?class=${encodeURIComponent(className)}`, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+            cache: 'no-store'
+        }).then(res => res.json());
+
+        Promise.all([studentsProgressPromise, detailedProgressPromise])
+        .then(([studentsWithProgress, detailedData]) => {
+            allStudentsWithProgress = studentsWithProgress || [];
+            allProgress = detailedData.progress || [];
+            
+            // Get unique students for dropdown from the detailed list
             const students = Array.from(new Set(allProgress.map(r => r.studentName + '|' + (r.studentNickname || ''))))
                 .map(s => {
                     const [name, nickname] = s.split('|');
@@ -119,8 +134,13 @@
                 studentSelect.appendChild(opt);
             });
             document.getElementById('studentSelect').value = '';
+
             renderProgressTable();
             renderClassGraph();
+        })
+        .catch(error => {
+            console.error("Error loading progress data:", error);
+            // Handle error, maybe show a message to the user
         });
     }
     function renderProgressTable() {
@@ -171,60 +191,63 @@
     function renderClassGraph() {
         const graphDiv = document.getElementById('classGraph');
         const selectedStudent = document.getElementById('studentSelect').value;
+        const selectedClass = document.getElementById('classSelect').value;
+
         if (selectedStudent) {
             graphDiv.innerHTML = '';
             return;
         }
-        // Show overall completion rate for the class
-        if (!allProgress.length) {
+        
+        if (!allStudentsWithProgress.length) {
             graphDiv.innerHTML = '';
             return;
         }
-        // Calculate percent of completed assessments per student
-        const studentStats = {};
-        allProgress.forEach(row => {
-            if (!studentStats[row.studentName]) studentStats[row.studentName] = { completed: 0, total: 0 };
-            if (row.status === 'Completed') studentStats[row.studentName].completed++;
-            studentStats[row.studentName].total++;
-        });
-        const students = Object.keys(studentStats).sort();
-        const maxBar = 200;
-        // Split students into two columns
-        const mid = Math.ceil(students.length / 2);
-        const col1 = students.slice(0, mid);
-        const col2 = students.slice(mid);
+
+        const studentsForGraph = allStudentsWithProgress.filter(student => {
+             const classMatch = !selectedClass || student.class === selectedClass;
+             return student.active && classMatch;
+        }).sort((a,b) => a.name.localeCompare(b.name));
+        
+        const mid = Math.ceil(studentsForGraph.length / 2);
+        const col1 = studentsForGraph.slice(0, mid);
+        const col2 = studentsForGraph.slice(mid);
         let html = '<strong>Overall Class Progress</strong><br><div class="row" style="max-width:900px">';
         html += '<div class="col-md-6"><div style="max-width:440px; padding-right:24px;">';
-        col1.forEach(name => {
-            const stat = studentStats[name];
-            const percent = stat.total ? Math.round((stat.completed / stat.total) * 100) : 0;
-            html += `<div style="margin-bottom:10px; display:flex; align-items:center; gap:8px;">
-                <span style="display:inline-block; width:180px; word-break:break-word; white-space:normal;">${name}</span>
-                <span style="display:inline-block; width:40px;">${percent}%</span>
-                <div style="flex:1; min-width:100px; max-width:200px; background:#eee; height:16px; vertical-align:middle;">
-                    <div style="width:${percent * 2}px; background:#28a745; height:16px;"></div>
+        
+        col1.forEach(student => {
+            const percent = student.progressPercent || 0;
+            html += `
+                <div class="d-flex align-items-center mb-1">
+                    <div style="width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${student.name}">${student.name}</div>
+                    <div class="text-end" style="width: 40px">${percent}%</div>
+                    <div class="progress flex-grow-1 ms-2" style="height: 18px;">
+                        <div class="progress-bar bg-success" role="progressbar" style="width: ${percent}%" aria-valuenow="${percent}" aria-valuemin="0" aria-valuemax="100"></div>
+                    </div>
                 </div>
-            </div>`;
+            `;
         });
         html += '</div></div>';
         html += '<div class="col-md-6"><div style="max-width:440px; padding-left:24px;">';
-        col2.forEach(name => {
-            const stat = studentStats[name];
-            const percent = stat.total ? Math.round((stat.completed / stat.total) * 100) : 0;
-            html += `<div style="margin-bottom:10px; display:flex; align-items:center; gap:8px;">
-                <span style="display:inline-block; width:180px; word-break:break-word; white-space:normal;">${name}</span>
-                <span style="display:inline-block; width:40px;">${percent}%</span>
-                <div style="flex:1; min-width:100px; max-width:200px; background:#eee; height:16px; vertical-align:middle;">
-                    <div style="width:${percent * 2}px; background:#28a745; height:16px;"></div>
+        col2.forEach(student => {
+            const percent = student.progressPercent || 0;
+            html += `
+                <div class="d-flex align-items-center mb-1">
+                    <div style="width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${student.name}">${student.name}</div>
+                    <div class="text-end" style="width: 40px">${percent}%</div>
+                    <div class="progress flex-grow-1 ms-2" style="height: 18px;">
+                        <div class="progress-bar bg-success" role="progressbar" style="width: ${percent}%" aria-valuenow="${percent}" aria-valuemin="0" aria-valuemax="100"></div>
+                    </div>
                 </div>
-            </div>`;
+            `;
         });
-        html += '</div></div>';
-        html += '</div>';
+        html += '</div></div></div>';
         graphDiv.innerHTML = html;
     }
-    document.getElementById('downloadCsvBtn').onclick = function() {
-        if (!filteredProgress.length) return;
+    document.getElementById('downloadCsvBtn').addEventListener('click', () => {
+        if (filteredProgress.length === 0) {
+            alert('No data to download.');
+            return;
+        }
         const headers = ['Student','Nickname','Class','Assessment','Attempts','Best Score','Last Score','Last Attempt','Status'];
         const propertyMap = {
             "Student": "studentName",
@@ -249,7 +272,7 @@
         a.download = 'class_progress.csv';
         a.click();
         URL.revokeObjectURL(url);
-    };
+    });
     </script>
 </body>
 </html> 

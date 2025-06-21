@@ -2889,108 +2889,113 @@ app.get('/api/student/assessments', auth, async (req, res) => {
 // New: Teacher progress endpoint
 app.get('/api/teacher/progress', auth, async (req, res) => {
     try {
+        // Only allow teachers
         const user = await prisma.user.findUnique({
             where: { id: req.user.userId }
         });
         if (!user || user.role !== 'TEACHER') {
             return res.status(403).json({ error: 'Not authorized' });
         }
-        
-        const { class: classFilter } = req.query;
 
-        let studentWhereClause = { role: 'STUDENT', active: true };
+        const { subjectId, class: classFilter } = req.query;
+        
+        let whereClause = {
+            role: 'STUDENT',
+            active: true // Only include active students
+        };
+
         if (classFilter) {
-            studentWhereClause.class = classFilter;
+            whereClause.class = classFilter;
+        }
+
+        if (subjectId) {
+            const studentCourses = await prisma.studentCourse.findMany({
+                where: { subjectId: subjectId },
+                select: { studentId: true }
+            });
+            const studentIds = studentCourses.map(sc => sc.studentId);
+            whereClause.id = { in: studentIds };
         }
 
         const students = await prisma.user.findMany({
-            where: studentWhereClause,
+            where: whereClause,
             select: {
                 id: true,
                 name: true,
+                nickname: true,
+                class: true,
+                email: true,
+                profilePicture: true,
+                assessmentSubmissions: {
+                    select: {
+                        score: true,
+                        submittedAt: true,
+                        assessment: {
+                            select: {
+                                id: true,
+                                title: true,
+                                maxAttempts: true
+                            }
+                        }
+                    }
+                }
             },
             orderBy: { name: 'asc' }
         });
 
-        const studentIds = students.map(s => s.id);
-        if (studentIds.length === 0) {
-            return res.json({ progress: [] });
-        }
-
-        const studentCourses = await prisma.studentCourse.findMany({
-            where: { studentId: { in: studentIds } },
-            select: { studentId: true, subjectId: true }
-        });
-
-        const studentSubjectMap = studentCourses.reduce((map, sc) => {
-            if (!map[sc.studentId]) map[sc.studentId] = [];
-            map[sc.studentId].push(sc.subjectId);
-            return map;
-        }, {});
-
-        const allSubjectIds = [...new Set(studentCourses.map(sc => sc.subjectId))];
-
-        const assessments = await prisma.assessment.findMany({
-            where: {
-                section: { part: { unit: { subjectId: { in: allSubjectIds } } } }
-            },
-            select: { 
-                id: true, 
-                section: { select: { part: { select: { unit: { select: { subjectId: true } } } } } }
-            }
-        });
-
-        const subjectAssessmentMap = assessments.reduce((map, a) => {
-            const subjectId = a.section?.part?.unit?.subjectId;
-            if (subjectId) {
-                if (!map[subjectId]) map[subjectId] = [];
-                map[subjectId].push(a.id);
-            }
-            return map;
-        }, {});
-
-        const completedSubmissions = await prisma.assessmentSubmission.findMany({
-            where: { studentId: { in: studentIds }, score: { gte: 100 } },
-            select: { studentId: true, assessmentId: true }
-        });
-
-        const studentCompletedMap = completedSubmissions.reduce((map, sub) => {
-            if (!map[sub.studentId]) map[sub.studentId] = new Set();
-            map[sub.studentId].add(sub.assessmentId);
-            return map;
-        }, {});
-
-        const studentsWithProgress = students.map(student => {
-            const enrolledSubjectIds = studentSubjectMap[student.id] || [];
-            
-            const enrolledAssessmentsSet = new Set();
-            enrolledSubjectIds.forEach(subjectId => {
-                (subjectAssessmentMap[subjectId] || []).forEach(id => enrolledAssessmentsSet.add(id));
-            });
-
-            const totalAssessments = enrolledAssessmentsSet.size;
-            const allCompletedForStudent = studentCompletedMap[student.id] || new Set();
-
-            let relevantCompletedCount = 0;
-            allCompletedForStudent.forEach(completedId => {
-                if (enrolledAssessmentsSet.has(completedId)) {
-                    relevantCompletedCount++;
+        const progress = students.flatMap(student => {
+            const submissionsByAssessment = {};
+            student.assessmentSubmissions.forEach(sub => {
+                if (!submissionsByAssessment[sub.assessment.id]) {
+                    submissionsByAssessment[sub.assessment.id] = [];
                 }
+                submissionsByAssessment[sub.assessment.id].push(sub);
             });
+
+            if (Object.keys(submissionsByAssessment).length === 0) {
+                 return [{
+                    studentName: student.name,
+                    studentNickname: student.nickname,
+                    studentClass: student.class,
+                    studentPhoto: student.profilePicture,
+                    assessmentTitle: 'No assessments submitted',
+                    attempts: 0,
+                    maxAttempts: '-',
+                    bestScore: null,
+                    lastScore: null,
+                    lastAttempt: null,
+                    status: 'Not Started'
+                 }];
+            }
             
-            const progressPercent = totalAssessments > 0 
-                ? Math.round((relevantCompletedCount / totalAssessments) * 100)
-                : 0;
-            
-            return {
-                studentName: student.name,
-                progressPercent,
-                completed: relevantCompletedCount,
-                total: totalAssessments
-            };
+            return Object.values(submissionsByAssessment).map(submissions => {
+                const assessment = submissions[0].assessment;
+                const attempts = submissions.length;
+                const bestScore = Math.max(...submissions.map(s => s.score || 0));
+                const lastSubmission = submissions.sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt))[0];
+                
+                let status = 'In Progress';
+                if (bestScore === 100) {
+                    status = 'Completed';
+                }
+
+                return {
+                    studentName: student.name,
+                    studentNickname: student.nickname,
+                    studentClass: student.class,
+                    studentPhoto: student.profilePicture,
+                    assessmentTitle: assessment.title,
+                    attempts: attempts,
+                    maxAttempts: assessment.maxAttempts || '-',
+                    bestScore: bestScore,
+                    lastScore: lastSubmission.score,
+                    lastAttempt: lastSubmission.submittedAt,
+                    status: status
+                };
+            });
         });
 
-        res.json({ progress: studentsWithProgress });
+        res.json({ progress });
 
     } catch (error) {
         console.error('Error fetching teacher progress:', error);
@@ -2998,84 +3003,38 @@ app.get('/api/teacher/progress', auth, async (req, res) => {
     }
 });
 
-
-
 // Endpoint to get all classes for teacher's students
 app.get('/api/teacher/classes', auth, async (req, res) => {
     try {
-        // More robust method: fetch all students and derive classes from them.
-        const allStudents = await prisma.user.findMany({
-            where: {
-                role: 'STUDENT',
-                class: {
-                    not: null,
-                },
-            },
-            select: {
-                class: true,
-            },
+        const teacher = await prisma.user.findUnique({
+            where: { id: req.user.userId },
+            include: {
+                subjectTeacher: {
+                    include: {
+                        subject: {
+                            include: {
+                                studentCourses: {
+                                    include: { student: true }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         });
-
-        // Use a Set to ensure uniqueness, then sort the result with custom logic.
-        const classSet = new Set(allStudents.map(s => s.class));
-        const classes = Array.from(classSet).sort((a, b) => {
-            const matchA = a.match(/([PM])(\d+)\/(\d+)/);
-            const matchB = b.match(/([PM])(\d+)\/(\d+)/);
-
-            // If a class name doesn't match the expected pattern, sort it to the end.
-            if (!matchA) return 1;
-            if (!matchB) return -1;
-
-            const prefixA = matchA[1];
-            const yearA = parseInt(matchA[2], 10);
-            const roomA = parseInt(matchA[3], 10);
-
-            const prefixB = matchB[1];
-            const yearB = parseInt(matchB[2], 10);
-            const roomB = parseInt(matchB[3], 10);
-
-            // 'P' (Prathom) should come before 'M' (Mattayom)
-            if (prefixA === 'P' && prefixB === 'M') return -1;
-            if (prefixA === 'M' && prefixB === 'P') return 1;
-            
-            // If prefixes are the same, sort by year level
-            if (yearA !== yearB) return yearA - yearB;
-            
-            // If year levels are the same, sort by room number
-            return roomA - roomB;
-        });
-
-        res.json({ classes });
-
+        if (!teacher || !teacher.subjectTeacher) return res.json({ classes: [] });
+        const classSet = new Set();
+        for (const subjT of teacher.subjectTeacher) {
+            const subject = subjT.subject;
+            if (!subject || !subject.studentCourses) continue;
+            for (const sc of subject.studentCourses) {
+                if (sc.student && sc.student.class) classSet.add(sc.student.class);
+            }
+        }
+        res.json({ classes: Array.from(classSet).sort() });
     } catch (error) {
         console.error('Error fetching teacher classes:', error);
         res.status(500).json({ error: 'Failed to fetch classes' });
-    }
-});
-
-// New endpoint to update student statuses
-app.post('/api/teacher/students/status', auth, async (req, res) => {
-    try {
-        const { changes } = req.body; // Expects an object like { studentId: newStatus, ... }
-
-        if (!changes || typeof changes !== 'object' || Object.keys(changes).length === 0) {
-            return res.status(400).json({ error: 'No changes provided.' });
-        }
-
-        const updatePromises = Object.entries(changes).map(([studentId, active]) =>
-            prisma.user.update({
-                where: { id: studentId },
-                data: { active: active },
-            })
-        );
-
-        await Promise.all(updatePromises);
-
-        res.json({ success: true, message: 'Student statuses updated successfully.' });
-
-    } catch (error) {
-        console.error('Error updating student statuses:', error);
-        res.status(500).json({ error: 'Failed to update student statuses.' });
     }
 });
 
@@ -3862,50 +3821,51 @@ app.get('/api/teacher/students/photos', auth, async (req, res) => {
     try {
         const { class: studentClass } = req.query;
 
-        let students = [];
-        // Only fetch students if a specific class is provided
-        if (studentClass) {
-            students = await prisma.user.findMany({
-                where: {
-                    role: 'STUDENT',
-                    active: true,
-                    class: studentClass,
-                },
-                select: {
-                    id: true,
-                    name: true,
-                    nickname: true,
-                    class: true,
-                    profilePicture: true,
-                    email: true,
-                },
-                orderBy: {
-                    name: 'asc',
-                },
-            });
+        let whereClause = {
+            role: 'STUDENT',
+            active: true,
+        };
+
+        if (studentClass && studentClass !== 'All Classes') {
+            whereClause.class = studentClass;
         }
 
-        // Get a unique list of all active classes for the filter
+        const students = await prisma.user.findMany({
+            where: whereClause,
+            select: {
+                id: true,
+                name: true,
+                nickname: true,
+                class: true,
+                profilePicture: true,
+                email: true, // Add email to the selection
+            },
+            orderBy: {
+                name: 'asc',
+            },
+        });
+
+        // Get a unique list of all classes for the filter
         const allStudentClasses = await prisma.user.findMany({
             where: {
                 role: 'STUDENT',
                 active: true,
                 class: {
-                    not: null,
-                },
+                    not: null
+                }
             },
             distinct: ['class'],
             select: {
-                class: true,
+                class: true
             },
             orderBy: {
-                class: 'asc',
-            },
+                class: 'asc'
+            }
         });
 
         const classes = allStudentClasses.map(s => s.class);
 
-        res.json({ students, classes });
+        res.json({ students, classes }); // Return both students and classes
 
     } catch (error) {
         console.error('Error fetching student photos:', error);
@@ -3916,18 +3876,16 @@ app.get('/api/teacher/students/photos', auth, async (req, res) => {
 // Enhanced teacher students endpoint (for manage students page)
 app.get('/api/teacher/students', auth, async (req, res) => {
     try {
-        console.log('\n--- [START] /api/teacher/students ---');
-
+        // Only allow teachers
         const user = await prisma.user.findUnique({
             where: { id: req.user.userId }
         });
         if (!user || user.role !== 'TEACHER') {
-            console.log('[ERROR] User is not a teacher.');
             return res.status(403).json({ error: 'Not authorized' });
         }
 
         const students = await prisma.user.findMany({
-            where: { role: 'STUDENT', active: true },
+            where: { role: 'STUDENT' },
             select: {
                 id: true,
                 name: true,
@@ -3941,112 +3899,10 @@ app.get('/api/teacher/students', auth, async (req, res) => {
             },
             orderBy: { name: 'asc' }
         });
-        console.log(`[1] Found ${students.length} students.`);
 
-        const studentIds = students.map(s => s.id);
-        if (studentIds.length === 0) {
-            console.log('[INFO] No students found, returning empty array.');
-            return res.json([]);
-        }
-
-        const studentCourses = await prisma.studentCourse.findMany({
-            where: { studentId: { in: studentIds } },
-            select: { studentId: true, subjectId: true }
-        });
-        console.log(`[2] Found ${studentCourses.length} student course enrollments.`);
-
-        const studentSubjectMap = studentCourses.reduce((map, sc) => {
-            if (!map[sc.studentId]) map[sc.studentId] = [];
-            map[sc.studentId].push(sc.subjectId);
-            return map;
-        }, {});
-        if (students.length > 0) {
-             console.log(`[3] Student-to-Subject map created. Example for student ${students[0].id}:`, studentSubjectMap[students[0].id]);
-        }
-
-
-        const allSubjectIds = [...new Set(studentCourses.map(sc => sc.subjectId))];
-        console.log(`[4] Found ${allSubjectIds.length} unique subject IDs across all students.`);
-
-        const assessments = await prisma.assessment.findMany({
-            where: {
-                section: { part: { unit: { subjectId: { in: allSubjectIds } } } }
-            },
-            select: { 
-                id: true, 
-                section: { select: { part: { select: { unit: { select: { subjectId: true } } } } } }
-            }
-        });
-        console.log(`[5] Found ${assessments.length} assessments total for those subjects.`);
-
-        const subjectAssessmentMap = assessments.reduce((map, a) => {
-            const subjectId = a.section?.part?.unit?.subjectId;
-            if (subjectId) {
-                if (!map[subjectId]) map[subjectId] = [];
-                map[subjectId].push(a.id);
-            }
-            return map;
-        }, {});
-         if (allSubjectIds.length > 0) {
-             console.log(`[6] Subject-to-Assessment map created. Example for subject ${allSubjectIds[0]}:`, subjectAssessmentMap[allSubjectIds[0]]?.length || 0, 'assessments');
-        }
-
-        const completedSubmissions = await prisma.assessmentSubmission.findMany({
-            where: { studentId: { in: studentIds }, score: { gte: 100 } },
-            select: { studentId: true, assessmentId: true }
-        });
-        console.log(`[7] Found ${completedSubmissions.length} completed submissions total.`);
-
-        const studentCompletedMap = completedSubmissions.reduce((map, sub) => {
-            if (!map[sub.studentId]) map[sub.studentId] = new Set();
-            map[sub.studentId].add(sub.assessmentId);
-            return map;
-        }, {});
-
-        const studentsWithProgress = students.map(student => {
-            const enrolledSubjectIds = studentSubjectMap[student.id] || [];
-            
-            const enrolledAssessmentsSet = new Set();
-            enrolledSubjectIds.forEach(subjectId => {
-                const assessmentIds = subjectAssessmentMap[subjectId] || [];
-                assessmentIds.forEach(id => enrolledAssessmentsSet.add(id));
-            });
-
-            const totalAssessments = enrolledAssessmentsSet.size;
-            const allCompletedForStudent = studentCompletedMap[student.id] || new Set();
-
-            let relevantCompletedCount = 0;
-            allCompletedForStudent.forEach(completedId => {
-                if (enrolledAssessmentsSet.has(completedId)) {
-                    relevantCompletedCount++;
-                }
-            });
-            
-            const progressPercent = totalAssessments > 0 
-                ? Math.round((relevantCompletedCount / totalAssessments) * 100)
-                : 0;
-            
-            return {
-                ...student,
-                progressPercent,
-                progressCompleted: relevantCompletedCount,
-                progressTotal: totalAssessments
-            };
-        });
-
-        if (studentsWithProgress.length > 0) {
-            console.log('[8] Progress calculation complete. Example for first student:', {
-                id: studentsWithProgress[0].id,
-                progressPercent: studentsWithProgress[0].progressPercent,
-                progressCompleted: studentsWithProgress[0].progressCompleted,
-                progressTotal: studentsWithProgress[0].progressTotal,
-            });
-        }
-        
-        console.log('--- [END] /api/teacher/students ---');
-        res.json(studentsWithProgress);
+        res.json(students);
     } catch (error) {
-        console.error('--- [CRITICAL ERROR] /api/teacher/students ---', error);
+        console.error('Error fetching students:', error);
         res.status(500).json({ error: 'Failed to fetch students' });
     }
 });
@@ -4062,112 +3918,47 @@ app.get('/api/teacher/reports/logins', auth, async (req, res) => {
             return res.status(403).json({ error: 'Not authorized' });
         }
 
-        const { subjectId, date, class: classFilter } = req.query;
+        const { subjectId } = req.query;
         
         if (!subjectId) {
-            return res.json({ students: [] });
+            return res.json([]); // Return empty array if no subject selected
         }
 
-        // 1. Get total number of assessments for the subject
-        const assessments = await prisma.assessment.findMany({
-            where: {
-                section: {
-                    part: {
-                        unit: {
-                            subjectId: subjectId,
-                        },
-                    },
-                },
-            },
-            select: { id: true },
-        });
-        const totalAssessments = assessments.length;
-        const assessmentIds = assessments.map(a => a.id);
-
-        // Get student IDs enrolled in this subject
+        // Get students enrolled in this subject
         const studentCourses = await prisma.studentCourse.findMany({
             where: { subjectId: subjectId },
-            select: { studentId: true }
+            include: {
+                student: {
+                    select: {
+                        id: true,
+                        name: true,
+                        nickname: true,
+                        class: true,
+                        email: true
+                    }
+                }
+            }
         });
 
-        const studentIds = studentCourses.map(sc => sc.studentId);
-        if (studentIds.length === 0) {
-            return res.json({ students: [] });
-        }
-
-        // Build the where clause for the main user query
-        const userWhere = {
-            id: { in: studentIds },
-            active: true,
-        };
-
-        if (classFilter) {
-            userWhere.class = classFilter;
-        }
-
-        if (date) {
-            // This approach is more robust to timezone differences.
-            // It finds all logins on a given calendar date regardless of the server/client timezone.
-            const localDate = new Date(date);
-            const year = localDate.getUTCFullYear();
-            const month = localDate.getUTCMonth();
-            const day = localDate.getUTCDate();
-            
-            const startDate = new Date(Date.UTC(year, month, day, 0, 0, 0, 0));
-            const endDate = new Date(Date.UTC(year, month, day, 23, 59, 59, 999));
-
-            userWhere.lastLogin = {
-                gte: startDate,
-                lte: endDate,
-            };
-        }
-
-        // Get login data for these students
+        // Get login data for these students (filter out inactive students)
+        const studentIds = studentCourses.map(sc => sc.student.id);
         const loginData = await prisma.user.findMany({
-            where: userWhere,
+            where: {
+                id: { in: studentIds },
+                active: true // Only include active students
+            },
             select: {
                 id: true,
                 name: true,
                 nickname: true,
                 class: true,
                 email: true,
-                lastLogin: true,
-                assessmentSubmissions: {
-                    where: {
-                        assessmentId: { in: assessmentIds },
-                        score: { gte: 100 },
-                    },
-                    select: {
-                        assessmentId: true,
-                    },
-                },
+                lastLoginAt: true
             },
-            orderBy: { name: 'asc' },
+            orderBy: { name: 'asc' }
         });
 
-        // 3. Calculate progress for each student
-        const studentsWithProgress = loginData.map(student => {
-            const completedSubmissions = new Set(
-                student.assessmentSubmissions.map(s => s.assessmentId)
-            );
-            const progressCompleted = completedSubmissions.size;
-            const progressTotal = totalAssessments;
-            const progressPercent =
-                progressTotal > 0
-                    ? Math.round((progressCompleted / progressTotal) * 100)
-                    : 0;
-
-            const { assessmentSubmissions, ...studentData } = student;
-
-            return {
-                ...studentData,
-                progressCompleted,
-                progressTotal,
-                progressPercent,
-            };
-        });
-
-        res.json({ students: studentsWithProgress });
+        res.json(loginData);
     } catch (error) {
         console.error('Error fetching login report:', error);
         res.status(500).json({ error: 'Failed to fetch login report' });
