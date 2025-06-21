@@ -3720,3 +3720,244 @@ app.post('/api/teacher/update-students-active', auth, async (req, res) => {
         res.status(500).json({ success: false, error: error.message });
     }
 });
+
+// Get user profile with photo
+app.get('/api/user/profile', auth, async (req, res) => {
+    try {
+        const user = await prisma.user.findUnique({
+            where: { id: req.user.userId },
+            select: {
+                id: true,
+                name: true,
+                nickname: true,
+                email: true,
+                role: true,
+                class: true,
+                yearLevel: true,
+                profilePicture: true
+            }
+        });
+
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        res.json(user);
+    } catch (error) {
+        console.error('Error fetching user profile:', error);
+        res.status(500).json({ error: 'Failed to fetch user profile' });
+    }
+});
+
+// Upload profile photo
+app.post('/api/user/upload-photo', auth, upload.single('photo'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'No photo uploaded' });
+        }
+
+        const userId = req.user.userId;
+        const photoPath = `/uploads/resources/${req.file.filename}`;
+
+        // Update user's profile picture
+        await prisma.user.update({
+            where: { id: userId },
+            data: { profilePicture: photoPath }
+        });
+
+        res.json({ 
+            success: true, 
+            photoPath: photoPath,
+            message: 'Photo uploaded successfully' 
+        });
+    } catch (error) {
+        console.error('Error uploading photo:', error);
+        res.status(500).json({ error: 'Failed to upload photo' });
+    }
+});
+
+// Get student photos for teacher dashboard
+app.get('/api/teacher/students/photos', auth, async (req, res) => {
+    try {
+        const { class: studentClass } = req.query;
+
+        let whereClause = {
+            role: 'STUDENT',
+            active: true,
+        };
+
+        if (studentClass && studentClass !== 'All Classes') {
+            whereClause.class = studentClass;
+        }
+
+        const students = await prisma.user.findMany({
+            where: whereClause,
+            select: {
+                id: true,
+                name: true,
+                nickname: true,
+                class: true,
+                profilePicture: true,
+            },
+            orderBy: {
+                name: 'asc',
+            },
+        });
+
+        res.json(students);
+    } catch (error) {
+        console.error('Error fetching student photos:', error);
+        res.status(500).json({ error: 'Failed to fetch student photos' });
+    }
+});
+
+// Enhanced teacher students endpoint (for manage students page)
+app.get('/api/teacher/students', auth, async (req, res) => {
+    try {
+        // Only allow teachers
+        const user = await prisma.user.findUnique({
+            where: { id: req.user.userId }
+        });
+        if (!user || user.role !== 'TEACHER') {
+            return res.status(403).json({ error: 'Not authorized' });
+        }
+
+        const students = await prisma.user.findMany({
+            where: { role: 'STUDENT' },
+            select: {
+                id: true,
+                name: true,
+                nickname: true,
+                email: true,
+                class: true,
+                yearLevel: true,
+                active: true,
+                profilePicture: true,
+                createdAt: true
+            },
+            orderBy: { name: 'asc' }
+        });
+
+        res.json(students);
+    } catch (error) {
+        console.error('Error fetching students:', error);
+        res.status(500).json({ error: 'Failed to fetch students' });
+    }
+});
+
+// Login report endpoint
+app.get('/api/teacher/reports/logins', auth, async (req, res) => {
+    try {
+        // Only allow teachers
+        const user = await prisma.user.findUnique({
+            where: { id: req.user.userId }
+        });
+        if (!user || user.role !== 'TEACHER') {
+            return res.status(403).json({ error: 'Not authorized' });
+        }
+
+        const { subjectId } = req.query;
+        
+        if (!subjectId) {
+            return res.json([]); // Return empty array if no subject selected
+        }
+
+        // Get students enrolled in this subject
+        const studentCourses = await prisma.studentCourse.findMany({
+            where: { subjectId: subjectId },
+            include: {
+                student: {
+                    select: {
+                        id: true,
+                        name: true,
+                        nickname: true,
+                        class: true,
+                        email: true
+                    }
+                }
+            }
+        });
+
+        // Get login data for these students (filter out inactive students)
+        const studentIds = studentCourses.map(sc => sc.student.id);
+        const loginData = await prisma.user.findMany({
+            where: {
+                id: { in: studentIds },
+                active: true // Only include active students
+            },
+            select: {
+                id: true,
+                name: true,
+                nickname: true,
+                class: true,
+                email: true,
+                lastLoginAt: true
+            },
+            orderBy: { name: 'asc' }
+        });
+
+        res.json(loginData);
+    } catch (error) {
+        console.error('Error fetching login report:', error);
+        res.status(500).json({ error: 'Failed to fetch login report' });
+    }
+});
+
+// Update the existing progress endpoint to include photos and filter inactive students
+app.get('/api/teacher/progress', auth, async (req, res) => {
+    try {
+        // Only allow teachers
+        const user = await prisma.user.findUnique({
+            where: { id: req.user.userId }
+        });
+        if (!user || user.role !== 'TEACHER') {
+            return res.status(403).json({ error: 'Not authorized' });
+        }
+
+        const { subjectId } = req.query;
+        
+        if (!subjectId) {
+            return res.json([]);
+        }
+
+        // Get students enrolled in this subject
+        const studentCourses = await prisma.studentCourse.findMany({
+            where: { subjectId: subjectId },
+            include: {
+                student: {
+                    select: {
+                        id: true,
+                        name: true,
+                        nickname: true,
+                        class: true,
+                        email: true,
+                        profilePicture: true
+                    }
+                }
+            }
+        });
+
+        // Get progress data for these students (filter out inactive students)
+        const studentIds = studentCourses.map(sc => sc.student.id);
+        const progressData = await prisma.user.findMany({
+            where: {
+                id: { in: studentIds },
+                active: true // Only include active students
+            },
+            select: {
+                id: true,
+                name: true,
+                nickname: true,
+                class: true,
+                email: true,
+                profilePicture: true
+            },
+            orderBy: { name: 'asc' }
+        });
+
+        res.json(progressData);
+    } catch (error) {
+        console.error('Error fetching progress:', error);
+        res.status(500).json({ error: 'Failed to fetch progress' });
+    }
+});
