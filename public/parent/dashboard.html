@@ -64,6 +64,7 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/logout.js"></script>
     <script>
         const token = localStorage.getItem('token');
         if (!token) {
@@ -182,12 +183,8 @@
             progressBar.textContent = `${Math.round(progress)}%`;
         }
 
-        // Handle logout
-        document.getElementById('logoutBtn').addEventListener('click', () => {
-            localStorage.removeItem('token');
-            window.location.href = '/login';
-        });
-
+        // logout() function is now provided by logout.js utility
+        
         // Load data when page loads
         loadChildren();
     </script>

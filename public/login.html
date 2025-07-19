@@ -90,10 +90,20 @@
                        </svg>`;
             });
 
+            // Read org and type from URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const org = urlParams.get('org') || 'PBS';
+            const userType = urlParams.get('type') || localStorage.getItem('userType') || '';
+            document.getElementById('organization').value = org;
+            document.getElementById('userType').value = userType;
+            document.getElementById('orgDisplay').textContent = `Organization: ${org} | User Type: ${userType}`;
+
             form.addEventListener('submit', async function(e) {
                 e.preventDefault();
                 const email = document.getElementById('email').value;
                 const password = document.getElementById('password').value;
+                const organization = document.getElementById('organization').value;
+                const userType = document.getElementById('userType').value;
                 const rememberMe = document.getElementById('rememberMe').checked;
 
                 try {
@@ -102,7 +112,7 @@
                         headers: {
                             'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify({ email, password, rememberMe })
+                        body: JSON.stringify({ email, password, organization, userType, rememberMe })
                     });
 
                     const data = await response.json();
@@ -111,6 +121,8 @@
                         localStorage.setItem('token', data.token);
                         localStorage.setItem('userRole', data.user.role.toUpperCase());
                         localStorage.setItem('userName', data.user.name);
+                        localStorage.setItem('organization', org); // Store organization in localStorage
+                        localStorage.setItem('userType', userType); // Store userType in localStorage
 
                         if (data.user.role === 'STUDENT') {
                             window.location.href = '/student/dashboard.html';

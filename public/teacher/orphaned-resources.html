@@ -50,7 +50,7 @@
     <script>
         const token = localStorage.getItem('token');
         if (!token) {
-            window.location.href = '/login';
+            window.location.href = '/login-pbs.html';
         }
         document.addEventListener('DOMContentLoaded', loadOrphanedResources);
         async function loadOrphanedResources() {
@@ -118,7 +118,7 @@
         }
         function logout() {
             localStorage.removeItem('token');
-            window.location.href = '/login';
+            window.location.href = '/login-pbs.html';
         }
     </script>
 </body>

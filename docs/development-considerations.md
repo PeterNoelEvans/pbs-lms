@@ -51,6 +51,11 @@
    - Query performance improvements
    - Backup automation
 
+4. **Assessment & Filtering Enhancements**
+   - Add `class` property to assessment data model to associate assessments with specific classes (e.g., "M1/1", "M2/2", etc.)
+   - Update backend and API endpoints to include class information in assessment responses
+   - Support class-based filtering in the Manual Grading UI and other relevant pages
+
 ### Technical Decisions
 1. **Email Service Provider**
    - Options considered:
@@ -160,3 +165,65 @@ A `label` field was added to the `MediaFile` model in the database. This field s
    - Security patches
    - Feature updates
    - Documentation updates 
+
+
+   ## [IMPORTANT] Assessment-Subject Mapping: Best Practices for Future Versions
+
+**Recurring Issue:**  
+When mapping or filtering assessments by subject, bugs often occur if the full section > part > unit > subjectId chain is not included in the Prisma query. This leads to incorrect progress, reporting, and filtering.
+
+**Best Practice for Next Version:**
+- **Always use a utility function** for fetching assessments by subject.
+- The utility must include the full nested chain:  
+  `section > part > unit > subjectId`
+- **Always filter for attached assessments** (i.e., `resources.length > 0`) when calculating progress, reporting, or filtering for students/teachers.
+- **Document this pattern** in the codebase and add tests or assertions to catch missing `subjectId` in assessment data.
+
+**Why:**  
+This prevents recurring bugs with progress and reporting endpoints, and ensures all subject/assessment mapping is always correct and maintainable.
+
+---
+
+*This note was generated as a persistent memory from the AI assistant to help future developers avoid known pitfalls in this codebase.*
+
+## Assessment Bank / Staging (Planned for Version 2)
+
+- Allow teachers to create assessments without requiring subject, unit, part, or section.
+- Store these as “unattached” or “draft” assessments in an assessment bank.
+- Provide a UI for teachers to browse, edit, and manage unattached assessments.
+- Enable assignment of assessments to courses/subjects/sections at any time.
+- Unattached assessments are not visible to students until assigned.
+- This will support faster content creation, reusability, and better workflow for teachers.
+
+### Assessment Editing & Assignment - Best Practices for v2
+
+- Decouple assessment content (title, questions, media) from assignment (subject/unit/part/section).
+- Allow assessments to exist in an “unassigned” state (draft/bank).
+- Editing an assessment should always show and preserve all content, regardless of assignment.
+- Assignment can be changed at any time, but should not affect the assessment’s content.
+- UI should clearly separate “Content” and “Assignment” steps/tabs.
+- Backend should allow nullable assignment fields and handle both attached and unattached assessments.
+
+### Multiple Resources per Assessment (Planned for v2)
+
+- Allow each assessment to have multiple resources (images, audio, PDFs, etc.).
+- UI: “Resources” section with add, remove, reorder, and caption features.
+- Data model: assessment.resources[] (one-to-many).
+- API: Endpoints accept and return an array of resources per assessment.
+- Display all resources in the order set by the teacher.
+
+### Automated Course Structure Creation (Planned for v2)
+
+- Allow teachers to quickly build the course structure by pasting or uploading the table of contents from a textbook.
+- System parses the input and auto-creates units, parts, and sections in the correct hierarchy.
+- Teacher can review and edit before saving.
+- Supports manual paste, CSV/Excel upload, and (optionally) OCR from images.
+- Greatly speeds up initial course setup and ensures alignment with published materials.
+
+### Export/Print Course Structure (Planned for v2)
+
+- Add an “Export” or “Print” button to the course structure page.
+- Allow export as PDF, Word, or plain text.
+- Export includes full hierarchy: units, parts, sections, and (optionally) descriptions.
+- Output is formatted for easy printing and sharing with parents, teachers, or admins.
+- Optionally, allow preview and customization before export.

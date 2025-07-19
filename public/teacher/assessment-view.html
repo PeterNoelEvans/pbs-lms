@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Assessment View</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .question-block { margin-bottom: 2rem; }
+        .choice-list { list-style-type: upper-alpha; }
+        .choice-list li.correct { font-weight: bold; color: green; }
+        .choice-list li.incorrect { color: #333; }
+    </style>
+</head>
+<body>
+    <div class="container my-4">
+        <a href="/teacher/assessments.html" class="btn btn-link mb-3">&larr; Back to Assessments</a>
+        <div id="assessmentContainer"></div>
+    </div>
+    <script>
+    const token = localStorage.getItem('token');
+    function getQueryParam(name) {
+        const urlParams = new URLSearchParams(window.location.search);
+        return urlParams.get(name);
+    }
+    async function loadAssessment() {
+        const assessmentId = getQueryParam('assessmentId');
+        if (!assessmentId) {
+            document.getElementById('assessmentContainer').innerHTML = '<div class="alert alert-danger">No assessmentId provided.</div>';
+            return;
+        }
+        try {
+            const response = await fetch(`/api/assessments/${assessmentId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!response.ok) throw new Error('Failed to fetch assessment');
+            const assessment = await response.json();
+            renderAssessment(assessment);
+        } catch (err) {
+            document.getElementById('assessmentContainer').innerHTML = `<div class='alert alert-danger'>${err.message}</div>`;
+        }
+    }
+    function renderAssessment(assessment) {
+        let html = `<h2>${assessment.title}</h2>`;
+        html += `<p><strong>Description:</strong> ${assessment.description || ''}</p>`;
+        html += `<p><strong>Type:</strong> ${assessment.type}</p>`;
+        html += `<p><strong>Category:</strong> ${assessment.category || 'N/A'}</p>`;
+        html += `<p><strong>Section:</strong> ${assessment.section?.part?.unit?.subject?.name || ''} > ${assessment.section?.part?.unit?.name || ''} > ${assessment.section?.part?.name || ''} > ${assessment.section?.name || ''}</p>`;
+        if (assessment.mediaFiles && assessment.mediaFiles.length > 0) {
+            html += `<div class='mb-3'><strong>Media:</strong><br/>`;
+            assessment.mediaFiles.forEach(file => {
+                if (file.type && file.type.startsWith('audio/')) {
+                    html += `<audio controls src='${file.filePath}'></audio><br/>`;
+                } else if (file.type && file.type.startsWith('image/')) {
+                    html += `<img src='${file.filePath}' alt='Image' style='max-width:200px;max-height:200px;' class='me-2 mb-2'/>`;
+                }
+            });
+            html += `</div>`;
+        }
+        html += `<hr><h4>Questions</h4>`;
+        if (Array.isArray(assessment.questions) && assessment.questions.length > 0) {
+            assessment.questions.forEach((q, i) => {
+                html += `<div class='question-block'><strong>Q${i+1}:</strong> `;
+                if (q.type === 'true-false' && Array.isArray(q.sentences)) {
+                    q.sentences.forEach((s, idx) => {
+                        html += `<div>${s.text} <span class='badge bg-${s.isTrue ? 'success' : 'danger'} ms-2'>${s.isTrue ? 'True' : 'False'}</span></div>`;
+                    });
+                } else if (q.type === 'multiple-choice' && q.text && Array.isArray(q.choices)) {
+                    html += `<div>${q.text}</div><ul class='choice-list'>`;
+                    q.choices.forEach((choice, idx) => {
+                        html += `<li class='${choice.isCorrect ? 'correct' : 'incorrect'}'>${choice.text}${choice.isCorrect ? ' (Correct)' : ''}</li>`;
+                    });
+                    html += `</ul>`;
+                } else if (q.type === 'speaking' || q.type === 'writing' || q.type === 'writing-long' || q.type === 'assignment') {
+                    html += `<div>${q.text || '(Teacher will manually grade this response.)'}</div>`;
+                } else {
+                    html += `<pre>${JSON.stringify(q, null, 2)}</pre>`;
+                }
+                html += `</div>`;
+            });
+        } else {
+            html += '<div>No questions found.</div>';
+        }
+        document.getElementById('assessmentContainer').innerHTML = html;
+    }
+    document.addEventListener('DOMContentLoaded', loadAssessment);
+    </script>
+</body>
+</html> 

@@ -106,3 +106,8 @@ This guide covers common errors and their solutions for the assessment and stude
 ---
 
 _Last updated: [DATE]_ 
+
+**12 July 2025**
+- for checking the logs in pm2 use this
+-- pm2 log 0
+put this in the terminal and it should show the error logs

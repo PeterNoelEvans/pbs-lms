@@ -211,32 +211,79 @@
         const mid = Math.ceil(studentsForGraph.length / 2);
         const col1 = studentsForGraph.slice(0, mid);
         const col2 = studentsForGraph.slice(mid);
-        let html = '<strong>Overall Class Progress</strong><br><div class="row" style="max-width:900px">';
-        html += '<div class="col-md-6"><div style="max-width:440px; padding-right:24px;">';
+        let html = `<strong>Overall Class Progress</strong><br>
+            <div style="display: flex; font-size: 0.95em; color: #888; margin-bottom: 4px; align-items: center;">
+                <div style="width: 200px;"></div>
+                <div style="flex: 1; text-align: center;">Progress<br>&nbsp;</div>
+                <div style="width: 60px; text-align: right;"> </div>
+                <div style="width: 70px; text-align: right;"> </div>
+            </div>
+            <div class="row w-100">`;
+        html += '<div class="col-md-6"><div style="width:100%; padding-right:24px;">';
+        // Add mini-header for Avg. Score and Final Grade in the first column
+        html += `<div style="display: flex; font-size: 0.95em; color: #888; margin-bottom: 4px; align-items: center;">
+            <div style="width: 200px;"></div>
+            <div style="flex: 1;"></div>
+            <div style="width: 60px; text-align: right;">Avg.<br>Score</div>
+            <div style="width: 70px; text-align: right;">Final<br>Grade</div>
+        </div>`;
         
         col1.forEach(student => {
             const percent = student.progressPercent || 0;
+            const avgScore = student.averageScore ?? null;
+            const finalGrade = (avgScore !== null) ? Math.round(percent * avgScore / 100) : null;
             html += `
-                <div class="d-flex align-items-center mb-1">
-                    <div style="width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${student.name}">${student.name}</div>
-                    <div class="text-end" style="width: 40px">${percent}%</div>
-                    <div class="progress flex-grow-1 ms-2" style="height: 18px;">
-                        <div class="progress-bar bg-success" role="progressbar" style="width: ${percent}%" aria-valuenow="${percent}" aria-valuemin="0" aria-valuemax="100"></div>
+                <div class="d-flex align-items-center mb-1" style="width:100%;">
+                    <div style="width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${student.name}">${student.name}</div>
+                    <div class="flex-grow-1 mx-2" style="min-width: 100px;">
+                        <div class="progress" style="height: 18px;">
+                            <div class="progress-bar bg-success" role="progressbar" style="width: ${percent}%" aria-valuenow="${percent}" aria-valuemin="0" aria-valuemax="100"></div>
+                        </div>
                     </div>
+                    <div style="width: 60px; text-align: right; font-size: 0.9rem; color: #495057; font-weight: 500;" title="Average score across all completed assessments">${avgScore !== null ? avgScore + '%' : 'N/A'}</div>
+                    <div style="width: 70px; text-align: right; font-size: 0.9rem; color: #0d6efd; font-weight: 500;" title="Final Grade = Progress % × Avg. Score %">${finalGrade !== null ? finalGrade + '%' : 'N/A'}</div>
                 </div>
             `;
         });
         html += '</div></div>';
-        html += '<div class="col-md-6"><div style="max-width:440px; padding-left:24px;">';
+        html += '<div class="col-md-6"><div style="width:100%; padding-left:24px;">';
+        // Add two invisible rows to push the right column's header down
+        html += `
+          <div class="d-flex align-items-center mb-1" style="width:100%; visibility: hidden;">
+            <div style="width: 200px;"></div>
+            <div class="flex-grow-1 mx-2" style="min-width: 100px;"></div>
+            <div style="width: 60px;"></div>
+            <div style="width: 70px;"></div>
+          </div>
+          <div class="d-flex align-items-center mb-1" style="width:100%; visibility: hidden;">
+            <div style="width: 200px;"></div>
+            <div class="flex-grow-1 mx-2" style="min-width: 100px;"></div>
+            <div style="width: 60px;"></div>
+            <div style="width: 70px;"></div>
+          </div>
+        `;
+        // Add mini-header for Avg. Score and Final Grade in the right column
+        html += `<div style="display: flex; font-size: 0.95em; color: #888; margin-bottom: 4px; align-items: center;">
+            <div style="width: 200px;"></div>
+            <div style="flex: 1;"></div>
+            <div style="width: 60px; text-align: right;">Avg.<br>Score</div>
+            <div style="width: 70px; text-align: right;">Final<br>Grade</div>
+        </div>`;
+        
         col2.forEach(student => {
             const percent = student.progressPercent || 0;
+            const avgScore = student.averageScore ?? null;
+            const finalGrade = (avgScore !== null) ? Math.round(percent * avgScore / 100) : null;
             html += `
-                <div class="d-flex align-items-center mb-1">
-                    <div style="width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${student.name}">${student.name}</div>
-                    <div class="text-end" style="width: 40px">${percent}%</div>
-                    <div class="progress flex-grow-1 ms-2" style="height: 18px;">
-                        <div class="progress-bar bg-success" role="progressbar" style="width: ${percent}%" aria-valuenow="${percent}" aria-valuemin="0" aria-valuemax="100"></div>
+                <div class="d-flex align-items-center mb-1" style="width:100%;">
+                    <div style="width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${student.name}">${student.name}</div>
+                    <div class="flex-grow-1 mx-2" style="min-width: 100px;">
+                        <div class="progress" style="height: 18px;">
+                            <div class="progress-bar bg-success" role="progressbar" style="width: ${percent}%" aria-valuenow="${percent}" aria-valuemin="0" aria-valuemax="100"></div>
+                        </div>
                     </div>
+                    <div style="width: 60px; text-align: right; font-size: 0.9rem; color: #495057; font-weight: 500;" title="Average score across all completed assessments">${avgScore !== null ? avgScore + '%' : 'N/A'}</div>
+                    <div style="width: 70px; text-align: right; font-size: 0.9rem; color: #0d6efd; font-weight: 500;" title="Final Grade = Progress % × Avg. Score %">${finalGrade !== null ? finalGrade + '%' : 'N/A'}</div>
                 </div>
             `;
         });

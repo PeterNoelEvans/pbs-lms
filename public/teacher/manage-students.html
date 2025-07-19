@@ -116,7 +116,7 @@
 
     <script>
     const token = localStorage.getItem('token');
-    if (!token) window.location.href = '/login';
+    if (!token) window.location.href = '/login-pbs.html';
     
     let allStudents = [];
     let changed = {};
@@ -306,7 +306,7 @@
 
     document.getElementById('logoutBtn').onclick = function() {
         localStorage.clear();
-        window.location.href = '/login';
+        window.location.href = '/login-pbs.html';
     };
     </script>
 </body>

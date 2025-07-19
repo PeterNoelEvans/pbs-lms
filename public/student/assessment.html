@@ -100,6 +100,95 @@
         .list-group-item:last-child {
             margin-bottom: 15px !important;
         }
+        
+        /* Change-Sequence specific styles for mobile scrolling */
+        .change-sequence-container {
+            position: relative;
+            width: 100%;
+        }
+        
+        .change-sequence-container .list-group {
+            width: calc(100% - 60px); /* Leave 60px on the right for scrolling */
+            max-width: calc(100vw - 80px); /* Ensure it doesn't overflow viewport */
+            margin-right: 60px; /* Space for scrolling */
+        }
+        
+        .change-sequence-container .list-group-item {
+            width: 100%;
+            max-width: 100%;
+            margin-right: 0;
+            cursor: grab;
+            user-select: none;
+            transition: all 0.2s;
+        }
+        
+        .change-sequence-container .list-group-item:hover {
+            background-color: #f8f9fa;
+        }
+        
+        .change-sequence-container .list-group-item:active {
+            cursor: grabbing;
+        }
+        
+        /* Improve touch experience on mobile */
+        .change-sequence-container .list-group-item {
+            touch-action: pan-y; /* Allow vertical scrolling */
+        }
+        
+        /* Prevent accidental drags on mobile */
+        @media (max-width: 768px) {
+            .change-sequence-container .list-group-item {
+                touch-action: pan-y;
+                -webkit-user-select: none;
+                -moz-user-select: none;
+                -ms-user-select: none;
+                user-select: none;
+            }
+        }
+        
+        /* Mobile-specific adjustments */
+        @media (max-width: 768px) {
+            .change-sequence-container .list-group {
+                width: calc(100% - 40px); /* Smaller space on mobile */
+                margin-right: 40px;
+            }
+            
+            .change-sequence-container .list-group-item {
+                font-size: 1rem;
+                padding: 12px 15px;
+                min-height: 60px;
+            }
+        }
+        
+        /* Add visual indicator for scrollable area */
+        .change-sequence-container::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 40px;
+            height: 100%;
+            background: linear-gradient(to right, transparent, rgba(0,0,0,0.05));
+            pointer-events: none;
+            z-index: 1;
+        }
+        
+        /* Mobile scroll indicator */
+        @media (max-width: 768px) {
+            .change-sequence-container::after {
+                width: 30px;
+                background: linear-gradient(to right, transparent, rgba(0,0,0,0.08));
+            }
+        }
+        
+        /* Mobile scroll indicator */
+        @media (max-width: 768px) {
+            .change-sequence-container::after {
+                width: 30px;
+                background: linear-gradient(to right, transparent, rgba(0,0,0,0.08));
+            }
+        }
+        
         /* Drag and drop styles */
         .draggable-items-container {
             display: flex;
@@ -1029,8 +1118,19 @@
                         // Instructions
                         const instr = document.createElement('div');
                         instr.className = 'alert alert-info';
-                        instr.textContent = 'Drag and drop the items to put them in the correct order.';
+                        instr.innerHTML = `
+                            <div><strong>Instructions:</strong> Drag and drop the items to put them in the correct order.</div>
+                            <div class="mt-2" style="font-size: 0.9rem; color: #6c757d;">
+                                <i class="bi bi-phone"></i> On mobile: Use the right side of the screen to scroll, left side to drag items.
+                            </div>
+                        `;
                         container.appendChild(instr);
+                        
+                        // Create container for change-sequence with proper spacing
+                        const sequenceContainer = document.createElement('div');
+                        sequenceContainer.className = 'change-sequence-container';
+                        container.appendChild(sequenceContainer);
+                        
                         // Sortable list
                         const list = document.createElement('ul');
                         list.className = 'list-group mb-3';
@@ -1048,7 +1148,7 @@
                             li.dataset.index = idx;
                             list.appendChild(li);
                         });
-                        container.appendChild(list);
+                        sequenceContainer.appendChild(list);
                         // Add pastel ghost class for SortableJS
                         const style = document.createElement('style');
                         style.innerHTML = `.sortable-ghost { background: #e7f3ff !important; opacity: 0.8 !important; }`;
@@ -3538,7 +3638,8 @@
                 // Prepare submission data
                 const submissionData = {
                     answers: userAnswers,
-                    score: percentageScore
+                    score: percentageScore,
+                    timeTaken: getAssignmentTimeSpent()
                 };
                 
                 // Submit assessment
@@ -3698,7 +3799,7 @@
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${token}`
                     },
-                    body: JSON.stringify({ answers, score })
+                    body: JSON.stringify({ answers, score, timeTaken: getAssignmentTimeSpent() })
                 });
                 if (response.ok) {
                     // Optionally show a toast or notification
@@ -3735,7 +3836,7 @@
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${token}`
                     },
-                    body: JSON.stringify({ answers, score })
+                    body: JSON.stringify({ answers, score, timeTaken: getAssignmentTimeSpent() })
                 });
                 if (response.ok) {
                     document.getElementById('assessmentContainer').innerHTML = `
@@ -3806,6 +3907,12 @@
                     statusDiv.innerHTML = `<div class='alert alert-danger'>Error uploading audio: ${error.message || 'Unknown error'}</div>`;
                 }
             });
+        }
+
+        // Timer for time spent on assignment
+        let assignmentStartTime = Date.now();
+        function getAssignmentTimeSpent() {
+            return Math.round((Date.now() - assignmentStartTime) / 1000); // seconds
         }
     </script>
     <!-- Direct fix for drag and drop functionality -->

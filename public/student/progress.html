@@ -25,6 +25,7 @@
                     <thead class="table-light">
                         <tr>
                             <th>Assessment</th>
+                            <th>Resource</th>
                             <th>Attempts</th>
                             <th>Best Score</th>
                             <th>Last Score</th>
@@ -69,7 +70,7 @@
     // Fetch and render student info and progress data from API
     const tbody = document.getElementById('progressTableBody');
     const studentInfoDiv = document.getElementById('studentInfo');
-    tbody.innerHTML = '<tr><td colspan="7" class="text-center">Loading...</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center">Loading...</td></tr>';
     let progressRows = [];
     let submissionData = {}; // Store submission data for modal
 
@@ -97,7 +98,7 @@
     .then(data => {
         tbody.innerHTML = '';
         if (!data.assessments || data.assessments.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" class="text-center">No progress data found.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center">No progress data found.</td></tr>';
             return;
         }
         progressRows = data.assessments.map(row => {
@@ -115,6 +116,7 @@
             
             return {
                 Assessment: row.title || row.name || '-',
+                Resource: row.resourceTitle || '-',
                 Attempts: attempts,
                 'Best Score': bestScore,
                 'Last Score': lastScore,
@@ -127,6 +129,7 @@
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td>${row.Assessment}</td>
+                <td>${row.Resource}</td>
                 <td>${row.Attempts}</td>
                 <td>${row['Best Score']}</td>
                 <td>${row['Last Score']}</td>
@@ -140,16 +143,28 @@
                 </td>
             `;
             tbody.appendChild(tr);
+            
+            // Debug: Log the submissionId for this row
+            if (row.submissionId) {
+                console.log(`Row for "${row.Assessment}" has submissionId: ${row.submissionId}`);
+            }
         });
     })
     .catch(err => {
-        tbody.innerHTML = '<tr><td colspan="7" class="text-danger text-center">Failed to load progress data.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="text-danger text-center">Failed to load progress data.</td></tr>';
         console.error(err);
     });
 
     // Function to view submission details
     async function viewSubmissionDetails(submissionId) {
+        console.log('viewSubmissionDetails called with submissionId:', submissionId);
+        
         const modalBody = document.getElementById('submissionDetailsBody');
+        if (!modalBody) {
+            console.error('Modal body element not found!');
+            return;
+        }
+        
         modalBody.innerHTML = `
             <div class="text-center">
                 <div class="spinner-border" role="status">
@@ -159,15 +174,20 @@
         `;
         
         try {
+            console.log('Fetching submission details from:', `/api/student/submission/${submissionId}`);
             const response = await fetch(`/api/student/submission/${submissionId}`, {
                 headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
             });
             
+            console.log('Response status:', response.status);
+            
             if (!response.ok) {
-                throw new Error('Failed to fetch submission details');
+                throw new Error(`Failed to fetch submission details: ${response.status} ${response.statusText}`);
             }
             
             const data = await response.json();
+            console.log('Submission data received:', data);
+            
             const submission = data.submission;
             
             let commentHtml = '';
@@ -202,7 +222,8 @@
                     <div class="col-md-6">
                         <h6><i class="bi bi-file-text"></i> Assessment Details:</h6>
                         <ul class="list-unstyled">
-                            <li><strong>Title:</strong> ${submission.assessment.title}</li>
+                            <li><strong>Assessment:</strong> ${submission.assessment.title}</li>
+                            <li><strong>Resource:</strong> ${submission.resourceTitle || 'Not linked to a resource'}</li>
                             <li><strong>Type:</strong> ${submission.assessment.type}</li>
                             <li><strong>Subject:</strong> ${submission.assessment.subject}</li>
                             <li><strong>Unit:</strong> ${submission.assessment.unit}</li>
@@ -225,16 +246,31 @@
             `;
             
             // Show the modal
-            const modal = new bootstrap.Modal(document.getElementById('submissionDetailsModal'));
+            const modalElement = document.getElementById('submissionDetailsModal');
+            if (!modalElement) {
+                console.error('Modal element not found!');
+                return;
+            }
+            
+            const modal = new bootstrap.Modal(modalElement);
             modal.show();
+            console.log('Modal should now be visible');
             
         } catch (error) {
+            console.error('Error in viewSubmissionDetails:', error);
             modalBody.innerHTML = `
                 <div class="alert alert-danger">
                     <i class="bi bi-exclamation-triangle"></i>
                     Failed to load submission details: ${error.message}
                 </div>
             `;
+            
+            // Still try to show the modal even if there's an error
+            const modalElement = document.getElementById('submissionDetailsModal');
+            if (modalElement) {
+                const modal = new bootstrap.Modal(modalElement);
+                modal.show();
+            }
         }
     }
 

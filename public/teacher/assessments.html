@@ -66,10 +66,31 @@
         </div>
     </nav>
 
-    <div class="container mt-4">
+    <div class="container-fluid mt-4">
+        <div class="row mb-3">
+            <div class="col-auto">
+                <label for="quarterFilter" class="form-label mb-0 me-2">Quarter:</label>
+                <select id="quarterFilter" class="form-select d-inline-block w-auto">
+                    <option value="">All</option>
+                    <option value="Q1">Q1</option>
+                    <option value="Q2">Q2</option>
+                    <option value="Q3">Q3</option>
+                    <option value="Q4">Q4</option>
+                </select>
+            </div>
+            <div class="col-auto">
+                <label for="publishedFilter" class="form-label mb-0 me-2">Published:</label>
+                <select id="publishedFilter" class="form-select d-inline-block w-auto">
+                    <option value="">All</option>
+                    <option value="true">Published</option>
+                    <option value="false">Unpublished</option>
+                </select>
+            </div>
+        </div>
         <div class="row">
-            <div class="col-md-8">
-                <div class="card">
+            <!-- Left panel: selectors and form -->
+            <div class="col-lg-5 col-xl-4">
+                <div class="card mb-4">
                     <div class="card-header">
                         <h4>Create New Assessment</h4>
                     </div>
@@ -243,15 +264,15 @@
                     </div>
                 </div>
             </div>
-
-            <div class="col-md-4">
+            <!-- Right panel: existing assessments grid -->
+            <div class="col-lg-7 col-xl-8">
                 <div class="card">
                     <div class="card-header">
                         <h4>Existing Assessments</h4>
                     </div>
                     <div class="card-body">
-                        <div id="existingAssessments">
-                            <!-- Assessments will be loaded here -->
+                        <div id="existingAssessments" class="row g-3">
+                            <!-- Assessments will be loaded here as grid -->
                         </div>
                     </div>
                 </div>
@@ -260,18 +281,15 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/logout.js"></script>
     <script>
         const token = localStorage.getItem('token');
         if (!token) {
             window.location.href = '/login';
         }
 
-        // Logout function
-        function logout() {
-            localStorage.removeItem('token');
-            window.location.href = '/login';
-        }
-
+        // logout() function is now provided by logout.js utility
+        
         // Add event listener to logout button
         document.getElementById('logoutBtn').addEventListener('click', logout);
 
@@ -1203,68 +1221,44 @@
 
                 // No additional filtering needed - backend has already filtered
                 assessments.forEach(assessment => {
+                    const col = document.createElement('div');
+                    col.className = 'col-12 col-md-6 col-xl-3'; // 4 columns on xl screens
                     const card = document.createElement('div');
-                    card.className = 'card mb-3';
-                    
-                    // Parse questions array safely
-                    const questionsArray = Array.isArray(assessment.questions) ? assessment.questions : [];
-                    let questionCount = questionsArray.length;
-                    let questionDisplay = questionCount.toString();
-                    
-                    // For writing assessments, show "N/A" instead of 0
-                    if ((assessment.type === 'writing' || assessment.type === 'writing-long') && questionCount === 0) {
-                        questionDisplay = 'N/A';
-                    }
-                    // Improved count for drag-and-drop subtypes
-                    else if (assessment.type === 'drag-and-drop' && questionsArray.length > 0) {
-                        const q = questionsArray[0];
-                        if (q.subtype === 'fill-in-blank' && Array.isArray(q.sentences)) {
-                            questionCount = q.sentences.length;
-                            questionDisplay = questionCount.toString();
-                        } else if (q.subtype === 'sequence') {
-                            questionCount = 1;
-                            questionDisplay = questionCount.toString();
-                        } else if (q.subtype === 'sequence' && Array.isArray(q.correctSequence)) {
-                            questionCount = q.correctSequence.length;
-                            questionDisplay = questionCount.toString();
-                        }
-                    }
-                    
-                    // Determine if this assessment needs manual grading
-                    const manualTypes = ['speaking', 'assignment', 'writing', 'writing-long'];
-                    const showGradeBtn = manualTypes.includes((assessment.type || '').toLowerCase());
-                    
-                    try {
-                        card.innerHTML = `
-                            <div class="card-body">
-                                <h6 class="card-title">${assessment.title}</h6>
-                                <p class="card-text small">
-                                    ${assessment.section.part.unit.subject.name} > 
-                                    ${assessment.section.part.unit.name} > 
-                                    ${assessment.section.part.name} > 
-                                    ${assessment.section.name}
-                                </p>
-                                <p class="card-text small">
-                                    Category: ${assessment.category || 'N/A'}
-                                </p>
-                                <p class="card-text small">
-                                    Questions: ${questionDisplay}
-                                </p>
-                                <div class="btn-group">
-                                    <button class="btn btn-sm btn-primary" onclick="editAssessment('${assessment.id}')">
-                                        <i class="bi bi-pencil"></i> Edit
-                                    </button>
-                                    <button class="btn btn-sm btn-danger" onclick="deleteAssessment('${assessment.id}')">
-                                        <i class="bi bi-trash"></i> Delete
-                                    </button>
-                                    ${showGradeBtn ? `<a href="/teacher/grade-assessment.html?assessmentId=${assessment.id}" class="btn btn-success btn-sm ms-2"><i class="bi bi-clipboard-check"></i> Grade</a>` : ''}
-                                </div>
+                    card.className = 'card h-100';
+                    card.innerHTML = `
+                        <div class="card-body">
+                            <h6 class="card-title">
+                                ${assessment.title}
+                                ${assessment.unattached ? '<span class="badge bg-danger ms-2">Unattached</span>' : ''}
+                            </h6>
+                            <p class="card-text small">
+                                ${assessment.section.part.unit.subject.name} > 
+                                ${assessment.section.part.unit.name} > 
+                                ${assessment.section.part.name} > 
+                                ${assessment.section.name}
+                            </p>
+                            <p class="card-text small">
+                                Category: ${assessment.category || 'N/A'}
+                            </p>
+                            <p class="card-text small">
+                                Questions: ${assessment.questions.length}
+                            </p>
+                            <div class="btn-group">
+                                <button class="btn btn-sm btn-secondary" onclick="openAssessmentView('${assessment.id}')">
+                                    <i class="bi bi-eye"></i> View
+                                </button>
+                                <button class="btn btn-sm btn-primary" onclick="editAssessment('${assessment.id}')">
+                                    <i class="bi bi-pencil"></i> Edit
+                                </button>
+                                <button class="btn btn-sm btn-danger" onclick="deleteAssessment('${assessment.id}')">
+                                    <i class="bi bi-trash"></i> Delete
+                                </button>
+                                ${['speaking', 'assignment', 'writing', 'writing-long'].includes((assessment.type || '').toLowerCase()) ? `<a href="/teacher/grade-assessment.html?assessmentId=${assessment.id}" class="btn btn-success btn-sm ms-2"><i class="bi bi-clipboard-check"></i> Grade</a>` : ''}
                             </div>
-                        `;
-                        container.appendChild(card);
-                    } catch (e) {
-                        console.error('Error rendering assessment card:', e, assessment);
-                    }
+                        </div>
+                    `;
+                    col.appendChild(card);
+                    container.appendChild(col);
                 });
             } catch (error) {
                 console.error('Error loading assessments:', error);
@@ -3277,6 +3271,98 @@ Ooh, exciting!|That sounds fun.</pre>
             }
         }
         // ... existing code ...
+
+        async function viewAssessment(assessmentId) {
+            try {
+                const response = await fetch(`/api/assessments/${assessmentId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!response.ok) throw new Error('Failed to fetch assessment');
+                const assessment = await response.json();
+                let html = `<h5>${assessment.title}</h5>`;
+                html += `<p><strong>Description:</strong> ${assessment.description || ''}</p>`;
+                html += `<p><strong>Type:</strong> ${assessment.type}</p>`;
+                html += `<p><strong>Category:</strong> ${assessment.category || 'N/A'}</p>`;
+                html += `<p><strong>Section:</strong> ${assessment.section.part.unit.subject.name} > ${assessment.section.part.unit.name} > ${assessment.section.part.name} > ${assessment.section.name}</p>`;
+                html += `<hr><h6>Questions:</h6>`;
+                if (Array.isArray(assessment.questions) && assessment.questions.length > 0) {
+                    assessment.questions.forEach((q, i) => {
+                        html += `<div class='mb-2'><strong>Q${i+1}:</strong> `;
+                        if (q.type === 'true-false' && Array.isArray(q.sentences)) {
+                            q.sentences.forEach((s, idx) => {
+                                html += `<div>${s.text} <span class='badge bg-${s.isTrue ? 'success' : 'danger'} ms-2'>${s.isTrue ? 'True' : 'False'}</span></div>`;
+                            });
+                        } else if (q.type === 'multiple-choice' && q.text && Array.isArray(q.choices)) {
+                            html += `<div>${q.text}</div><ul>`;
+                            q.choices.forEach((choice, idx) => {
+                                html += `<li${choice.isCorrect ? ' style=\'font-weight:bold;color:green;\'' : ''}>${String.fromCharCode(65+idx)}. ${choice.text}${choice.isCorrect ? ' (Correct)' : ''}</li>`;
+                            });
+                            html += `</ul>`;
+                        } else {
+                            html += `<pre>${JSON.stringify(q, null, 2)}</pre>`;
+                        }
+                        html += `</div>`;
+                    });
+                } else {
+                    html += '<div>No questions found.</div>';
+                }
+                document.getElementById('viewAssessmentModalBody').innerHTML = html;
+                const modal = new bootstrap.Modal(document.getElementById('viewAssessmentModal'));
+                modal.show();
+            } catch (error) {
+                alert('Failed to load assessment for viewing: ' + error.message);
+            }
+        }
+
+        // In the JS section, add this function:
+        function openAssessmentView(assessmentId) {
+            const windowWidth = 900;
+            const windowHeight = 700;
+            const left = window.screen.width - windowWidth;
+            const top = 0;
+            window.open(
+                `/teacher/assessment-view.html?assessmentId=${assessmentId}`,
+                '_blank',
+                `width=${windowWidth},height=${windowHeight},left=${left},top=${top},scrollbars=yes,resizable=yes`
+            );
+        }
+
+        // Add filter logic for quarter and published
+        function getAssessmentFilters() {
+            const quarter = document.getElementById('quarterFilter').value;
+            const published = document.getElementById('publishedFilter').value;
+            return { quarter, published };
+        }
+        async function fetchAssessmentsWithFilters() {
+            const { quarter, published } = getAssessmentFilters();
+            let url = '/api/teacher/assessments?';
+            if (quarter) url += `quarter=${encodeURIComponent(quarter)}&`;
+            if (published) url += `published=${encodeURIComponent(published)}&`;
+            // Remove trailing & or ?
+            url = url.replace(/[&?]$/, '');
+            // ...existing fetch logic, replace the fetch URL with 'url'...
+            // Example:
+            // const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+            // ...rest of your fetch logic...
+        }
+        document.getElementById('quarterFilter').addEventListener('change', fetchAssessmentsWithFilters);
+        document.getElementById('publishedFilter').addEventListener('change', fetchAssessmentsWithFilters);
+        // ...existing code to call fetchAssessmentsWithFilters() on page load...
+        // ... existing code ...
     </script>
+    <!-- Modal for viewing assessment as teacher -->
+    <div class="modal fade" id="viewAssessmentModal" tabindex="-1" aria-labelledby="viewAssessmentModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="viewAssessmentModalLabel">Assessment Details</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body" id="viewAssessmentModalBody">
+            <!-- Content will be injected by JS -->
+          </div>
+        </div>
+      </div>
+    </div>
 </body>
 </html>

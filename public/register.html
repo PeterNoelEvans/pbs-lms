@@ -95,6 +95,16 @@
                 <label for="password">Password</label>
             </div>
             <div class="form-floating">
+                <select class="form-select" id="organization" name="organization" required>
+                    <option value="">Select Organization</option>
+                    <option value="PBS">PBS</option>
+                    <option value="Hospital">Hospital</option>
+                    <option value="CodingSchool">Coding School</option>
+                    <!-- Add more organizations as needed -->
+                </select>
+                <label for="organization">Organization</label>
+            </div>
+            <div class="form-floating">
                 <select class="form-select" id="role" name="role" required>
                     <option value="">Select Role</option>
                     <option value="teacher">Teacher</option>
@@ -206,7 +216,8 @@
                 nickname: document.getElementById('nickname').value,
                 email: document.getElementById('email').value,
                 password: document.getElementById('password').value,
-                role: document.getElementById('role').value
+                role: document.getElementById('role').value,
+                organization: document.getElementById('organization').value
             };
 
             // Only add year and class for students

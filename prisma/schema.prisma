@@ -16,6 +16,8 @@ model User {
   email             String
   password          String
   role              String              // ADMIN, TEACHER, STUDENT
+  organization      String              @default("PBS") // e.g., "PBS", "Hospital", "CodingSchool"
+  studentNumber     Int?                @unique // Student ID number (5-digit number, e.g., 12345, 67890)
   nickname          String?             @unique
   yearLevel         Int?
   class             String?
@@ -37,6 +39,7 @@ model User {
   parentId      String?   
   parent        User?     @relation("ParentChild", fields: [parentId], references: [id])
   assessmentSubmissions AssessmentSubmission[]
+  sessions      UserSession[] // Track login sessions
 }
 
 model CoreSubject {
@@ -185,6 +188,8 @@ model Assessment {
   criteria    String?  // Grading criteria/rubric for manually graded assessments
   questions   Json?     // For quizzes
   dueDate     DateTime? // For assignments
+  quarter     String   @default("Q1") // "Q1", "Q2", "Q3", "Q4"
+  published   Boolean  @default(true)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   section     Section   @relation(fields: [sectionId], references: [id])
@@ -287,7 +292,7 @@ model SubjectTeacher {
 
 model AssessmentSubmission {
   id           String   @id @default(uuid())
-  answers      Json
+  answers      Json?
   comment      String?  // Teacher feedback/comment for manually graded assessments
   score        Float?
   submittedAt  DateTime @default(now())
@@ -297,4 +302,26 @@ model AssessmentSubmission {
   studentId    String
   attempts     Int?     // Total number of attempts
   totalTime    Int?     // Accumulative time in seconds
+} 
+
+model Config {
+  id    Int    @id @default(1)
+  key   String @unique
+  value String
+} 
+
+model UserSession {
+  id          String   @id @default(uuid())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String
+  startTime   DateTime @default(now())
+  endTime     DateTime? // null if session is still active
+  duration    Int?     // Duration in seconds (calculated when session ends)
+  ipAddress   String?  // Optional: track IP address
+  userAgent   String?  // Optional: track browser/device info
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId, startTime])
+  @@index([startTime])
 } 

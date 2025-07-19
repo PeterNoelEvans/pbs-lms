@@ -89,6 +89,12 @@
                     </select>
                 </div>
                 <div class="col-md-4">
+                    <label for="classFilter" class="form-label">Filter by Class:</label>
+                    <select class="form-select" id="classFilter">
+                        <option value="">All Classes</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
                     <button class="btn btn-outline-secondary w-100" onclick="clearFilters()">
                         <i class="bi bi-x-circle"></i> Clear Filters
                     </button>
@@ -149,6 +155,7 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/logout.js"></script>
     <script>
         const token = localStorage.getItem('token');
         if (!token) window.location.href = '/login';
@@ -157,12 +164,30 @@
         let filteredAssessments = [];
 
         document.addEventListener('DOMContentLoaded', function() {
+            // Restore filters from localStorage
+            const savedSubject = localStorage.getItem('manualGradingSubject');
+            const savedType = localStorage.getItem('manualGradingType');
+            const savedClass = localStorage.getItem('manualGradingClass');
+            if (savedSubject) document.getElementById('subjectFilter').value = savedSubject;
+            if (savedType) document.getElementById('typeFilter').value = savedType;
+            if (savedClass) document.getElementById('classFilter').value = savedClass;
+
             loadSubjects();
             loadAssessments();
             
             // Add event listeners for filters
-            document.getElementById('subjectFilter').addEventListener('change', filterAssessments);
-            document.getElementById('typeFilter').addEventListener('change', filterAssessments);
+            document.getElementById('subjectFilter').addEventListener('change', function() {
+                localStorage.setItem('manualGradingSubject', this.value);
+                filterAssessments();
+            });
+            document.getElementById('typeFilter').addEventListener('change', function() {
+                localStorage.setItem('manualGradingType', this.value);
+                filterAssessments();
+            });
+            document.getElementById('classFilter').addEventListener('change', function() {
+                localStorage.setItem('manualGradingClass', this.value);
+                filterAssessments();
+            });
         });
 
         async function loadSubjects() {
@@ -170,7 +195,8 @@
                 const response = await fetch('/api/subjects', {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-                const subjects = await response.json();
+                const data = await response.json();
+                const subjects = Array.isArray(data) ? data : (data.subjects || []);
                 
                 const subjectSelect = document.getElementById('subjectFilter');
                 subjects.forEach(subject => {
@@ -193,9 +219,9 @@
         async function loadAssessments() {
             try {
                 const subjectFilter = document.getElementById('subjectFilter').value;
-                const url = subjectFilter ? 
-                    `/api/teacher/assessments/ungraded?subjectId=${subjectFilter}` :
-                    '/api/teacher/assessments/ungraded';
+                const url = subjectFilter
+                    ? `/api/subjects/${subjectFilter}/assessments`
+                    : '/api/teacher/assessments';
                 
                 const response = await fetch(url, {
                     headers: { 'Authorization': `Bearer ${token}` }
@@ -204,8 +230,18 @@
                 if (!response.ok) throw new Error('Failed to load assessments');
                 
                 allAssessments = await response.json();
+                const manualTypes = ['speaking', 'assignment', 'writing', 'writing-long'];
+                allAssessments = allAssessments
+                    .filter(a => a.resources && a.resources.length > 0)
+                    .filter(a => manualTypes.includes((a.type || '').toLowerCase()));
                 filteredAssessments = [...allAssessments];
                 
+                // Debug: log the first assessment object to inspect structure
+                if (allAssessments.length > 0) {
+                    console.log('Sample assessment object:', allAssessments[0]);
+                }
+                
+                populateClassFilter();
                 updateStats();
                 renderAssessments();
             } catch (error) {
@@ -215,18 +251,34 @@
             }
         }
 
+        function populateClassFilter() {
+            const classSelect = document.getElementById('classFilter');
+            // Try to extract class from assessment.section.class
+            const classes = Array.from(new Set(allAssessments.map(a => a.section && a.section.class).filter(Boolean)));
+            classSelect.innerHTML = '<option value="">All Classes</option>';
+            classes.forEach(cls => {
+                const option = document.createElement('option');
+                option.value = cls;
+                option.textContent = cls;
+                classSelect.appendChild(option);
+            });
+        }
+
         function filterAssessments() {
             const subjectFilter = document.getElementById('subjectFilter').value;
             const typeFilter = document.getElementById('typeFilter').value;
-            
+            const classFilter = document.getElementById('classFilter').value;
+            // Only show manual grading types
+            const manualTypes = ['speaking', 'assignment', 'writing', 'writing-long'];
             filteredAssessments = allAssessments.filter(assessment => {
                 const matchesSubject = !subjectFilter || 
                     assessment.section.part.unit.subject.id.toString() === subjectFilter;
                 const matchesType = !typeFilter || assessment.type === typeFilter;
-                
-                return matchesSubject && matchesType;
+                // Use assessment.section.class for filtering
+                const matchesClass = !classFilter || (assessment.section && assessment.section.class === classFilter);
+                const isManual = manualTypes.includes((assessment.type || '').toLowerCase());
+                return matchesSubject && matchesType && matchesClass && isManual;
             });
-            
             updateStats();
             renderAssessments();
         }
@@ -234,6 +286,10 @@
         function clearFilters() {
             document.getElementById('subjectFilter').value = '';
             document.getElementById('typeFilter').value = '';
+            document.getElementById('classFilter').value = '';
+            localStorage.removeItem('manualGradingSubject');
+            localStorage.removeItem('manualGradingType');
+            localStorage.removeItem('manualGradingClass');
             filteredAssessments = [...allAssessments];
             updateStats();
             renderAssessments();
@@ -256,33 +312,30 @@
         function renderAssessments() {
             const container = document.getElementById('assessmentsContainer');
             const noAssessments = document.getElementById('noAssessments');
-            
             if (filteredAssessments.length === 0) {
                 container.style.display = 'none';
                 noAssessments.style.display = 'block';
                 return;
             }
-            
             container.style.display = 'block';
             noAssessments.style.display = 'none';
-            
             const assessmentsHtml = filteredAssessments.map(assessment => {
                 const subjectPath = `${assessment.section.part.unit.subject.name} > ${assessment.section.part.unit.name} > ${assessment.section.part.name} > ${assessment.section.name}`;
-                
                 const typeBadgeClass = {
                     'speaking': 'bg-info',
                     'writing': 'bg-success',
                     'writing-long': 'bg-success',
                     'assignment': 'bg-warning'
                 }[assessment.type] || 'bg-secondary';
-                
                 const typeDisplayName = {
                     'speaking': 'Speaking',
                     'writing': 'Writing',
                     'writing-long': 'Writing (Long)',
                     'assignment': 'Assignment'
                 }[assessment.type] || assessment.type;
-                
+                // Badge color and icon logic
+                const ungradedBadgeClass = assessment.ungradedCount > 0 ? 'bg-danger' : 'bg-success';
+                const ungradedIcon = assessment.ungradedCount > 0 ? '<i class="bi bi-exclamation-triangle me-1"></i>' : '';
                 return `
                     <div class="card assessment-card mb-3">
                         <div class="card-body">
@@ -292,8 +345,8 @@
                                     <p class="subject-path mb-2">${subjectPath}</p>
                                     <div class="d-flex gap-2 align-items-center">
                                         <span class="badge ${typeBadgeClass}">${typeDisplayName}</span>
-                                        <span class="badge bg-danger ungraded-badge">
-                                            <i class="bi bi-exclamation-triangle me-1"></i>
+                                        <span class="badge ${ungradedBadgeClass} ungraded-badge">
+                                            ${ungradedIcon}
                                             ${assessment.ungradedCount} ungraded submission${assessment.ungradedCount !== 1 ? 's' : ''}
                                         </span>
                                         ${assessment.category ? `<span class="badge bg-secondary">${assessment.category}</span>` : ''}
@@ -311,7 +364,6 @@
                     </div>
                 `;
             }).join('');
-            
             container.innerHTML = assessmentsHtml;
         }
 
@@ -319,10 +371,7 @@
             loadAssessments();
         }
 
-        function logout() {
-            localStorage.removeItem('token');
-            window.location.href = '/login';
-        }
+        // logout() function is now provided by logout.js utility
     </script>
 </body>
 </html> 
