@@ -4997,3 +4997,114 @@ app.delete('/api/subjects/:subjectId', auth, async (req, res) => {
     }
 });
 
+// List students for a class/subject (teacher only)
+app.get('/api/teacher/class-students/:subjectId', auth, async (req, res) => {
+  try {
+    const user = req.user;
+    if (user.role !== 'TEACHER') {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    const subjectId = req.params.subjectId;
+    // Get subject and check organization
+    const subject = await prisma.subject.findUnique({ where: { id: subjectId } });
+    if (!subject) {
+      return res.status(404).json({ error: 'Subject not found' });
+    }
+    if (subject.organization && user.organization && subject.organization !== user.organization) {
+      return res.status(403).json({ error: 'Access denied: subject belongs to different organization' });
+    }
+    // Get students enrolled in this subject
+    const studentCourses = await prisma.studentCourse.findMany({
+      where: { subjectId },
+      select: { studentId: true }
+    });
+    const studentIds = studentCourses.map(sc => sc.studentId);
+    if (studentIds.length === 0) return res.json([]);
+    const students = await prisma.user.findMany({
+      where: {
+        id: { in: studentIds },
+        role: 'STUDENT',
+        organization: user.organization
+      },
+      select: {
+        id: true,
+        nickname: true,
+        name: true,
+        studentNumber: true
+      }
+    });
+    res.json(students);
+  } catch (error) {
+    console.error('Error fetching class students:', error);
+    res.status(500).json({ error: 'Failed to fetch class students' });
+  }
+});
+
+// List students for a class (by class name, teacher only)
+app.get('/api/teacher/class-students-by-class/:className', auth, async (req, res) => {
+  try {
+    const user = req.user;
+    if (user.role !== 'TEACHER') {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    const className = decodeURIComponent(req.params.className);
+    // Always filter out undefined from orgs array
+    const orgs = [user.organization, 'PBS'].filter(Boolean);
+    const students = await prisma.user.findMany({
+      where: {
+        class: className,
+        role: 'STUDENT',
+        organization: { in: orgs },
+        active: true
+      },
+      select: {
+        id: true,
+        nickname: true,
+        name: true,
+        studentNumber: true
+      }
+    });
+    res.json(students);
+  } catch (error) {
+    console.error('Error fetching class students by class:', error);
+    res.status(500).json({ error: 'Failed to fetch class students' });
+  }
+});
+
+// ... existing code ...
+app.get('/api/teacher/class-students-by-class/:className/download', auth, async (req, res) => {
+  try {
+    const user = req.user;
+    if (user.role !== 'TEACHER') {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    const className = decodeURIComponent(req.params.className);
+    const orgs = [user.organization, 'PBS'].filter(Boolean);
+    const students = await prisma.user.findMany({
+      where: {
+        class: className,
+        role: 'STUDENT',
+        organization: { in: orgs },
+        active: true
+      },
+      select: {
+        nickname: true,
+        name: true,
+        studentNumber: true
+      }
+    });
+    // Convert to CSV
+    let csv = 'Nickname,Full Name,Student Number\n';
+    students.forEach(s => {
+      csv += `"${s.nickname || ''}","${s.name || ''}","${s.studentNumber || ''}"\n`;
+    });
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="${className.replace(/[^a-zA-Z0-9]/g, '_')}_students.csv"`);
+    res.send(csv);
+  } catch (error) {
+    console.error('Error downloading class students CSV:', error);
+    res.status(500).json({ error: 'Failed to download class students' });
+  }
+});
+// ... existing code ...
+

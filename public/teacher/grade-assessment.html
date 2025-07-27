@@ -47,6 +47,7 @@
             &larr; Back to Manual Grading
         </a>
         <h2 class="mb-4">Grade Assessment</h2>
+        <div id="assessmentDetailsBox" class="mb-4" style="display:none;"></div>
         <div id="criteriaBox"></div>
         <div class="table-responsive">
             <table class="table table-bordered table-sticky align-middle" id="gradingTable">
@@ -79,7 +80,39 @@
             document.body.innerHTML = '<div class="container mt-5"><div class="alert alert-danger">No assessment selected.</div></div>';
             throw new Error('No assessmentId');
         }
-        document.addEventListener('DOMContentLoaded', loadGradingData);
+        document.addEventListener('DOMContentLoaded', async function() {
+            await loadAssessmentDetails();
+            loadGradingData();
+        });
+        async function loadAssessmentDetails() {
+            try {
+                const res = await fetch(`/api/assessments/${assessmentId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) throw new Error('Failed to load assessment details');
+                const a = await res.json();
+                let criteriaHtml = '';
+                if (a.criteria && Array.isArray(a.criteria) && a.criteria.length > 0) {
+                    criteriaHtml = `<ul>` + a.criteria.map(c => `<li>${c}</li>`).join('') + `</ul>`;
+                } else if (a.criteria && typeof a.criteria === 'string') {
+                    criteriaHtml = `<div>${a.criteria}</div>`;
+                }
+                document.getElementById('assessmentDetailsBox').innerHTML = `
+                    <div class="card border-info">
+                        <div class="card-body">
+                            <h5 class="card-title mb-2">Assignment Reference</h5>
+                            <div><strong>Topic:</strong> ${a.topic || '<span class=\'text-muted\'>N/A</span>'}</div>
+                            <div><strong>Description:</strong> ${a.description || '<span class=\'text-muted\'>N/A</span>'}</div>
+                            <div><strong>Criteria:</strong> ${criteriaHtml || '<span class=\'text-muted\'>N/A</span>'}</div>
+                        </div>
+                    </div>
+                `;
+                document.getElementById('assessmentDetailsBox').style.display = '';
+            } catch (err) {
+                document.getElementById('assessmentDetailsBox').innerHTML = `<div class='alert alert-warning'>Could not load assignment details.</div>`;
+                document.getElementById('assessmentDetailsBox').style.display = '';
+            }
+        }
         async function loadGradingData() {
             try {
                 const res = await fetch(`/api/assessments/${assessmentId}/all-submissions`, {

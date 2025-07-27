@@ -69,6 +69,9 @@
             </button>
         </div>
 
+        <!-- Assignment Details Reference -->
+        <div id="assignmentDetailsBox" class="mb-4" style="display:none;"></div>
+
         <!-- Filters -->
         <div class="filter-section">
             <div class="row align-items-end">
@@ -164,17 +167,8 @@
         let filteredAssessments = [];
 
         document.addEventListener('DOMContentLoaded', function() {
-            // Restore filters from localStorage
-            const savedSubject = localStorage.getItem('manualGradingSubject');
-            const savedType = localStorage.getItem('manualGradingType');
-            const savedClass = localStorage.getItem('manualGradingClass');
-            if (savedSubject) document.getElementById('subjectFilter').value = savedSubject;
-            if (savedType) document.getElementById('typeFilter').value = savedType;
-            if (savedClass) document.getElementById('classFilter').value = savedClass;
-
             loadSubjects();
             loadAssessments();
-            
             // Add event listeners for filters
             document.getElementById('subjectFilter').addEventListener('change', function() {
                 localStorage.setItem('manualGradingSubject', this.value);
@@ -197,7 +191,6 @@
                 });
                 const data = await response.json();
                 const subjects = Array.isArray(data) ? data : (data.subjects || []);
-                
                 const subjectSelect = document.getElementById('subjectFilter');
                 subjects.forEach(subject => {
                     const option = document.createElement('option');
@@ -211,6 +204,11 @@
                     option.textContent = `${subject.coreSubject?.name || ''} (${yearLevelStr}) - ${subject.name}`;
                     subjectSelect.appendChild(option);
                 });
+                // Restore subject filter after options are loaded
+                const savedSubject = localStorage.getItem('manualGradingSubject');
+                if (savedSubject) {
+                    subjectSelect.value = savedSubject;
+                }
             } catch (error) {
                 console.error('Error loading subjects:', error);
             }
@@ -222,28 +220,30 @@
                 const url = subjectFilter
                     ? `/api/subjects/${subjectFilter}/assessments`
                     : '/api/teacher/assessments';
-                
                 const response = await fetch(url, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-                
                 if (!response.ok) throw new Error('Failed to load assessments');
-                
                 allAssessments = await response.json();
                 const manualTypes = ['speaking', 'assignment', 'writing', 'writing-long'];
                 allAssessments = allAssessments
                     .filter(a => a.resources && a.resources.length > 0)
                     .filter(a => manualTypes.includes((a.type || '').toLowerCase()));
                 filteredAssessments = [...allAssessments];
-                
                 // Debug: log the first assessment object to inspect structure
                 if (allAssessments.length > 0) {
                     console.log('Sample assessment object:', allAssessments[0]);
                 }
-                
                 populateClassFilter();
+                // Restore type and class filters after options are loaded
+                const savedType = localStorage.getItem('manualGradingType');
+                const savedClass = localStorage.getItem('manualGradingClass');
+                if (savedType) document.getElementById('typeFilter').value = savedType;
+                if (savedClass) document.getElementById('classFilter').value = savedClass;
                 updateStats();
                 renderAssessments();
+                // Trigger filtering with restored values
+                filterAssessments();
             } catch (error) {
                 console.error('Error loading assessments:', error);
                 document.getElementById('assessmentsContainer').innerHTML = 
@@ -312,13 +312,35 @@
         function renderAssessments() {
             const container = document.getElementById('assessmentsContainer');
             const noAssessments = document.getElementById('noAssessments');
+            const detailsBox = document.getElementById('assignmentDetailsBox');
             if (filteredAssessments.length === 0) {
                 container.style.display = 'none';
                 noAssessments.style.display = 'block';
+                detailsBox.style.display = 'none';
+                detailsBox.innerHTML = '';
                 return;
             }
             container.style.display = 'block';
             noAssessments.style.display = 'none';
+            // Show details for the first filtered assessment
+            const a = filteredAssessments[0];
+            let criteriaHtml = '';
+            if (a.criteria && Array.isArray(a.criteria) && a.criteria.length > 0) {
+                criteriaHtml = `<ul>` + a.criteria.map(c => `<li>${c}</li>`).join('') + `</ul>`;
+            } else if (a.criteria && typeof a.criteria === 'string') {
+                criteriaHtml = `<div>${a.criteria}</div>`;
+            }
+            detailsBox.innerHTML = `
+                <div class="card border-info">
+                    <div class="card-body">
+                        <h5 class="card-title mb-2">Assignment Reference</h5>
+                        <div><strong>Topic:</strong> ${a.topic || '<span class=\'text-muted\'>N/A</span>'}</div>
+                        <div><strong>Description:</strong> ${a.description || '<span class=\'text-muted\'>N/A</span>'}</div>
+                        <div><strong>Criteria:</strong> ${criteriaHtml || '<span class=\'text-muted\'>N/A</span>'}</div>
+                    </div>
+                </div>
+            `;
+            detailsBox.style.display = '';
             const assessmentsHtml = filteredAssessments.map(assessment => {
                 const subjectPath = `${assessment.section.part.unit.subject.name} > ${assessment.section.part.unit.name} > ${assessment.section.part.name} > ${assessment.section.name}`;
                 const typeBadgeClass = {
