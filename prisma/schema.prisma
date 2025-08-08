@@ -104,6 +104,7 @@ model Resource {
   filePath    String?  // For uploaded files
   thumbnail   String?  // For video thumbnails or poster previews
   duration    Int?     // For audio/video duration in seconds
+  quarter     String   @default("Q1") // "Q1", "Q2", "Q3", "Q4" - NEW FIELD
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

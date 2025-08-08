@@ -1114,6 +1114,8 @@ app.put('/api/subjects/:subjectId', auth, async (req, res) => {
 app.get('/api/subjects/:subjectId/resources', auth, async (req, res) => {
     try {
         const { subjectId } = req.params;
+        const { quarter } = req.query;
+        const activeQuarter = quarter || await getActiveQuarter();
         
         // Get the subject structure with units
         const subject = await prisma.subject.findUnique({
@@ -1205,11 +1207,26 @@ app.get('/api/subjects/:subjectId/resources', auth, async (req, res) => {
             const unitInfo = unitMap[topic.name];
             if (unitInfo) {
                 for (const resource of topic.resources) {
-                    // Fetch linked assessments for this resource
+                    // Only include resources that match the active quarter
+                    if (resource.quarter !== activeQuarter) {
+                        continue;
+                    }
+                    
+                    // Fetch linked assessments for this resource, filtered by active quarter
                     const resourceWithAssessments = await prisma.resource.findUnique({
                         where: { id: resource.id },
-                        include: { assessments: true }
+                        include: { 
+                            assessments: {
+                                where: {
+                                    quarter: activeQuarter,
+                                    published: true
+                                }
+                            }
+                        }
                     });
+                    
+                    // Include all resources, but mark those without Q2 assessments
+                    const hasQ2Assessments = resourceWithAssessments.assessments && resourceWithAssessments.assessments.length > 0;
                     
                     // Extract audioPath from metadata if it exists
                     let audioPath = null;
@@ -1223,6 +1240,7 @@ app.get('/api/subjects/:subjectId/resources', auth, async (req, res) => {
                         partId: resource.partId,
                         sectionId: resource.sectionId,
                         audioPath: audioPath,
+                        hasQ2Assessments: hasQ2Assessments,
                         assessments: resourceWithAssessments.assessments.map(a => ({
                             id: a.id,
                             title: a.title,
@@ -1233,7 +1251,7 @@ app.get('/api/subjects/:subjectId/resources', auth, async (req, res) => {
             }
         }
 
-        console.log('Found resources:', resources); // Debug log
+        console.log(`Found ${resources.length} resources for quarter ${activeQuarter}`); // Debug log
         res.json(resources);
     } catch (error) {
         console.error('Error fetching resources:', error);
@@ -1304,12 +1322,16 @@ app.post('/api/resources', auth, upload.fields([
             metadata.audioPath = audioPath;
         }
         
+        // Get the active quarter for the new resource
+        const activeQuarter = await getActiveQuarter();
+        
         const resource = await prisma.resource.create({
             data: {
                 title,
                 description,
                 type,
                 url: filePath,
+                quarter: activeQuarter, // Set the quarter for the new resource
                 topic: {
                     connect: { id: topic.id }
                 },
@@ -2041,6 +2063,8 @@ app.get('/api/sections/:sectionId/assessments', auth, async (req, res) => {
 // Get total resources count for student's enrolled subjects
 app.get('/api/student/resources/count', auth, async (req, res) => {
     try {
+        const activeQuarter = await getActiveQuarter();
+        
         // Get student's enrolled subjects
         const user = await prisma.user.findUnique({
             where: { id: req.user.userId },
@@ -2066,12 +2090,23 @@ app.get('/api/student/resources/count', auth, async (req, res) => {
                 }
             },
             include: {
-                resources: true
+                resources: {
+                    include: {
+                        assessments: {
+                            where: {
+                                quarter: activeQuarter,
+                                published: true
+                            }
+                        }
+                    }
+                }
             }
         });
 
-        // Count total resources
-        const totalResources = topics.reduce((total, topic) => total + topic.resources.length, 0);
+        // Count all resources (not just those with Q2 assessments)
+        const totalResources = topics.reduce((total, topic) => {
+            return total + topic.resources.length;
+        }, 0);
 
         res.json({ count: totalResources });
     } catch (error) {
@@ -2181,6 +2216,7 @@ app.delete('/api/subjects/:subjectId/topics', auth, async (req, res) => {
 app.get('/api/topics/:topicId/resources', auth, async (req, res) => {
     try {
         const { topicId } = req.params;
+        const activeQuarter = await getActiveQuarter();
         
         const topic = await prisma.topic.findUnique({
             where: { id: topicId },
@@ -2197,32 +2233,47 @@ app.get('/api/topics/:topicId/resources', auth, async (req, res) => {
             return res.status(404).json({ error: 'Topic not found' });
         }
 
-        // For each resource, include its linked assessments
-        const resourcesWithAssessments = await Promise.all(topic.resources.map(async resource => {
-            const resourceWithAssessments = await prisma.resource.findUnique({
-                where: { id: resource.id },
-                include: { assessments: true }
-            });
-            // Extract audioPath from metadata if it exists
-            let audioPath = null;
-            if (resource.metadata && typeof resource.metadata === 'object' && resource.metadata.audioPath) {
-                audioPath = resource.metadata.audioPath;
-            }
-            return {
-                ...resource,
-                audioPath: audioPath,
-                assessments: resourceWithAssessments.assessments.map(a => ({
-                    id: a.id,
-                    title: a.title,
-                    type: a.type
-                }))
-            };
-        }));
+        // For each resource, include its linked assessments filtered by active quarter
+        const resourcesWithAssessments = await Promise.all(topic.resources
+            .filter(resource => resource.quarter === activeQuarter) // Only include resources for active quarter
+            .map(async resource => {
+                const resourceWithAssessments = await prisma.resource.findUnique({
+                    where: { id: resource.id },
+                    include: { 
+                        assessments: {
+                            where: {
+                                quarter: activeQuarter,
+                                published: true
+                            }
+                        }
+                    }
+                });
+                
+                // Include all resources, but mark those without Q2 assessments
+                const hasQ2Assessments = resourceWithAssessments.assessments && resourceWithAssessments.assessments.length > 0;
+                
+                // Extract audioPath from metadata if it exists
+                let audioPath = null;
+                if (resource.metadata && typeof resource.metadata === 'object' && resource.metadata.audioPath) {
+                    audioPath = resource.metadata.audioPath;
+                }
+                return {
+                    ...resource,
+                    audioPath: audioPath,
+                    hasQ2Assessments: hasQ2Assessments,
+                    assessments: resourceWithAssessments.assessments.map(a => ({
+                        id: a.id,
+                        title: a.title,
+                        type: a.type
+                    }))
+                };
+            }));
 
-        // Sort by order field
-        resourcesWithAssessments.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+        // Filter out null resources and sort by order field
+        const filteredResources = resourcesWithAssessments.filter(r => r !== null);
+        filteredResources.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
-        res.json(resourcesWithAssessments);
+        res.json(filteredResources);
     } catch (error) {
         console.error('Error fetching topic resources:', error);
         res.status(500).json({ error: 'Failed to fetch topic resources' });
@@ -2409,7 +2460,7 @@ app.get('/api/assessments/:assessmentId/submissions', auth, async (req, res) => 
 app.post('/api/sections/:sectionId/assessments', auth, upload.any(), async (req, res) => {
     try {
         const { sectionId } = req.params;
-        const { title, description, type, questions, dueDate, maxAttempts, category, topicId, weeklyScheduleId, criteria, audioFile } = req.body;
+        const { title, description, type, questions, dueDate, maxAttempts, category, topicId, weeklyScheduleId, criteria, audioFile, quarter } = req.body;
         console.log('[CREATE ASSESSMENT] req.body:', req.body);
 
         if (!sectionId) {
@@ -2553,6 +2604,20 @@ app.post('/api/sections/:sectionId/assessments', auth, upload.any(), async (req,
         }
         
         // Create the assessment
+        console.log('[CREATE ASSESSMENT] Creating assessment with data:', {
+            title: title.trim(),
+            description,
+            type,
+            category,
+            criteria,
+            sectionId,
+            userId: req.user.userId,
+            mediaFilesCount: mediaFiles.length,
+            maxAttempts: maxAttempts ? parseInt(maxAttempts) : null,
+            topicId,
+            weeklyScheduleId
+        });
+        
         const assessment = await prisma.assessment.create({
             data: {
                 title: title.trim(),
@@ -2562,6 +2627,8 @@ app.post('/api/sections/:sectionId/assessments', auth, upload.any(), async (req,
                 criteria, // Ensure criteria is included
                 questions: parsedQuestions,
                 dueDate: dueDate ? new Date(dueDate) : null,
+                quarter: quarter || "Q1", // Use quarter from form or default to Q1
+                published: true, // Explicitly set published to ensure it's visible
                 section: {
                     connect: { id: sectionId }
                 },
@@ -2587,6 +2654,13 @@ app.post('/api/sections/:sectionId/assessments', auth, upload.any(), async (req,
             }
         });
         
+        console.log('[CREATE ASSESSMENT] Assessment created successfully:', {
+            id: assessment.id,
+            title: assessment.title,
+            quarter: assessment.quarter,
+            published: assessment.published
+        });
+        
         // Log whether media files were successfully attached
         console.log(`[AUDIO] Assessment created with ${assessment.mediaFiles?.length || 0} media files`);
         if (assessment.mediaFiles && assessment.mediaFiles.length > 0) {
@@ -2604,7 +2678,7 @@ app.post('/api/sections/:sectionId/assessments', auth, upload.any(), async (req,
 app.put('/api/assessments/:assessmentId', auth, upload.any(), async (req, res) => {
     try {
         const { assessmentId } = req.params;
-        const { title, description, type, questions, dueDate, maxAttempts, category, topicId, weeklyScheduleId, criteria } = req.body;
+        const { title, description, type, questions, dueDate, maxAttempts, category, topicId, weeklyScheduleId, criteria, quarter } = req.body;
         console.log('[UPDATE ASSESSMENT] req.body:', req.body);
         console.log('[UPDATE ASSESSMENT] Category value:', category);
         console.log('[UPDATE ASSESSMENT] req.files:', req.files);
@@ -2707,6 +2781,7 @@ app.put('/api/assessments/:assessmentId', auth, upload.any(), async (req, res) =
                 criteria, // Ensure criteria is included
                 questions: parsedQuestions,
                 dueDate: dueDate ? new Date(dueDate) : null,
+                quarter: quarter || "Q1", // Use quarter from form or default to Q1
                 mediaFiles: mediaFiles.length > 0 ? {
                     create: mediaFiles
                 } : undefined,
@@ -2851,6 +2926,7 @@ app.get('/api/subjects/:subjectId/assessments', auth, async (req, res) => {
         }));
 
         console.log(`Found ${assessments.length} assessments, ${uniqueAssessments.length} are unique`);
+        console.log('[SUBJECT ASSESSMENTS] Assessment IDs:', uniqueAssessments.map(a => ({ id: a.id, title: a.title, quarter: a.quarter, published: a.published })));
         res.json(assessmentsWithExtras);
     } catch (error) {
         console.error('Error fetching subject assessments:', error);
@@ -2981,11 +3057,15 @@ app.delete('/api/parts/:partId', auth, async (req, res) => {
 app.get('/api/resources/:resourceId/assessments', auth, async (req, res) => {
     try {
         const { resourceId } = req.params;
+        console.log('[GET RESOURCE ASSESSMENTS] Fetching assessments for resource:', resourceId);
+        
         const resource = await prisma.resource.findUnique({
             where: { id: resourceId },
             include: { assessments: true }
         });
         if (!resource) return res.status(404).json({ error: 'Resource not found' });
+        
+        console.log('[GET RESOURCE ASSESSMENTS] Found assessments:', resource.assessments.map(a => ({ id: a.id, title: a.title })));
         res.json(resource.assessments);
     } catch (error) {
         console.error('Error fetching resource assessments:', error);
@@ -2998,12 +3078,17 @@ app.post('/api/resources/:resourceId/assessments', auth, async (req, res) => {
     try {
         const { resourceId } = req.params;
         const { assessmentIds } = req.body;
+        console.log('[LINK ASSESSMENTS] Linking assessments to resource:', { resourceId, assessmentIds });
+        
         if (!Array.isArray(assessmentIds)) return res.status(400).json({ error: 'assessmentIds must be an array' });
+        
         const resource = await prisma.resource.update({
             where: { id: resourceId },
             data: { assessments: { set: assessmentIds.map(id => ({ id })) } },
             include: { assessments: true }
         });
+        
+        console.log('[LINK ASSESSMENTS] Successfully linked assessments:', resource.assessments.map(a => ({ id: a.id, title: a.title })));
         res.json(resource.assessments);
     } catch (error) {
         console.error('Error updating resource assessments:', error);
@@ -5107,4 +5192,998 @@ app.get('/api/teacher/class-students-by-class/:className/download', auth, async 
   }
 });
 // ... existing code ...
+
+// Database export endpoint for teachers
+app.post('/api/teacher/export-database', auth, async (req, res) => {
+    try {
+        console.log('=== EXPORT DEBUG START ===');
+        console.log('Export request received');
+        console.log('Request body:', req.body);
+        console.log('User ID from auth:', req.user.userId);
+        
+        // Check if user is teacher or admin
+        console.log('Looking up user in database...');
+        const user = await prisma.user.findUnique({
+            where: { id: req.user.userId }
+        });
+
+        console.log('User found:', user ? `${user.name} (${user.role})` : 'NOT FOUND');
+
+        if (!user) {
+            console.log('ERROR: User not found');
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        if (user.role !== 'TEACHER' && user.role !== 'ADMIN') {
+            console.log('ERROR: Access denied - user role:', user.role);
+            return res.status(403).json({ error: 'Access denied. Teachers and admins only.' });
+        }
+
+        const { tables, quarter } = req.body;
+        console.log('Tables to export:', tables);
+        console.log('Quarter filter:', quarter);
+
+        // Test ExcelJS
+        console.log('Loading ExcelJS...');
+        const ExcelJS = require('exceljs');
+        console.log('ExcelJS loaded successfully');
+        
+        console.log('Creating workbook...');
+        const workbook = new ExcelJS.Workbook();
+        workbook.creator = 'LMS System';
+        workbook.lastModifiedBy = user.name;
+        workbook.created = new Date();
+        workbook.modified = new Date();
+        
+        console.log('Workbook created successfully');
+
+        // Helper function to add worksheet
+        function addWorksheet(name, data, headers) {
+            console.log(`Adding worksheet: ${name} with ${data.length} rows`);
+            try {
+                const worksheet = workbook.addWorksheet(name);
+                console.log(`Worksheet "${name}" created`);
+                
+                // Add headers
+                console.log(`Adding headers: ${headers.join(', ')}`);
+                worksheet.addRow(headers);
+                worksheet.getRow(1).font = { bold: true };
+                worksheet.getRow(1).fill = {
+                    type: 'pattern',
+                    pattern: 'solid',
+                    fgColor: { argb: 'FFE0E0E0' }
+                };
+                console.log('Headers added and styled');
+
+                // Add data
+                if (data && data.length > 0) {
+                    console.log(`Processing ${data.length} rows of data...`);
+                    data.forEach((row, index) => {
+                        const excelRow = [];
+                        headers.forEach(header => {
+                            const value = row[header] || '';
+                            // Handle special data types
+                            if (value && typeof value === 'object') {
+                                excelRow.push(JSON.stringify(value));
+                            } else if (value instanceof Date) {
+                                excelRow.push(value.toISOString());
+                            } else {
+                                excelRow.push(value);
+                            }
+                        });
+                        worksheet.addRow(excelRow);
+                        if (index % 10 === 0) console.log(`Processed ${index + 1} rows...`);
+                    });
+                    console.log('All data rows added');
+                } else {
+                    console.log('No data to add');
+                }
+
+                // Auto-fit columns
+                console.log('Auto-fitting columns...');
+                worksheet.columns.forEach(column => {
+                    const headerLength = column.header ? column.header.length : 10;
+                    column.width = Math.max(15, Math.min(50, headerLength + 5));
+                });
+                console.log('Columns auto-fitted');
+            } catch (error) {
+                console.error(`Error in addWorksheet for ${name}:`, error);
+                throw error;
+            }
+        }
+
+        // Student Performance Dashboard Export
+        console.log('Starting Student Performance Dashboard export...');
+        
+        try {
+            console.log('Querying students and their data...');
+            
+            // Get all students with their enrollments, progress, and submissions
+            const students = await prisma.user.findMany({
+                where: { role: 'STUDENT' },
+                include: {
+                    studentCourses: {
+                        include: {
+                            subject: true
+                        }
+                    },
+                    assessmentSubmissions: {
+                        include: {
+                            assessment: {
+                                include: {
+                                    section: {
+                                        include: {
+                                            part: {
+                                                include: {
+                                                    unit: {
+                                                        include: {
+                                                            subject: true
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    studentProgress: {
+                        include: {
+                            subject: true,
+                            topic: true
+                        }
+                    },
+                    sessions: {
+                        orderBy: {
+                            startTime: 'desc'
+                        }
+                    }
+                },
+                orderBy: { name: 'asc' }
+            });
+            
+            console.log(`Found ${students.length} students`);
+            
+            // Create comprehensive student performance data
+            console.log('Creating student performance dashboard...');
+            const studentPerformanceData = students.map(student => {
+                // Calculate performance metrics
+                // Count unique assessments instead of all submissions
+                const uniqueAssessments = new Set(student.assessmentSubmissions.map(sub => sub.assessmentId)).size;
+                const completedUniqueAssessments = new Set(
+                    student.assessmentSubmissions
+                        .filter(sub => sub.score !== null)
+                        .map(sub => sub.assessmentId)
+                ).size;
+                const averageScore = student.assessmentSubmissions.length > 0 
+                    ? (student.assessmentSubmissions.reduce((sum, sub) => sum + (sub.score || 0), 0) / student.assessmentSubmissions.length).toFixed(2)
+                    : 0;
+                
+                const enrolledSubjects = student.studentCourses.length;
+                const activeSubjects = student.studentCourses.filter(course => course.status === 'ACTIVE').length;
+                
+                // Calculate overall progress
+                const totalProgress = student.studentProgress.length;
+                const completedProgress = student.studentProgress.filter(p => p.status === 'COMPLETED').length;
+                const progressPercentage = totalProgress > 0 ? ((completedProgress / totalProgress) * 100).toFixed(1) : 0;
+                
+                // Get subject list
+                const subjectList = student.studentCourses.map(course => course.subject.name).join(', ');
+                
+                // Get recent activity
+                const lastSubmission = student.assessmentSubmissions
+                    .sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt))[0];
+                const lastActivity = lastSubmission ? new Date(lastSubmission.submittedAt).toLocaleDateString() : 'No activity';
+                
+                return {
+                    'Student ID': student.id,
+                    'Student Name': student.name,
+                    'Email': student.email,
+                    'Organization': student.organization,
+                    'Student Number': student.studentNumber,
+                    'Year Level': student.yearLevel,
+                    'Class': student.class,
+                    'Enrolled Subjects': enrolledSubjects,
+                    'Active Subjects': activeSubjects,
+                    'Subject List': subjectList,
+                    'Unique Assessments': uniqueAssessments,
+                    'Completed Unique Assessments': completedUniqueAssessments,
+                    'Completion Rate (%)': uniqueAssessments > 0 ? ((completedUniqueAssessments / uniqueAssessments) * 100).toFixed(1) : 0,
+                    'Average Score (%)': averageScore,
+                    'Progress Items': totalProgress,
+                    'Completed Progress': completedProgress,
+                    'Overall Progress (%)': progressPercentage,
+                    'Last Activity': lastActivity,
+                    'Active': student.active ? 'Yes' : 'No',
+                    'Last Login': student.lastLogin ? new Date(student.lastLogin).toLocaleDateString() : 'Never'
+                };
+            });
+            
+            console.log('Student performance data created successfully');
+
+            console.log('Adding Student Performance Dashboard worksheet...');
+            addWorksheet('Student Performance Dashboard', studentPerformanceData, [
+                'Student ID', 'Student Name', 'Email', 'Organization', 'Student Number', 
+                'Year Level', 'Class', 'Enrolled Subjects', 'Active Subjects', 'Subject List',
+                'Unique Assessments', 'Completed Unique Assessments', 'Completion Rate (%)', 'Average Score (%)',
+                'Progress Items', 'Completed Progress', 'Overall Progress (%)', 'Last Activity',
+                'Active', 'Last Login'
+            ]);
+            
+            // Create Login vs Activity Analysis
+            console.log('Creating login vs activity analysis...');
+            const loginActivityData = students.map(student => {
+                const lastLogin = student.lastLogin ? new Date(student.lastLogin) : null;
+                const lastSubmission = student.assessmentSubmissions
+                    .sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt))[0];
+                const lastActivity = lastSubmission ? new Date(lastSubmission.submittedAt) : null;
+                
+                // Calculate days since last login and activity
+                const now = new Date();
+                const daysSinceLogin = lastLogin ? Math.floor((now - lastLogin) / (1000 * 60 * 60 * 24)) : 'Never';
+                const daysSinceActivity = lastActivity ? Math.floor((now - lastActivity) / (1000 * 60 * 60 * 24)) : 'Never';
+                
+                // Determine engagement pattern
+                let engagementPattern = 'Unknown';
+                if (lastLogin && lastActivity) {
+                    const loginTime = lastLogin.getTime();
+                    const activityTime = lastActivity.getTime();
+                    
+                    if (activityTime > loginTime) {
+                        // Activity after login - good engagement
+                        engagementPattern = 'Active Learner';
+                    } else if (loginTime > activityTime) {
+                        // Login after activity - might be checking grades
+                        engagementPattern = 'Grade Checker';
+                    } else {
+                        // Same day - good engagement
+                        engagementPattern = 'Active Learner';
+                    }
+                } else if (lastLogin && !lastActivity) {
+                    engagementPattern = 'Login Only - No Submissions';
+                } else if (!lastLogin && lastActivity) {
+                    engagementPattern = 'Activity Only - No Recent Login';
+                } else {
+                    engagementPattern = 'Inactive';
+                }
+                
+                // Calculate login-to-activity ratio
+                // Count distinct login days instead of all sessions
+                const loginDays = student.sessions ? 
+                    new Set(student.sessions.map(s => new Date(s.startTime).toDateString())).size : 0;
+                const totalSubmissions = student.assessmentSubmissions.length;
+                const loginToSubmissionRatio = loginDays > 0 ? (totalSubmissions / loginDays).toFixed(2) : '0';
+                
+                return {
+                    'Student ID': student.id,
+                    'Student Name': student.name,
+                    'Email': student.email,
+                    'Organization': student.organization,
+                    'Last Login Date': lastLogin ? lastLogin.toLocaleDateString() : 'Never',
+                    'Days Since Last Login': daysSinceLogin,
+                    'Last Activity Date': lastActivity ? lastActivity.toLocaleDateString() : 'Never',
+                    'Days Since Last Activity': daysSinceActivity,
+                    'Login Days': loginDays,
+                    'Total Submissions': totalSubmissions,
+                    'Submissions per Login Day': loginToSubmissionRatio,
+                    'Engagement Pattern': engagementPattern,
+                    'Active': student.active ? 'Yes' : 'No'
+                };
+            });
+            
+            addWorksheet('Login vs Activity Analysis', loginActivityData, [
+                'Student ID', 'Student Name', 'Email', 'Organization', 'Last Login Date', 
+                'Days Since Last Login', 'Last Activity Date', 'Days Since Last Activity',
+                'Login Days', 'Total Submissions', 'Submissions per Login Day', 
+                'Engagement Pattern', 'Active'
+            ]);
+            
+            // Create summary statistics
+            console.log('Creating summary statistics...');
+            const totalStudents = students.length;
+            const activeStudents = students.filter(s => s.active).length;
+            const avgCompletionRate = studentPerformanceData.reduce((sum, s) => sum + parseFloat(s['Completion Rate (%)']), 0) / totalStudents;
+            const avgScore = studentPerformanceData.reduce((sum, s) => sum + parseFloat(s['Average Score (%)']), 0) / totalStudents;
+            const avgProgress = studentPerformanceData.reduce((sum, s) => sum + parseFloat(s['Overall Progress (%)']), 0) / totalStudents;
+            
+            // Calculate engagement metrics
+            const loginOnlyStudents = loginActivityData.filter(s => s['Engagement Pattern'] === 'Login Only - No Submissions').length;
+            const activeLearners = loginActivityData.filter(s => s['Engagement Pattern'] === 'Active Learner').length;
+            const inactiveStudents = loginActivityData.filter(s => s['Engagement Pattern'] === 'Inactive').length;
+            
+            const summaryData = [
+                {
+                    'Metric': 'Total Students',
+                    'Value': totalStudents,
+                    'Description': 'Total number of students in the system'
+                },
+                {
+                    'Metric': 'Active Students',
+                    'Value': activeStudents,
+                    'Description': 'Students with active accounts'
+                },
+                {
+                    'Metric': 'Active Learners',
+                    'Value': activeLearners,
+                    'Description': 'Students who login and submit assessments'
+                },
+                {
+                    'Metric': 'Login Only (No Submissions)',
+                    'Value': loginOnlyStudents,
+                    'Description': 'Students who login but don\'t submit assessments'
+                },
+                {
+                    'Metric': 'Inactive Students',
+                    'Value': inactiveStudents,
+                    'Description': 'Students with no recent login or activity'
+                },
+                {
+                    'Metric': 'Average Completion Rate',
+                    'Value': avgCompletionRate.toFixed(1) + '%',
+                    'Description': 'Average assessment completion rate across all students'
+                },
+                {
+                    'Metric': 'Average Score',
+                    'Value': avgScore.toFixed(1) + '%',
+                    'Description': 'Average assessment score across all students'
+                },
+                {
+                    'Metric': 'Average Progress',
+                    'Value': avgProgress.toFixed(1) + '%',
+                    'Description': 'Average overall progress across all students'
+                }
+            ];
+            
+            addWorksheet('Summary Statistics', summaryData, [
+                'Metric', 'Value', 'Description'
+            ]);
+            
+            // Add quarter-filtered data if quarter is specified
+            if (quarter) {
+                console.log(`Adding quarter-filtered data for ${quarter}...`);
+                
+                // Export Resources with quarter filter
+                if (tables.includes('resources')) {
+                    console.log('Exporting resources with quarter filter...');
+                    const resources = await prisma.resource.findMany({
+                        where: { quarter: quarter },
+                        include: {
+                            createdBy: true,
+                            topic: true,
+                            unit: true,
+                            part: true,
+                            section: true,
+                            assessments: true
+                        },
+                        orderBy: { createdAt: 'desc' }
+                    });
+                    
+                    const resourcesData = resources.map(resource => ({
+                        'Resource ID': resource.id,
+                        'Title': resource.title,
+                        'Description': resource.description,
+                        'Type': resource.type,
+                        'Quarter': resource.quarter,
+                        'URL': resource.url,
+                        'File Path': resource.filePath,
+                        'Created By': resource.createdBy.name,
+                        'Topic': resource.topic?.name || 'N/A',
+                        'Unit': resource.unit?.name || 'N/A',
+                        'Part': resource.part?.name || 'N/A',
+                        'Section': resource.section?.name || 'N/A',
+                        'Usage Count': resource.usageCount,
+                        'Created At': resource.createdAt.toISOString(),
+                        'Updated At': resource.updatedAt.toISOString(),
+                        'Linked Assessments': resource.assessments.length
+                    }));
+                    
+                    addWorksheet(`Resources_${quarter}`, resourcesData, [
+                        'Resource ID', 'Title', 'Description', 'Type', 'Quarter', 'URL', 'File Path',
+                        'Created By', 'Topic', 'Unit', 'Part', 'Section', 'Usage Count', 'Created At', 'Updated At', 'Linked Assessments'
+                    ]);
+                }
+                
+                // Export Assessments with quarter filter
+                if (tables.includes('assessments')) {
+                    console.log('Exporting assessments with quarter filter...');
+                    const assessments = await prisma.assessment.findMany({
+                        where: { quarter: quarter },
+                        include: {
+                            createdBy: true,
+                            section: {
+                                include: {
+                                    part: {
+                                        include: {
+                                            unit: {
+                                                include: {
+                                                    subject: true
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            mediaFiles: true,
+                            resources: true
+                        },
+                        orderBy: { createdAt: 'desc' }
+                    });
+                    
+                    const assessmentsData = assessments.map(assessment => ({
+                        'Assessment ID': assessment.id,
+                        'Title': assessment.title,
+                        'Description': assessment.description,
+                        'Type': assessment.type,
+                        'Category': assessment.category,
+                        'Quarter': assessment.quarter,
+                        'Published': assessment.published ? 'Yes' : 'No',
+                        'Created By': assessment.createdBy.name,
+                        'Subject': assessment.section?.part?.unit?.subject?.name || 'N/A',
+                        'Unit': assessment.section?.part?.unit?.name || 'N/A',
+                        'Part': assessment.section?.part?.name || 'N/A',
+                        'Section': assessment.section?.name || 'N/A',
+                        'Media Files': assessment.mediaFiles.length,
+                        'Linked Resources': assessment.resources.length,
+                        'Created At': assessment.createdAt.toISOString(),
+                        'Updated At': assessment.updatedAt.toISOString()
+                    }));
+                    
+                    addWorksheet(`Assessments_${quarter}`, assessmentsData, [
+                        'Assessment ID', 'Title', 'Description', 'Type', 'Category', 'Quarter', 'Published',
+                        'Created By', 'Subject', 'Unit', 'Part', 'Section', 'Media Files', 'Linked Resources', 'Created At', 'Updated At'
+                    ]);
+                }
+                
+                // Export Submissions with quarter filter (for assessments in the specified quarter)
+                if (tables.includes('submissions')) {
+                    console.log('Exporting submissions with quarter filter...');
+                    const submissions = await prisma.assessmentSubmission.findMany({
+                        where: {
+                            assessment: {
+                                quarter: quarter
+                            }
+                        },
+                        include: {
+                            student: true,
+                            assessment: {
+                                include: {
+                                    section: {
+                                        include: {
+                                            part: {
+                                                include: {
+                                                    unit: {
+                                                        include: {
+                                                            subject: true
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        orderBy: { submittedAt: 'desc' }
+                    });
+                    
+                    const submissionsData = submissions.map(submission => ({
+                        'Submission ID': submission.id,
+                        'Student ID': submission.student.id,
+                        'Student Name': submission.student.name,
+                        'Assessment ID': submission.assessment.id,
+                        'Assessment Title': submission.assessment.title,
+                        'Assessment Quarter': submission.assessment.quarter,
+                        'Score': submission.score,
+                        'Attempts': submission.attempts,
+                        'Total Time': submission.totalTime,
+                        'Status': submission.status,
+                        'Subject': submission.assessment.section?.part?.unit?.subject?.name || 'N/A',
+                        'Submitted At': submission.submittedAt.toISOString(),
+                        'Updated At': submission.updatedAt.toISOString()
+                    }));
+                    
+                    addWorksheet(`Submissions_${quarter}`, submissionsData, [
+                        'Submission ID', 'Student ID', 'Student Name', 'Assessment ID', 'Assessment Title', 'Assessment Quarter',
+                        'Score', 'Attempts', 'Total Time', 'Status', 'Subject', 'Submitted At', 'Updated At'
+                    ]);
+                }
+            }
+            
+            console.log('Worksheets added successfully');
+
+            console.log('Generating Excel file...');
+            const buffer = await workbook.xlsx.writeBuffer();
+            console.log('Excel file generated successfully, buffer size:', buffer.length);
+            
+            console.log('Setting response headers...');
+            const quarterSuffix = quarter ? `-${quarter}` : '';
+            res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            res.setHeader('Content-Disposition', `attachment; filename=student-performance-dashboard${quarterSuffix}-${new Date().toISOString().split('T')[0]}.xlsx`);
+            
+            console.log('Sending response...');
+            res.send(buffer);
+            console.log('=== EXPORT DEBUG END - SUCCESS ===');
+        } catch (error) {
+            console.error('Error in export process:', error);
+            throw error;
+        }
+
+    } catch (error) {
+        console.error('Database export error:', error);
+        res.status(500).json({ error: 'Failed to export database' });
+    }
+});
+
+// Student Performance Dashboard API
+app.get('/api/teacher/student-performance', auth, async (req, res) => {
+    try {
+        // Check if user is teacher or admin
+        const user = await prisma.user.findUnique({
+            where: { id: req.user.userId }
+        });
+
+        if (user.role !== 'TEACHER' && user.role !== 'ADMIN') {
+            return res.status(403).json({ error: 'Access denied. Teachers and admins only.' });
+        }
+
+        // Get all students with their performance data
+        const students = await prisma.user.findMany({
+            where: { role: 'STUDENT' },
+            include: {
+                studentCourses: {
+                    include: {
+                        subject: true
+                    }
+                },
+                assessmentSubmissions: {
+                    include: {
+                        assessment: {
+                            include: {
+                                section: {
+                                    include: {
+                                        part: {
+                                            include: {
+                                                unit: {
+                                                    include: {
+                                                        subject: true
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                studentProgress: {
+                    include: {
+                        subject: true,
+                        topic: true
+                    }
+                },
+                sessions: {
+                    orderBy: {
+                        startTime: 'desc'
+                    }
+                }
+            },
+            orderBy: { name: 'asc' }
+        });
+
+        // Process student data for dashboard
+        const studentPerformanceData = students.map(student => {
+            // Calculate performance metrics
+            const uniqueAssessments = new Set(student.assessmentSubmissions.map(sub => sub.assessmentId)).size;
+            const completedUniqueAssessments = new Set(
+                student.assessmentSubmissions
+                    .filter(sub => sub.score !== null)
+                    .map(sub => sub.assessmentId)
+            ).size;
+            const averageScore = student.assessmentSubmissions.length > 0 
+                ? (student.assessmentSubmissions.reduce((sum, sub) => sum + (sub.score || 0), 0) / student.assessmentSubmissions.length).toFixed(1)
+                : 0;
+            
+            const completionRate = uniqueAssessments > 0 ? ((completedUniqueAssessments / uniqueAssessments) * 100).toFixed(1) : 0;
+            
+            // Calculate engagement metrics
+            const loginDays = student.sessions ? 
+                new Set(student.sessions.map(s => new Date(s.startTime).toDateString())).size : 0;
+            const totalSubmissions = student.assessmentSubmissions.length;
+            const submissionsPerLoginDay = loginDays > 0 ? (totalSubmissions / loginDays).toFixed(2) : '0';
+            
+            // Determine engagement pattern
+            const lastLogin = student.lastLogin ? new Date(student.lastLogin) : null;
+            const lastSubmission = student.assessmentSubmissions
+                .sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt))[0];
+            const lastActivity = lastSubmission ? new Date(lastSubmission.submittedAt) : null;
+            
+            let engagementPattern = 'Unknown';
+            if (lastLogin && lastActivity) {
+                const loginTime = lastLogin.getTime();
+                const activityTime = lastActivity.getTime();
+                
+                if (activityTime > loginTime) {
+                    engagementPattern = 'Active Learner';
+                } else if (loginTime > activityTime) {
+                    engagementPattern = 'Grade Checker';
+                } else {
+                    engagementPattern = 'Active Learner';
+                }
+            } else if (lastLogin && !lastActivity) {
+                engagementPattern = 'Login Only - No Submissions';
+            } else if (!lastLogin && lastActivity) {
+                engagementPattern = 'Activity Only - No Recent Login';
+            } else {
+                engagementPattern = 'Inactive';
+            }
+
+            // Extract subjects from student courses
+            const subjects = student.studentCourses.map(sc => sc.subject.name);
+            
+            return {
+                id: student.id,
+                name: student.name,
+                email: student.email,
+                organization: student.organization,
+                yearLevel: student.yearLevel,
+                class: student.class,
+                active: student.active,
+                subjects: subjects,
+                uniqueAssessments: uniqueAssessments,
+                completedUniqueAssessments: completedUniqueAssessments,
+                completionRate: parseFloat(completionRate),
+                averageScore: parseFloat(averageScore),
+                loginDays: loginDays,
+                totalSubmissions: totalSubmissions,
+                submissionsPerLoginDay: submissionsPerLoginDay,
+                engagementPattern: engagementPattern,
+                lastLogin: student.lastLogin,
+                lastActivity: lastActivity ? lastActivity.toISOString() : null
+            };
+        });
+
+        res.json(studentPerformanceData);
+
+    } catch (error) {
+        console.error('Student performance API error:', error);
+        res.status(500).json({ error: 'Failed to load student performance data' });
+    }
+});
+
+// Quarter-specific reporting endpoint
+app.get('/api/teacher/quarter-report', auth, async (req, res) => {
+    try {
+        const { quarter } = req.query;
+        
+        if (!quarter) {
+            return res.status(400).json({ error: 'Quarter parameter is required (Q1, Q2, Q3, Q4)' });
+        }
+        
+        // Check if user is teacher or admin
+        const user = await prisma.user.findUnique({
+            where: { id: req.user.userId }
+        });
+
+        if (user.role !== 'TEACHER' && user.role !== 'ADMIN') {
+            return res.status(403).json({ error: 'Access denied. Teachers and admins only.' });
+        }
+
+        console.log(`Generating quarter report for ${quarter}...`);
+
+        // Get resources for the quarter
+        const resources = await prisma.resource.findMany({
+            where: { quarter: quarter },
+            include: {
+                createdBy: true,
+                topic: true,
+                assessments: true
+            },
+            orderBy: { createdAt: 'desc' }
+        });
+
+        // Get assessments for the quarter
+        const assessments = await prisma.assessment.findMany({
+            where: { quarter: quarter },
+            include: {
+                createdBy: true,
+                section: {
+                    include: {
+                        part: {
+                            include: {
+                                unit: {
+                                    include: {
+                                        subject: true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                submissions: true
+            },
+            orderBy: { createdAt: 'desc' }
+        });
+
+        // Get submissions for assessments in this quarter
+        const submissions = await prisma.assessmentSubmission.findMany({
+            where: {
+                assessment: {
+                    quarter: quarter
+                }
+            },
+            include: {
+                student: true,
+                assessment: true
+            },
+            orderBy: { submittedAt: 'desc' }
+        });
+
+        // Calculate statistics
+        const totalResources = resources.length;
+        const totalAssessments = assessments.length;
+        const totalSubmissions = submissions.length;
+        const publishedAssessments = assessments.filter(a => a.published).length;
+        const averageScore = submissions.length > 0 
+            ? (submissions.reduce((sum, sub) => sum + (sub.score || 0), 0) / submissions.length).toFixed(2)
+            : 0;
+
+        // Group by subject
+        const subjectStats = {};
+        assessments.forEach(assessment => {
+            const subjectName = assessment.section?.part?.unit?.subject?.name || 'Unknown';
+            if (!subjectStats[subjectName]) {
+                subjectStats[subjectName] = {
+                    assessments: 0,
+                    submissions: 0,
+                    averageScore: 0
+                };
+            }
+            subjectStats[subjectName].assessments++;
+        });
+
+        submissions.forEach(submission => {
+            const subjectName = submission.assessment.section?.part?.unit?.subject?.name || 'Unknown';
+            if (subjectStats[subjectName]) {
+                subjectStats[subjectName].submissions++;
+            }
+        });
+
+        // Calculate average scores by subject
+        Object.keys(subjectStats).forEach(subjectName => {
+            const subjectSubmissions = submissions.filter(sub => 
+                sub.assessment.section?.part?.unit?.subject?.name === subjectName
+            );
+            if (subjectSubmissions.length > 0) {
+                const avgScore = subjectSubmissions.reduce((sum, sub) => sum + (sub.score || 0), 0) / subjectSubmissions.length;
+                subjectStats[subjectName].averageScore = avgScore.toFixed(2);
+            }
+        });
+
+        const report = {
+            quarter: quarter,
+            summary: {
+                totalResources,
+                totalAssessments,
+                totalSubmissions,
+                publishedAssessments,
+                averageScore: parseFloat(averageScore),
+                completionRate: totalAssessments > 0 ? ((publishedAssessments / totalAssessments) * 100).toFixed(1) : 0
+            },
+            subjectStats,
+            resources: resources.map(r => ({
+                id: r.id,
+                title: r.title,
+                type: r.type,
+                createdBy: r.createdBy.name,
+                topic: r.topic?.name,
+                linkedAssessments: r.assessments.length,
+                createdAt: r.createdAt
+            })),
+            assessments: assessments.map(a => ({
+                id: a.id,
+                title: a.title,
+                type: a.type,
+                category: a.category,
+                published: a.published,
+                createdBy: a.createdBy.name,
+                subject: a.section?.part?.unit?.subject?.name,
+                submissions: a.submissions.length,
+                createdAt: a.createdAt
+            })),
+            submissions: submissions.map(s => ({
+                id: s.id,
+                studentName: s.student.name,
+                assessmentTitle: s.assessment.title,
+                score: s.score,
+                attempts: s.attempts,
+                status: s.status,
+                submittedAt: s.submittedAt
+            }))
+        };
+
+        res.json(report);
+    } catch (error) {
+        console.error('Quarter report error:', error);
+        res.status(500).json({ error: 'Failed to generate quarter report' });
+    }
+});
+
+// Login without activity tracking endpoint
+app.get('/api/teacher/login-without-activity', auth, async (req, res) => {
+    try {
+        // Check if user is teacher or admin
+        const user = await prisma.user.findUnique({
+            where: { id: req.user.userId }
+        });
+
+        if (user.role !== 'TEACHER' && user.role !== 'ADMIN') {
+            return res.status(403).json({ error: 'Access denied. Teachers and admins only.' });
+        }
+
+        const { days = 30, quarter } = req.query;
+        const daysAgo = new Date();
+        daysAgo.setDate(daysAgo.getDate() - parseInt(days));
+
+        console.log(`Analyzing login without activity for the past ${days} days...`);
+
+        // Get all active students with their login sessions and assessment submissions
+        const students = await prisma.user.findMany({
+            where: { 
+                role: 'STUDENT',
+                active: true  // Only include active students
+            },
+            include: {
+                sessions: {
+                    where: {
+                        startTime: {
+                            gte: daysAgo
+                        }
+                    },
+                    orderBy: {
+                        startTime: 'desc'
+                    }
+                },
+                assessmentSubmissions: {
+                    where: {
+                        submittedAt: {
+                            gte: daysAgo
+                        }
+                    },
+                    orderBy: {
+                        submittedAt: 'desc'
+                    }
+                },
+                studentCourses: {
+                    include: {
+                        subject: true
+                    }
+                }
+            },
+            orderBy: { name: 'asc' }
+        });
+
+        // Analyze each student's login vs activity pattern
+        const analysis = students.map(student => {
+            const loginSessions = student.sessions;
+            const recentSubmissions = student.assessmentSubmissions;
+            
+            // Count distinct login days
+            const loginDays = new Set(loginSessions.map(s => 
+                new Date(s.startTime).toDateString()
+            )).size;
+            
+            // Count distinct activity days (submission days)
+            const activityDays = new Set(recentSubmissions.map(s => 
+                new Date(s.submittedAt).toDateString()
+            )).size;
+            
+            // Find login sessions that didn't result in activity
+            const loginWithoutActivity = loginSessions.filter(session => {
+                const sessionDate = new Date(session.startTime).toDateString();
+                const hadActivityOnDay = recentSubmissions.some(submission => 
+                    new Date(submission.submittedAt).toDateString() === sessionDate
+                );
+                return !hadActivityOnDay;
+            });
+            
+            // Calculate engagement metrics
+            const totalLoginSessions = loginSessions.length;
+            const sessionsWithActivity = totalLoginSessions - loginWithoutActivity.length;
+            const sessionsWithoutActivity = loginWithoutActivity.length;
+            const activityRate = totalLoginSessions > 0 ? 
+                ((sessionsWithActivity / totalLoginSessions) * 100).toFixed(1) : 0;
+            
+            // Determine engagement pattern
+            let engagementPattern = 'Unknown';
+            if (totalLoginSessions === 0) {
+                engagementPattern = 'No Logins';
+            } else if (sessionsWithoutActivity === 0) {
+                engagementPattern = 'Always Active';
+            } else if (sessionsWithoutActivity === totalLoginSessions) {
+                engagementPattern = 'Login Only - No Activity';
+            } else if (activityRate >= 75) {
+                engagementPattern = 'Highly Engaged';
+            } else if (activityRate >= 50) {
+                engagementPattern = 'Moderately Engaged';
+            } else if (activityRate >= 25) {
+                engagementPattern = 'Low Engagement';
+            } else {
+                engagementPattern = 'Minimal Engagement';
+            }
+            
+            // Get last login and last activity
+            const lastLogin = loginSessions.length > 0 ? 
+                new Date(loginSessions[0].startTime) : null;
+            const lastActivity = recentSubmissions.length > 0 ? 
+                new Date(recentSubmissions[0].submittedAt) : null;
+            
+            // Calculate days since last login and activity
+            const now = new Date();
+            const daysSinceLogin = lastLogin ? 
+                Math.floor((now - lastLogin) / (1000 * 60 * 60 * 24)) : 'Never';
+            const daysSinceActivity = lastActivity ? 
+                Math.floor((now - lastActivity) / (1000 * 60 * 60 * 24)) : 'Never';
+            
+            return {
+                id: student.id,
+                name: student.name,
+                email: student.email,
+                organization: student.organization,
+                yearLevel: student.yearLevel,
+                class: student.class,
+                active: student.active,
+                subjects: student.studentCourses.map(sc => sc.subject.name),
+                totalLoginSessions,
+                sessionsWithActivity,
+                sessionsWithoutActivity,
+                activityRate: parseFloat(activityRate),
+                engagementPattern,
+                loginDays,
+                activityDays,
+                lastLogin: lastLogin ? lastLogin.toISOString() : null,
+                lastActivity: lastActivity ? lastActivity.toISOString() : null,
+                daysSinceLogin,
+                daysSinceActivity,
+                loginWithoutActivitySessions: loginWithoutActivity.map(session => ({
+                    id: session.id,
+                    startTime: session.startTime,
+                    endTime: session.endTime,
+                    duration: session.duration,
+                    ipAddress: session.ipAddress
+                }))
+            };
+        });
+        
+        // Calculate summary statistics
+        const totalStudents = analysis.length;
+        const studentsWithLogins = analysis.filter(s => s.totalLoginSessions > 0).length;
+        const studentsWithActivity = analysis.filter(s => s.sessionsWithActivity > 0).length;
+        const studentsLoginOnly = analysis.filter(s => s.engagementPattern === 'Login Only - No Activity').length;
+        const studentsNoLogins = analysis.filter(s => s.engagementPattern === 'No Logins').length;
+        
+        const averageActivityRate = analysis.reduce((sum, s) => sum + s.activityRate, 0) / totalStudents;
+        
+        const summary = {
+            totalStudents,
+            studentsWithLogins,
+            studentsWithActivity,
+            studentsLoginOnly,
+            studentsNoLogins,
+            averageActivityRate: averageActivityRate.toFixed(1),
+            analysisPeriod: `${days} days`,
+            analysisDate: new Date().toISOString()
+        };
+        
+        res.json({
+            summary,
+            students: analysis
+        });
+        
+    } catch (error) {
+        console.error('Login without activity analysis error:', error);
+        res.status(500).json({ error: 'Failed to analyze login without activity patterns' });
+    }
+});
 

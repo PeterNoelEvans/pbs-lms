@@ -1,0 +1,661 @@
+
+<0!10DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Database Export - Teacher Portal</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        .export-section {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .export-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .export-cube {
+            background: white;
+            border: 2px solid #e9ecef;
+            border-radius: 12px;
+            padding: 20px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+            min-height: 140px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        .export-cube:hover {
+            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+            transform: translateY(-3px);
+            border-color: #0d6efd;
+        }
+        .export-cube.selected {
+            border-color: #0d6efd;
+            background: linear-gradient(135deg, #f8f9ff 0%, #e3f2fd 100%);
+            box-shadow: 0 4px 8px rgba(13, 110, 253, 0.2);
+        }
+        .export-cube.selected::before {
+            content: '✓';
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            background: #0d6efd;
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 12px;
+        }
+        .cube-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .cube-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 12px;
+            font-size: 18px;
+            color: white;
+        }
+        .cube-title {
+            font-weight: 600;
+            font-size: 14px;
+            margin: 0;
+            color: #212529;
+        }
+        .cube-description {
+            font-size: 12px;
+            color: #6c757d;
+            line-height: 1.4;
+            margin-bottom: 10px;
+        }
+        .cube-info {
+            font-size: 11px;
+            color: #868e96;
+            background: #f8f9fa;
+            padding: 6px 8px;
+            border-radius: 6px;
+            margin-top: auto;
+        }
+        .progress-section {
+            display: none;
+            margin-top: 20px;
+        }
+        .btn-export {
+            min-width: 120px;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 6px;
+        }
+        .status-ready { background-color: #28a745; }
+        .status-processing { background-color: #ffc107; }
+        .status-complete { background-color: #17a2b8; }
+        .status-error { background-color: #dc3545; }
+        
+        /* Responsive grid adjustments */
+        @media (min-width: 768px) {
+            .export-grid {
+                grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            }
+        }
+        @media (min-width: 1200px) {
+            .export-grid {
+                grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <nav class="col-md-3 col-lg-2 d-md-block bg-light sidebar">
+                <div class="position-sticky pt-3">
+                    <ul class="nav flex-column">
+                        <li class="nav-item">
+                            <a class="nav-link" href="/teacher/dashboard.html">
+                                <i class="bi bi-house"></i> Dashboard
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/teacher/subjects.html">
+                                <i class="bi bi-book"></i> Subjects
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/teacher/resources.html">
+                                <i class="bi bi-file-earmark"></i> Resources
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/teacher/assessments.html">
+                                <i class="bi bi-clipboard-check"></i> Assessments
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link active" href="/teacher/database-export.html">
+                                <i class="bi bi-download"></i> Database Export
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/teacher/progress.html">
+                                <i class="bi bi-graph-up"></i> Progress
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/teacher/manage-students.html">
+                                <i class="bi bi-people"></i> Manage Students
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/teacher/session-analytics.html">
+                                <i class="bi bi-clock"></i> Session Analytics
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </nav>
+
+            <!-- Main Content -->
+            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
+                <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                    <h1 class="h2">Database Export</h1>
+                    <div class="btn-toolbar mb-2 mb-md-0">
+                        <div class="btn-group me-2">
+                            <div class="d-flex align-items-center me-3">
+                                <label for="quarterFilter" class="form-label mb-0 me-2">Quarter:</label>
+                                <select id="quarterFilter" class="form-select form-select-sm" style="width: auto;">
+                                    <option value="">All Quarters</option>
+                                    <option value="Q1">Q1</option>
+                                    <option value="Q2" selected>Q2</option>
+                                    <option value="Q3">Q3</option>
+                                    <option value="Q4">Q4</option>
+                                </select>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="exportSelected()">
+                                <i class="bi bi-download"></i> Export Selected
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="exportAll()">
+                                <i class="bi bi-download-all"></i> Export All
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Export Options -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="export-section">
+                            <h4><i class="bi bi-database"></i> Export Options</h4>
+                            <p class="text-muted">Click on the cubes below to select which data tables you want to export. Each table will be exported as a separate Excel sheet.</p>
+                            
+                            <div class="export-grid">
+                                <!-- Users -->
+                                <div class="export-cube" data-table="users">
+                                    <div class="cube-header">
+                                        <div class="cube-icon" style="background: #007bff;">
+                                            <i class="bi bi-people"></i>
+                                        </div>
+                                        <h6 class="cube-title">Users</h6>
+                                    </div>
+                                    <div class="cube-description">
+                                        All user accounts (students, teachers, admins)
+                                    </div>
+                                    <div class="cube-info">
+                                        <span class="status-indicator status-ready"></span>
+                                        Name, email, role, organization, student number
+                                    </div>
+                                </div>
+
+                                <!-- Subjects -->
+                                <div class="export-cube" data-table="subjects">
+                                    <div class="cube-header">
+                                        <div class="cube-icon" style="background: #28a745;">
+                                            <i class="bi bi-book"></i>
+                                        </div>
+                                        <h6 class="cube-title">Subjects</h6>
+                                    </div>
+                                    <div class="cube-description">
+                                        All subjects and their core subject categories
+                                    </div>
+                                    <div class="cube-info">
+                                        <span class="status-indicator status-ready"></span>
+                                        Subject names, descriptions, year levels
+                                    </div>
+                                </div>
+
+                                <!-- Course Structure -->
+                                <div class="export-cube" data-table="course-structure">
+                                    <div class="cube-header">
+                                        <div class="cube-icon" style="background: #ffc107;">
+                                            <i class="bi bi-diagram-3"></i>
+                                        </div>
+                                        <h6 class="cube-title">Course Structure</h6>
+                                    </div>
+                                    <div class="cube-description">
+                                        Units, Parts, Sections, and Topics
+                                    </div>
+                                    <div class="cube-info">
+                                        <span class="status-indicator status-ready"></span>
+                                        Hierarchy and descriptions
+                                    </div>
+                                </div>
+
+                                <!-- Resources -->
+                                <div class="export-cube" data-table="resources">
+                                    <div class="cube-header">
+                                        <div class="cube-icon" style="background: #17a2b8;">
+                                            <i class="bi bi-file-earmark"></i>
+                                        </div>
+                                        <h6 class="cube-title">Resources</h6>
+                                    </div>
+                                    <div class="cube-description">
+                                        All learning resources and their metadata
+                                    </div>
+                                    <div class="cube-info">
+                                        <span class="status-indicator status-ready"></span>
+                                        Titles, types, file paths, usage stats
+                                    </div>
+                                </div>
+
+                                <!-- Assessments -->
+                                <div class="export-cube" data-table="assessments">
+                                    <div class="cube-header">
+                                        <div class="cube-icon" style="background: #dc3545;">
+                                            <i class="bi bi-clipboard-check"></i>
+                                        </div>
+                                        <h6 class="cube-title">Assessments</h6>
+                                    </div>
+                                    <div class="cube-description">
+                                        All quizzes, assignments, and assessments
+                                    </div>
+                                    <div class="cube-info">
+                                        <span class="status-indicator status-ready"></span>
+                                        Titles, types, categories, questions
+                                    </div>
+                                </div>
+
+                                <!-- Submissions -->
+                                <div class="export-cube" data-table="submissions">
+                                    <div class="cube-header">
+                                        <div class="cube-icon" style="background: #6f42c1;">
+                                            <i class="bi bi-file-text"></i>
+                                        </div>
+                                        <h6 class="cube-title">Submissions</h6>
+                                    </div>
+                                    <div class="cube-description">
+                                        All student submissions and scores
+                                    </div>
+                                    <div class="cube-info">
+                                        <span class="status-indicator status-ready"></span>
+                                        Scores, attempts, time spent, feedback
+                                    </div>
+                                </div>
+
+                                <!-- Progress -->
+                                <div class="export-cube" data-table="progress">
+                                    <div class="cube-header">
+                                        <div class="cube-icon" style="background: #fd7e14;">
+                                            <i class="bi bi-graph-up"></i>
+                                        </div>
+                                        <h6 class="cube-title">Progress</h6>
+                                    </div>
+                                    <div class="cube-description">
+                                        Progress tracking for all students
+                                    </div>
+                                    <div class="cube-info">
+                                        <span class="status-indicator status-ready"></span>
+                                        Status, scores, last updated
+                                    </div>
+                                </div>
+
+                                <!-- Student Courses -->
+                                <div class="export-cube" data-table="student-courses">
+                                    <div class="cube-header">
+                                        <div class="cube-icon" style="background: #20c997;">
+                                            <i class="bi bi-mortarboard"></i>
+                                        </div>
+                                        <h6 class="cube-title">Enrollments</h6>
+                                    </div>
+                                    <div class="cube-description">
+                                        Student course enrollments
+                                    </div>
+                                    <div class="cube-info">
+                                        <span class="status-indicator status-ready"></span>
+                                        Student-subject enrollments
+                                    </div>
+                                </div>
+
+                                <!-- Teacher Assignments -->
+                                <div class="export-cube" data-table="teacher-assignments">
+                                    <div class="cube-header">
+                                        <div class="cube-icon" style="background: #e83e8c;">
+                                            <i class="bi bi-person-badge"></i>
+                                        </div>
+                                        <h6 class="cube-title">Assignments</h6>
+                                    </div>
+                                    <div class="cube-description">
+                                        Teacher subject assignments
+                                    </div>
+                                    <div class="cube-info">
+                                        <span class="status-indicator status-ready"></span>
+                                        Teacher-subject assignments
+                                    </div>
+                                </div>
+
+                                <!-- Weekly Schedules -->
+                                <div class="export-cube" data-table="weekly-schedules">
+                                    <div class="cube-header">
+                                        <div class="cube-icon" style="background: #6c757d;">
+                                            <i class="bi bi-calendar-week"></i>
+                                        </div>
+                                        <h6 class="cube-title">Schedules</h6>
+                                    </div>
+                                    <div class="cube-description">
+                                        Weekly lesson plans and objectives
+                                    </div>
+                                    <div class="cube-info">
+                                        <span class="status-indicator status-ready"></span>
+                                        Week numbers, objectives, resources
+                                    </div>
+                                </div>
+
+                                <!-- User Sessions -->
+                                <div class="export-cube" data-table="user-sessions">
+                                    <div class="cube-header">
+                                        <div class="cube-icon" style="background: #198754;">
+                                            <i class="bi bi-clock"></i>
+                                        </div>
+                                        <h6 class="cube-title">Sessions</h6>
+                                    </div>
+                                    <div class="cube-description">
+                                        Login sessions and activity tracking
+                                    </div>
+                                    <div class="cube-info">
+                                        <span class="status-indicator status-ready"></span>
+                                        Start/end times, duration, IP
+                                    </div>
+                                </div>
+
+                                <!-- Resource Usage -->
+                                <div class="export-cube" data-table="resource-usage">
+                                    <div class="cube-header">
+                                        <div class="cube-icon" style="background: #0dcaf0;">
+                                            <i class="bi bi-activity"></i>
+                                        </div>
+                                        <h6 class="cube-title">Usage</h6>
+                                    </div>
+                                    <div class="cube-description">
+                                        Resource usage tracking
+                                    </div>
+                                    <div class="cube-info">
+                                        <span class="status-indicator status-ready"></span>
+                                        Usage timestamps, user activity
+                                    </div>
+                                </div>
+
+                                <!-- Media Files -->
+                                <div class="export-cube" data-table="media-files">
+                                    <div class="cube-header">
+                                        <div class="cube-icon" style="background: #d63384;">
+                                            <i class="bi bi-file-earmark-play"></i>
+                                        </div>
+                                        <h6 class="cube-title">Media</h6>
+                                    </div>
+                                    <div class="cube-description">
+                                        Audio, video, and image files
+                                    </div>
+                                    <div class="cube-info">
+                                        <span class="status-indicator status-ready"></span>
+                                        File types, paths, durations
+                                    </div>
+                                </div>
+
+                                <!-- Transfer Logs -->
+                                <div class="export-cube" data-table="transfer-logs">
+                                    <div class="cube-header">
+                                        <div class="cube-icon" style="background: #ffc107;">
+                                            <i class="bi bi-arrow-left-right"></i>
+                                        </div>
+                                        <h6 class="cube-title">Transfers</h6>
+                                    </div>
+                                    <div class="cube-description">
+                                        History of teacher transfers
+                                    </div>
+                                    <div class="cube-info">
+                                        <span class="status-indicator status-ready"></span>
+                                        Transfer history, reasons
+                                    </div>
+                                </div>
+
+                                <!-- Configuration -->
+                                <div class="export-cube" data-table="config">
+                                    <div class="cube-header">
+                                        <div class="cube-icon" style="background: #6c757d;">
+                                            <i class="bi bi-gear"></i>
+                                        </div>
+                                        <h6 class="cube-title">Config</h6>
+                                    </div>
+                                    <div class="cube-description">
+                                        System settings and configuration
+                                    </div>
+                                    <div class="cube-info">
+                                        <span class="status-indicator status-ready"></span>
+                                        Active quarter, system settings
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Progress Section -->
+                <div class="progress-section" id="progressSection">
+                    <div class="alert alert-info">
+                        <h5><i class="bi bi-gear-fill"></i> Exporting Database...</h5>
+                        <div class="progress mb-3">
+                            <div class="progress-bar" role="progressbar" style="width: 0%" id="exportProgress"></div>
+                        </div>
+                        <p id="exportStatus">Preparing export...</p>
+                    </div>
+                </div>
+
+                <!-- Export History -->
+                <div class="row mt-4">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5><i class="bi bi-clock-history"></i> Recent Exports</h5>
+                            </div>
+                            <div class="card-body">
+                                <div id="exportHistory">
+                                    <p class="text-muted">No recent exports found.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const token = localStorage.getItem('token');
+        if (!token) {
+            window.location.href = '/login';
+        }
+
+        // Check if user is teacher or admin
+        const userRole = localStorage.getItem('userRole');
+        if (userRole !== 'TEACHER' && userRole !== 'ADMIN') {
+            window.location.href = '/login';
+        }
+
+        // Export functions
+        function exportSelected() {
+            const selectedTables = [];
+            document.querySelectorAll('.export-cube.selected').forEach(cube => {
+                selectedTables.push(cube.dataset.table);
+            });
+
+            if (selectedTables.length === 0) {
+                alert('Please select at least one table to export.');
+                return;
+            }
+
+            startExport(selectedTables);
+        }
+
+        function exportAll() {
+            const allTables = [
+                'users', 'subjects', 'course-structure', 'resources', 'assessments', 
+                'submissions', 'progress', 'student-courses', 'teacher-assignments',
+                'weekly-schedules', 'user-sessions', 'resource-usage', 'media-files',
+                'transfer-logs', 'config'
+            ];
+            startExport(allTables);
+        }
+
+        function startExport(tables) {
+            const progressSection = document.getElementById('progressSection');
+            const progressBar = document.getElementById('exportProgress');
+            const statusText = document.getElementById('exportStatus');
+            const quarterFilter = document.getElementById('quarterFilter').value;
+
+            progressSection.style.display = 'block';
+            progressBar.style.width = '0%';
+            statusText.textContent = 'Starting export...';
+
+            fetch('/api/teacher/export-database', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`,
+                    'Cache-Control': 'no-cache'
+                },
+                body: JSON.stringify({ 
+                    tables,
+                    quarter: quarterFilter || null
+                })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Export failed');
+                }
+                // Get filename from Content-Disposition header
+                const contentDisposition = response.headers.get('Content-Disposition');
+                let filename = `database-export-${new Date().toISOString().split('T')[0]}.xlsx`;
+                
+                console.log('Content-Disposition header:', contentDisposition);
+                
+                if (contentDisposition) {
+                    // Try different patterns to extract filename
+                    let filenameMatch = contentDisposition.match(/filename="([^"]+)"/);
+                    if (!filenameMatch) {
+                        filenameMatch = contentDisposition.match(/filename=([^;]+)/);
+                    }
+                    if (filenameMatch) {
+                        filename = filenameMatch[1];
+                        console.log('Extracted filename:', filename);
+                    } else {
+                        console.log('No filename found in Content-Disposition. Full header:', contentDisposition);
+                    }
+                } else {
+                    console.log('No Content-Disposition header found');
+                }
+                
+                return response.blob().then(blob => ({ blob, filename }));
+            })
+            .then(({ blob, filename }) => {
+                progressBar.style.width = '100%';
+                statusText.textContent = 'Export complete! Downloading file...';
+                
+                // Create download link
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+
+                // Hide progress after a delay
+                setTimeout(() => {
+                    progressSection.style.display = 'none';
+                }, 3000);
+
+                // Add to history
+                addToHistory(tables);
+            })
+            .catch(error => {
+                console.error('Export error:', error);
+                statusText.textContent = 'Export failed. Please try again.';
+                progressBar.classList.add('bg-danger');
+            });
+        }
+
+        function addToHistory(tables) {
+            const history = document.getElementById('exportHistory');
+            const timestamp = new Date().toLocaleString();
+            const tableCount = tables.length;
+            
+            const historyItem = document.createElement('div');
+            historyItem.className = 'd-flex justify-content-between align-items-center p-2 border-bottom';
+            historyItem.innerHTML = `
+                <div>
+                    <strong>${tableCount} tables exported</strong>
+                    <br><small class="text-muted">${tables.join(', ')}</small>
+                </div>
+                <small class="text-muted">${timestamp}</small>
+            `;
+            
+            history.insertBefore(historyItem, history.firstChild);
+            
+            // Keep only last 5 exports
+            const items = history.querySelectorAll('.d-flex');
+            if (items.length > 5) {
+                items[items.length - 1].remove();
+            }
+        }
+
+        // Toggle export cubes
+        document.querySelectorAll('.export-cube').forEach(cube => {
+            cube.addEventListener('click', function() {
+                this.classList.toggle('selected');
+            });
+        });
+
+        // Initialize - all cubes start unselected
+        document.addEventListener('DOMContentLoaded', function() {
+            // All cubes start unselected by default
+            document.querySelectorAll('.export-cube').forEach(cube => {
+                cube.classList.remove('selected');
+            });
+        });
+    </script>
+</body>
+</html> 

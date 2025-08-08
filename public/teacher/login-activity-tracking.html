@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login Activity Tracking - Teacher Portal</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        .dashboard-card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .metric-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 15px;
+        }
+        .metric-value {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .metric-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+        .engagement-high { color: #28a745; }
+        .engagement-medium { color: #ffc107; }
+        .engagement-low { color: #dc3545; }
+        .engagement-critical { color: #dc3545; font-weight: bold; }
+        .filter-section {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        .alert-card {
+            border-left: 4px solid #dc3545;
+            background: #f8d7da;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 8px;
+        }
+        .warning-card {
+            border-left: 4px solid #ffc107;
+            background: #fff3cd;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 8px;
+        }
+        .success-card {
+            border-left: 4px solid #28a745;
+            background: #d4edda;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 8px;
+        }
+        .info-card {
+            border-left: 4px solid #17a2b8;
+            background: #d1ecf1;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 8px;
+        }
+        .student-row {
+            transition: all 0.3s ease;
+        }
+        .student-row:hover {
+            background-color: #f8f9fa;
+        }
+        .activity-rate-bar {
+            height: 8px;
+            background-color: #e9ecef;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .activity-rate-fill {
+            height: 100%;
+            transition: width 0.3s ease;
+        }
+        .export-section {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <nav class="col-md-3 col-lg-2 d-md-block bg-light sidebar">
+                <div class="position-sticky pt-3">
+                    <ul class="nav flex-column">
+                        <li class="nav-item">
+                            <a class="nav-link" href="/teacher/dashboard.html">
+                                <i class="bi bi-house"></i> Dashboard
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/teacher/subjects.html">
+                                <i class="bi bi-book"></i> Subjects
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/teacher/resources.html">
+                                <i class="bi bi-file-earmark"></i> Resources
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/teacher/assessments.html">
+                                <i class="bi bi-clipboard-check"></i> Assessments
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/teacher/engagement-analytics.html">
+                                <i class="bi bi-graph-up"></i> Engagement Analytics
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link active" href="/teacher/login-activity-tracking.html">
+                                <i class="bi bi-clock-history"></i> Login Activity Tracking
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/teacher/database-export.html">
+                                <i class="bi bi-download"></i> Database Export
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </nav>
+
+            <!-- Main Content -->
+            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
+                <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                    <h1 class="h2">Login Activity Tracking</h1>
+                    <div class="btn-toolbar mb-2 mb-md-0">
+                        <button class="btn btn-primary" onclick="exportReport()">
+                            <i class="bi bi-download"></i> Export Report
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Summary Cards -->
+                <div class="row" id="summaryCards">
+                    <!-- Summary cards will be loaded here -->
+                </div>
+
+                <!-- Filters -->
+                <div class="filter-section">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <label for="daysFilter" class="form-label">Analysis Period</label>
+                            <select class="form-select" id="daysFilter">
+                                <option value="7">Last 7 days</option>
+                                <option value="14">Last 14 days</option>
+                                <option value="30" selected>Last 30 days</option>
+                                <option value="60">Last 60 days</option>
+                                <option value="90">Last 90 days</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="engagementFilter" class="form-label">Engagement Pattern</label>
+                            <select class="form-select" id="engagementFilter">
+                                <option value="">All Patterns</option>
+                                <option value="Login Only - No Activity">Login Only - No Activity</option>
+                                <option value="Minimal Engagement">Minimal Engagement</option>
+                                <option value="Low Engagement">Low Engagement</option>
+                                <option value="Moderately Engaged">Moderately Engaged</option>
+                                <option value="Highly Engaged">Highly Engaged</option>
+                                <option value="Always Active">Always Active</option>
+                                <option value="No Logins">No Logins</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="activityRateFilter" class="form-label">Activity Rate</label>
+                            <select class="form-select" id="activityRateFilter">
+                                <option value="">All Rates</option>
+                                <option value="0-25">0-25%</option>
+                                <option value="25-50">25-50%</option>
+                                <option value="50-75">50-75%</option>
+                                <option value="75-100">75-100%</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="searchFilter" class="form-label">Search</label>
+                            <input type="text" class="form-control" id="searchFilter" placeholder="Search students...">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Alerts Section -->
+                <div id="alertsSection">
+                    <!-- Alerts will be loaded here -->
+                </div>
+
+                <!-- Students Table -->
+                <div class="dashboard-card">
+                    <h4><i class="bi bi-people"></i> Student Login Activity Analysis</h4>
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="studentsTable">
+                            <thead>
+                                <tr>
+                                    <th>Student</th>
+                                    <th>Engagement Pattern</th>
+                                    <th>Activity Rate</th>
+                                    <th>Login Sessions</th>
+                                    <th>Sessions Without Activity</th>
+                                    <th>Last Login</th>
+                                    <th>Last Activity</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="studentsTableBody">
+                                <!-- Student data will be loaded here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Detailed Session Modal -->
+                <div class="modal fade" id="sessionModal" tabindex="-1">
+                    <div class="modal-dialog modal-lg">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">Login Sessions Without Activity</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div id="sessionDetails">
+                                    <!-- Session details will be loaded here -->
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                                <button type="button" class="btn btn-primary" onclick="exportStudentReport()">Export Student Report</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const token = localStorage.getItem('token');
+        if (!token) {
+            window.location.href = '/login';
+        }
+
+        // Check if user is teacher or admin
+        const userRole = localStorage.getItem('userRole');
+        if (userRole !== 'TEACHER' && userRole !== 'ADMIN') {
+            window.location.href = '/login';
+        }
+
+        let currentData = null;
+        let selectedStudent = null;
+
+        // Load data when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            loadData();
+            
+            // Add event listeners for filters
+            document.getElementById('daysFilter').addEventListener('change', loadData);
+            document.getElementById('engagementFilter').addEventListener('change', applyFilters);
+            document.getElementById('activityRateFilter').addEventListener('change', applyFilters);
+            document.getElementById('searchFilter').addEventListener('input', applyFilters);
+        });
+
+        async function loadData() {
+            try {
+                const days = document.getElementById('daysFilter').value;
+                const response = await fetch(`/api/teacher/login-without-activity?days=${days}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to load data');
+                }
+                
+                currentData = await response.json();
+                displaySummaryCards(currentData.summary);
+                displayAlerts(currentData.students);
+                displayStudentsTable(currentData.students);
+                
+            } catch (error) {
+                console.error('Error loading data:', error);
+                alert('Failed to load data. Please try again.');
+            }
+        }
+
+        function displaySummaryCards(summary) {
+            const summaryCards = document.getElementById('summaryCards');
+            
+            summaryCards.innerHTML = `
+                <div class="col-md-3">
+                    <div class="metric-card">
+                        <div class="metric-value">${summary.totalStudents}</div>
+                        <div class="metric-label">Total Students</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="metric-card">
+                        <div class="metric-value">${summary.studentsWithLogins}</div>
+                        <div class="metric-label">Students with Logins</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="metric-card">
+                        <div class="metric-value">${summary.studentsLoginOnly}</div>
+                        <div class="metric-label">Login Only - No Activity</div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="metric-card">
+                        <div class="metric-value">${summary.averageActivityRate}%</div>
+                        <div class="metric-label">Average Activity Rate</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function displayAlerts(students) {
+            const alertsSection = document.getElementById('alertsSection');
+            const criticalStudents = students.filter(s => s.engagementPattern === 'Login Only - No Activity');
+            const lowEngagementStudents = students.filter(s => s.engagementPattern === 'Minimal Engagement' || s.engagementPattern === 'Low Engagement');
+            
+            let alertsHTML = '';
+            
+            if (criticalStudents.length > 0) {
+                alertsHTML += `
+                    <div class="alert-card">
+                        <h5><i class="bi bi-exclamation-triangle"></i> Critical Alert</h5>
+                        <p><strong>${criticalStudents.length} students</strong> are logging in but not producing any activity. 
+                        These students may need immediate intervention.</p>
+                        <button class="btn btn-sm btn-danger" onclick="showCriticalStudents()">View Details</button>
+                    </div>
+                `;
+            }
+            
+            if (lowEngagementStudents.length > 0) {
+                alertsHTML += `
+                    <div class="warning-card">
+                        <h5><i class="bi bi-exclamation-circle"></i> Warning</h5>
+                        <p><strong>${lowEngagementStudents.length} students</strong> have low engagement rates. 
+                        Consider reaching out to these students or their parents.</p>
+                        <button class="btn btn-sm btn-warning" onclick="showLowEngagementStudents()">View Details</button>
+                    </div>
+                `;
+            }
+            
+            alertsSection.innerHTML = alertsHTML;
+        }
+
+        function displayStudentsTable(students) {
+            const tbody = document.getElementById('studentsTableBody');
+            
+            tbody.innerHTML = students.map(student => {
+                const activityRateClass = getActivityRateClass(student.activityRate);
+                const engagementClass = getEngagementClass(student.engagementPattern);
+                
+                return `
+                    <tr class="student-row">
+                        <td>
+                            <strong>${student.name}</strong><br>
+                            <small class="text-muted">${student.email}</small><br>
+                            <small class="text-muted">${student.class} - ${student.yearLevel}</small>
+                        </td>
+                        <td>
+                            <span class="badge ${engagementClass}">${student.engagementPattern}</span>
+                        </td>
+                        <td>
+                            <div class="d-flex align-items-center">
+                                <div class="activity-rate-bar me-2" style="width: 100px;">
+                                    <div class="activity-rate-fill ${activityRateClass}" style="width: ${student.activityRate}%"></div>
+                                </div>
+                                <span>${student.activityRate}%</span>
+                            </div>
+                        </td>
+                        <td>${student.totalLoginSessions}</td>
+                        <td>
+                            <span class="text-danger">${student.sessionsWithoutActivity}</span>
+                        </td>
+                        <td>${formatDays(student.daysSinceLogin)}</td>
+                        <td>${formatDays(student.daysSinceActivity)}</td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary" onclick="viewSessions('${student.id}')">
+                                <i class="bi bi-clock"></i> Sessions
+                            </button>
+                            <button class="btn btn-sm btn-outline-info" onclick="generateParentReport('${student.id}')">
+                                <i class="bi bi-file-text"></i> Report
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function getActivityRateClass(rate) {
+            if (rate >= 75) return 'bg-success';
+            if (rate >= 50) return 'bg-warning';
+            if (rate >= 25) return 'bg-orange';
+            return 'bg-danger';
+        }
+
+        function getEngagementClass(pattern) {
+            switch (pattern) {
+                case 'Always Active': return 'bg-success';
+                case 'Highly Engaged': return 'bg-success';
+                case 'Moderately Engaged': return 'bg-warning';
+                case 'Low Engagement': return 'bg-orange';
+                case 'Minimal Engagement': return 'bg-danger';
+                case 'Login Only - No Activity': return 'bg-danger';
+                case 'No Logins': return 'bg-secondary';
+                default: return 'bg-secondary';
+            }
+        }
+
+        function formatDays(days) {
+            if (days === 'Never') return 'Never';
+            if (days === 0) return 'Today';
+            if (days === 1) return 'Yesterday';
+            return `${days} days ago`;
+        }
+
+        function applyFilters() {
+            if (!currentData) return;
+            
+            const engagementFilter = document.getElementById('engagementFilter').value;
+            const activityRateFilter = document.getElementById('activityRateFilter').value;
+            const searchFilter = document.getElementById('searchFilter').value.toLowerCase();
+            
+            let filteredStudents = currentData.students;
+            
+            // Apply engagement pattern filter
+            if (engagementFilter) {
+                filteredStudents = filteredStudents.filter(s => s.engagementPattern === engagementFilter);
+            }
+            
+            // Apply activity rate filter
+            if (activityRateFilter) {
+                const [min, max] = activityRateFilter.split('-').map(Number);
+                filteredStudents = filteredStudents.filter(s => s.activityRate >= min && s.activityRate <= max);
+            }
+            
+            // Apply search filter
+            if (searchFilter) {
+                filteredStudents = filteredStudents.filter(s => 
+                    s.name.toLowerCase().includes(searchFilter) ||
+                    s.email.toLowerCase().includes(searchFilter) ||
+                    s.class.toLowerCase().includes(searchFilter)
+                );
+            }
+            
+            displayStudentsTable(filteredStudents);
+        }
+
+        function viewSessions(studentId) {
+            const student = currentData.students.find(s => s.id === studentId);
+            if (!student) return;
+            
+            selectedStudent = student;
+            
+            const sessionDetails = document.getElementById('sessionDetails');
+            sessionDetails.innerHTML = `
+                <h6>${student.name} - Login Sessions Without Activity</h6>
+                <p class="text-muted">Analysis period: ${currentData.summary.analysisPeriod}</p>
+                
+                <div class="alert alert-info">
+                    <strong>Summary:</strong> ${student.sessionsWithoutActivity} out of ${student.totalLoginSessions} login sessions 
+                    (${((student.sessionsWithoutActivity / student.totalLoginSessions) * 100).toFixed(1)}%) 
+                    resulted in no assessment submissions.
+                </div>
+                
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Date & Time</th>
+                                <th>Duration</th>
+                                <th>IP Address</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${student.loginWithoutActivitySessions.map(session => `
+                                <tr>
+                                    <td>${new Date(session.startTime).toLocaleString()}</td>
+                                    <td>${session.duration ? `${Math.floor(session.duration / 60)}m ${session.duration % 60}s` : 'N/A'}</td>
+                                    <td>${session.ipAddress || 'N/A'}</td>
+                                    <td><span class="badge bg-warning">No Activity</span></td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            
+            const modal = new bootstrap.Modal(document.getElementById('sessionModal'));
+            modal.show();
+        }
+
+        function generateParentReport(studentId) {
+            const student = currentData.students.find(s => s.id === studentId);
+            if (!student) return;
+            
+            const report = {
+                studentName: student.name,
+                analysisPeriod: currentData.summary.analysisPeriod,
+                engagementPattern: student.engagementPattern,
+                activityRate: student.activityRate,
+                totalLoginSessions: student.totalLoginSessions,
+                sessionsWithoutActivity: student.sessionsWithoutActivity,
+                loginDays: student.loginDays,
+                activityDays: student.activityDays,
+                daysSinceLastActivity: student.daysSinceActivity,
+                recommendations: generateRecommendations(student)
+            };
+            
+            // Create and download report
+            const reportText = generateParentReportText(report);
+            const blob = new Blob([reportText], { type: 'text/plain' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `parent-report-${student.name.replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        }
+
+        function generateRecommendations(student) {
+            const recommendations = [];
+            
+            if (student.engagementPattern === 'Login Only - No Activity') {
+                recommendations.push('Student logs in but does not complete any assessments');
+                recommendations.push('Consider one-on-one support to understand barriers');
+                recommendations.push('Check if student understands how to access and complete assessments');
+            } else if (student.activityRate < 25) {
+                recommendations.push('Very low engagement with learning activities');
+                recommendations.push('Consider parent-teacher conference to discuss engagement');
+                recommendations.push('Provide additional support and encouragement');
+            } else if (student.activityRate < 50) {
+                recommendations.push('Below average engagement');
+                recommendations.push('Monitor progress and provide encouragement');
+                recommendations.push('Consider additional support if pattern continues');
+            }
+            
+            if (student.daysSinceActivity > 7) {
+                recommendations.push('No recent activity - may need re-engagement');
+            }
+            
+            return recommendations;
+        }
+
+        function generateParentReportText(report) {
+            return `
+PARENT REPORT - LOGIN ACTIVITY ANALYSIS
+=======================================
+
+Student: ${report.studentName}
+Analysis Period: ${report.analysisPeriod}
+Report Date: ${new Date().toLocaleDateString()}
+
+ENGAGEMENT SUMMARY
+------------------
+Pattern: ${report.engagementPattern}
+Activity Rate: ${report.activityRate}%
+Total Login Sessions: ${report.totalLoginSessions}
+Sessions Without Activity: ${report.sessionsWithoutActivity}
+Active Learning Days: ${report.activityDays} out of ${report.loginDays} login days
+Days Since Last Activity: ${report.daysSinceLastActivity}
+
+DETAILED ANALYSIS
+-----------------
+${report.activityRate < 50 ? 
+    `Your child is logging into the learning system but may not be fully engaging with the learning activities. 
+    Only ${report.activityRate}% of login sessions resulted in completed assessments.` :
+    `Your child is showing good engagement with the learning system, with ${report.activityRate}% of login sessions 
+    resulting in completed assessments.`
+}
+
+RECOMMENDATIONS
+---------------
+${report.recommendations.map(rec => `• ${rec}`).join('\n')}
+
+SUPPORT SUGGESTIONS
+------------------
+• Encourage regular completion of assessments after logging in
+• Set aside dedicated time for learning activities
+• Monitor progress and celebrate completed assessments
+• Contact teacher if you have concerns about engagement
+
+For questions or concerns, please contact your child's teacher.
+            `;
+        }
+
+        function exportReport() {
+            if (!currentData) return;
+            
+            const reportData = {
+                summary: currentData.summary,
+                students: currentData.students,
+                exportDate: new Date().toISOString()
+            };
+            
+            const blob = new Blob([JSON.stringify(reportData, null, 2)], { type: 'application/json' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `login-activity-report-${new Date().toISOString().split('T')[0]}.json`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        }
+
+        function exportStudentReport() {
+            if (!selectedStudent) return;
+            generateParentReport(selectedStudent.id);
+        }
+
+        function showCriticalStudents() {
+            document.getElementById('engagementFilter').value = 'Login Only - No Activity';
+            applyFilters();
+        }
+
+        function showLowEngagementStudents() {
+            document.getElementById('engagementFilter').value = '';
+            document.getElementById('activityRateFilter').value = '0-25';
+            applyFilters();
+        }
+    </script>
+</body>
+</html>

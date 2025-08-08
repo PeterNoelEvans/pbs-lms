@@ -200,6 +200,16 @@
                             </div>
 
                             <div class="mb-3">
+                                <label for="quarter" class="form-label">Quarter</label>
+                                <select class="form-select" id="quarter" name="quarter" required>
+                                    <option value="Q1">Q1</option>
+                                    <option value="Q2">Q2</option>
+                                    <option value="Q3">Q3</option>
+                                    <option value="Q4">Q4</option>
+                                </select>
+                            </div>
+
+                            <div class="mb-3">
                                 <label for="maxAttempts" class="form-label">Maximum Attempts (optional)</label>
                                 <input type="number" class="form-control" id="maxAttempts" min="1" placeholder="Leave blank for unlimited attempts">
                             </div>
@@ -1539,6 +1549,7 @@
             formData.append('dueDate', document.getElementById('dueDate').value);
             formData.append('criteria', document.getElementById('criteria').value);
             formData.set('category', document.getElementById('assessmentCategory').value);
+            formData.append('quarter', document.getElementById('quarter').value);
             const maxAttemptsValue = document.getElementById('maxAttempts').value;
             if (maxAttemptsValue) {
                 formData.append('maxAttempts', maxAttemptsValue);

@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>At-Risk Students - Teacher Portal</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        .dashboard-card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .metric-card {
+            background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+            color: white;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 15px;
+        }
+        .metric-value {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .metric-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+        .risk-high { 
+            background: #f8d7da; 
+            border-left: 4px solid #dc3545;
+        }
+        .risk-medium { 
+            background: #fff3cd; 
+            border-left: 4px solid #ffc107;
+        }
+        .risk-low { 
+            background: #d1ecf1; 
+            border-left: 4px solid #17a2b8;
+        }
+        .student-card {
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            transition: transform 0.2s;
+        }
+        .student-card:hover {
+            transform: translateY(-2px);
+        }
+        .filter-section {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        .intervention-btn {
+            font-size: 0.8rem;
+            padding: 4px 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <nav class="col-md-3 col-lg-2 d-md-block bg-light sidebar">
+                <div class="position-sticky pt-3">
+                    <ul class="nav flex-column">
+                        <li class="nav-item">
+                            <a class="nav-link" href="/teacher/dashboard.html">
+                                <i class="bi bi-house"></i> Dashboard
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/teacher/subjects.html">
+                                <i class="bi bi-book"></i> Subjects
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/teacher/resources.html">
+                                <i class="bi bi-file-earmark"></i> Resources
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/teacher/assessments.html">
+                                <i class="bi bi-clipboard-check"></i> Assessments
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/teacher/database-export.html">
+                                <i class="bi bi-download"></i> Database Export
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/teacher/student-performance-dashboard.html">
+                                <i class="bi bi-graph-up"></i> Performance Dashboard
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/teacher/engagement-analytics.html">
+                                <i class="bi bi-people"></i> Engagement Analytics
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link active" href="/teacher/at-risk-students.html">
+                                <i class="bi bi-exclamation-triangle"></i> At-Risk Students
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/teacher/activity-patterns.html">
+                                <i class="bi bi-clock"></i> Activity Patterns
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/teacher/progress.html">
+                                <i class="bi bi-graph-up"></i> Progress
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/teacher/manage-students.html">
+                                <i class="bi bi-people"></i> Manage Students
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </nav>
+
+            <!-- Main Content -->
+            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
+                <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                    <h1 class="h2">At-Risk Students</h1>
+                    <div class="btn-toolbar mb-2 mb-md-0">
+                        <div class="btn-group me-2">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="refreshData()">
+                                <i class="bi bi-arrow-clockwise"></i> Refresh
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="exportAtRiskData()">
+                                <i class="bi bi-download"></i> Export Report
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Risk Metrics -->
+                <div class="row mb-4">
+                    <div class="col-md-3">
+                        <div class="metric-card">
+                            <div class="metric-value" id="highRiskCount">-</div>
+                            <div class="metric-label">High Risk Students</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="metric-card">
+                            <div class="metric-value" id="mediumRiskCount">-</div>
+                            <div class="metric-label">Medium Risk Students</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="metric-card">
+                            <div class="metric-value" id="inactiveCount">-</div>
+                            <div class="metric-label">Inactive 30+ Days</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="metric-card">
+                            <div class="metric-value" id="lowCompletionCount">-</div>
+                            <div class="metric-label">Low Completion Rate</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Filters -->
+                <div class="filter-section">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <label for="riskLevelFilter" class="form-label">Risk Level</label>
+                            <select class="form-select" id="riskLevelFilter">
+                                <option value="">All Risk Levels</option>
+                                <option value="high">High Risk</option>
+                                <option value="medium">Medium Risk</option>
+                                <option value="low">Low Risk</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="inactivityFilter" class="form-label">Inactivity Period</label>
+                            <select class="form-select" id="inactivityFilter">
+                                <option value="">All Periods</option>
+                                <option value="7">7+ days</option>
+                                <option value="14">14+ days</option>
+                                <option value="30">30+ days</option>
+                                <option value="60">60+ days</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="completionFilter" class="form-label">Completion Rate</label>
+                            <select class="form-select" id="completionFilter">
+                                <option value="">All Rates</option>
+                                <option value="0-25">0-25%</option>
+                                <option value="25-50">25-50%</option>
+                                <option value="50-75">50-75%</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="searchInput" class="form-label">Search Students</label>
+                            <input type="text" class="form-control" id="searchInput" placeholder="Name or email...">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- At-Risk Students List -->
+                <div class="dashboard-card">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5><i class="bi bi-exclamation-triangle"></i> At-Risk Students</h5>
+                        <small class="text-muted" id="tableInfo">Loading...</small>
+                    </div>
+                    <div id="atRiskStudentsList">
+                        <div class="text-center">Loading at-risk students...</div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const token = localStorage.getItem('token');
+        if (!token) {
+            window.location.href = '/login';
+        }
+
+        // Check if user is teacher or admin
+        const userRole = localStorage.getItem('userRole');
+        if (userRole !== 'TEACHER' && userRole !== 'ADMIN') {
+            window.location.href = '/login';
+        }
+
+        let studentData = [];
+        let filteredData = [];
+
+        // Load student data
+        async function loadStudentData() {
+            try {
+                const response = await fetch('/api/teacher/student-performance', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to load student data');
+                }
+
+                studentData = await response.json();
+                filteredData = [...studentData];
+                updateMetrics();
+                renderAtRiskStudents();
+                applyFilters();
+            } catch (error) {
+                console.error('Error loading student data:', error);
+                document.getElementById('atRiskStudentsList').innerHTML = 
+                    '<div class="text-center text-danger">Error loading data. Please try again.</div>';
+            }
+        }
+
+        // Update risk metrics
+        function updateMetrics() {
+            const highRisk = studentData.filter(s => getRiskLevel(s) === 'high').length;
+            const mediumRisk = studentData.filter(s => getRiskLevel(s) === 'medium').length;
+            const inactive30Days = studentData.filter(s => {
+                if (!s.lastActivity || s.lastActivity === 'Never') return false;
+                const daysSinceActivity = (new Date() - new Date(s.lastActivity)) / (1000 * 60 * 60 * 24);
+                return daysSinceActivity > 30;
+            }).length;
+            const lowCompletion = studentData.filter(s => s.completionRate < 25).length;
+
+            document.getElementById('highRiskCount').textContent = highRisk;
+            document.getElementById('mediumRiskCount').textContent = mediumRisk;
+            document.getElementById('inactiveCount').textContent = inactive30Days;
+            document.getElementById('lowCompletionCount').textContent = lowCompletion;
+        }
+
+        // Determine risk level for a student
+        function getRiskLevel(student) {
+            let riskScore = 0;
+            
+            // Inactivity risk
+            if (student.lastActivity && student.lastActivity !== 'Never') {
+                const daysSinceActivity = (new Date() - new Date(student.lastActivity)) / (1000 * 60 * 60 * 24);
+                if (daysSinceActivity > 60) riskScore += 3;
+                else if (daysSinceActivity > 30) riskScore += 2;
+                else if (daysSinceActivity > 14) riskScore += 1;
+            } else {
+                riskScore += 3; // No activity at all
+            }
+
+            // Completion rate risk
+            if (student.completionRate < 25) riskScore += 3;
+            else if (student.completionRate < 50) riskScore += 2;
+            else if (student.completionRate < 75) riskScore += 1;
+
+            // Engagement pattern risk
+            if (student.engagementPattern === 'Inactive') riskScore += 3;
+            else if (student.engagementPattern === 'Login Only - No Submissions') riskScore += 2;
+            else if (student.engagementPattern === 'Grade Checker') riskScore += 1;
+
+            // Login frequency risk
+            if (student.loginDays === 0) riskScore += 2;
+            else if (student.loginDays < 3) riskScore += 1;
+
+            if (riskScore >= 6) return 'high';
+            if (riskScore >= 3) return 'medium';
+            return 'low';
+        }
+
+        // Get risk factors for a student
+        function getRiskFactors(student) {
+            const factors = [];
+            
+            if (student.lastActivity && student.lastActivity !== 'Never') {
+                const daysSinceActivity = (new Date() - new Date(student.lastActivity)) / (1000 * 60 * 60 * 24);
+                if (daysSinceActivity > 60) factors.push('No activity for 60+ days');
+                else if (daysSinceActivity > 30) factors.push('No activity for 30+ days');
+                else if (daysSinceActivity > 14) factors.push('No activity for 14+ days');
+            } else {
+                factors.push('No recorded activity');
+            }
+
+            if (student.completionRate < 25) factors.push('Very low completion rate');
+            else if (student.completionRate < 50) factors.push('Low completion rate');
+
+            if (student.engagementPattern === 'Inactive') factors.push('Inactive engagement pattern');
+            else if (student.engagementPattern === 'Login Only - No Submissions') factors.push('Logs in but doesn\'t submit');
+
+            if (student.loginDays === 0) factors.push('Never logged in');
+            else if (student.loginDays < 3) factors.push('Very few login days');
+
+            return factors;
+        }
+
+        // Render at-risk students
+        function renderAtRiskStudents() {
+            const container = document.getElementById('atRiskStudentsList');
+            const tableInfo = document.getElementById('tableInfo');
+
+            if (filteredData.length === 0) {
+                container.innerHTML = '<div class="text-center">No at-risk students match the current filters.</div>';
+                tableInfo.textContent = 'No results';
+                return;
+            }
+
+            const atRiskStudents = filteredData.filter(s => getRiskLevel(s) !== 'low');
+            
+            if (atRiskStudents.length === 0) {
+                container.innerHTML = '<div class="text-center text-success">No at-risk students found! 🎉</div>';
+                tableInfo.textContent = 'No at-risk students';
+                return;
+            }
+
+            container.innerHTML = atRiskStudents.map(student => {
+                const riskLevel = getRiskLevel(student);
+                const riskFactors = getRiskFactors(student);
+                const daysSinceActivity = student.lastActivity ? 
+                    Math.floor((new Date() - new Date(student.lastActivity)) / (1000 * 60 * 60 * 24)) : 
+                    'Unknown';
+
+                return `
+                    <div class="student-card risk-${riskLevel}">
+                        <div class="row align-items-center">
+                            <div class="col-md-3">
+                                <h6 class="mb-1">${student.name}</h6>
+                                <small class="text-muted">${student.email}</small>
+                                <br>
+                                <span class="badge bg-${riskLevel === 'high' ? 'danger' : riskLevel === 'medium' ? 'warning' : 'info'}">
+                                    ${riskLevel.toUpperCase()} RISK
+                                </span>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="row">
+                                    <div class="col-6">
+                                        <small class="text-muted">Completion</small>
+                                        <div class="fw-bold">${student.completionRate}%</div>
+                                    </div>
+                                    <div class="col-6">
+                                        <small class="text-muted">Avg Score</small>
+                                        <div class="fw-bold">${student.averageScore}%</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="row">
+                                    <div class="col-6">
+                                        <small class="text-muted">Login Days</small>
+                                        <div class="fw-bold">${student.loginDays}</div>
+                                    </div>
+                                    <div class="col-6">
+                                        <small class="text-muted">Days Since Activity</small>
+                                        <div class="fw-bold">${daysSinceActivity === 'Unknown' ? 'Unknown' : daysSinceActivity}</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="d-flex flex-column gap-1">
+                                    <button class="btn btn-sm btn-outline-primary intervention-btn" onclick="sendIntervention('${student.id}', 'email')">
+                                        <i class="bi bi-envelope"></i> Send Email
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-warning intervention-btn" onclick="sendIntervention('${student.id}', 'reminder')">
+                                        <i class="bi bi-bell"></i> Send Reminder
+                                    </button>
+                                    <button class="btn btn-sm btn-outline-info intervention-btn" onclick="viewStudentDetails('${student.id}')">
+                                        <i class="bi bi-eye"></i> View Details
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-2">
+                            <small class="text-muted"><strong>Risk Factors:</strong></small>
+                            <div class="mt-1">
+                                ${riskFactors.map(factor => `<span class="badge bg-light text-dark me-1">${factor}</span>`).join('')}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            tableInfo.textContent = `Showing ${atRiskStudents.length} at-risk students`;
+        }
+
+        // Apply filters
+        function applyFilters() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const riskLevelFilter = document.getElementById('riskLevelFilter').value;
+            const inactivityFilter = document.getElementById('inactivityFilter').value;
+            const completionFilter = document.getElementById('completionFilter').value;
+
+            filteredData = studentData.filter(student => {
+                // Search filter
+                const matchesSearch = !searchTerm || 
+                    student.name.toLowerCase().includes(searchTerm) ||
+                    student.email.toLowerCase().includes(searchTerm);
+
+                // Risk level filter
+                const matchesRiskLevel = !riskLevelFilter || 
+                    getRiskLevel(student) === riskLevelFilter;
+
+                // Inactivity filter
+                const matchesInactivity = !inactivityFilter || 
+                    isInactiveForDays(student.lastActivity, parseInt(inactivityFilter));
+
+                // Completion filter
+                const matchesCompletion = !completionFilter || 
+                    getCompletionRange(student.completionRate) === completionFilter;
+
+                return matchesSearch && matchesRiskLevel && matchesInactivity && matchesCompletion;
+            });
+
+            renderAtRiskStudents();
+        }
+
+        // Helper functions
+        function isInactiveForDays(lastActivity, days) {
+            if (!lastActivity || lastActivity === 'Never') return true;
+            const activityDate = new Date(lastActivity);
+            const daysDiff = (new Date() - activityDate) / (1000 * 60 * 60 * 24);
+            return daysDiff >= days;
+        }
+
+        function getCompletionRange(rate) {
+            if (rate <= 25) return '0-25';
+            if (rate <= 50) return '25-50';
+            if (rate <= 75) return '50-75';
+            return '75-100';
+        }
+
+        function sendIntervention(studentId, type) {
+            // Placeholder for intervention actions
+            alert(`Intervention ${type} sent to student ${studentId}`);
+        }
+
+        function viewStudentDetails(studentId) {
+            // Placeholder for viewing student details
+            alert(`Viewing details for student ${studentId}`);
+        }
+
+        function exportAtRiskData() {
+            const atRiskStudents = studentData.filter(s => getRiskLevel(s) !== 'low');
+            if (atRiskStudents.length === 0) {
+                alert('No at-risk students to export.');
+                return;
+            }
+
+            const csv = convertToCSV(atRiskStudents.map(s => ({
+                'Student Name': s.name,
+                'Email': s.email,
+                'Risk Level': getRiskLevel(s).toUpperCase(),
+                'Completion Rate': s.completionRate + '%',
+                'Average Score': s.averageScore + '%',
+                'Login Days': s.loginDays,
+                'Last Activity': s.lastActivity ? new Date(s.lastActivity).toLocaleDateString() : 'Never',
+                'Risk Factors': getRiskFactors(s).join('; ')
+            })));
+
+            downloadCSV(csv, `at-risk-students-${new Date().toISOString().split('T')[0]}.csv`);
+        }
+
+        function convertToCSV(data) {
+            const headers = Object.keys(data[0]);
+            const csvContent = [
+                headers.join(','),
+                ...data.map(row => headers.map(header => `"${row[header]}"`).join(','))
+            ].join('\n');
+            return csvContent;
+        }
+
+        function downloadCSV(csv, filename) {
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        }
+
+        function refreshData() {
+            loadStudentData();
+        }
+
+        // Event listeners
+        document.getElementById('searchInput').addEventListener('input', applyFilters);
+        document.getElementById('riskLevelFilter').addEventListener('change', applyFilters);
+        document.getElementById('inactivityFilter').addEventListener('change', applyFilters);
+        document.getElementById('completionFilter').addEventListener('change', applyFilters);
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            loadStudentData();
+        });
+    </script>
+</body>
+</html> 

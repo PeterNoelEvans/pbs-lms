@@ -367,7 +367,10 @@
               <div class="card resource-card h-100 ${cardClass}">
                 <div class="card-body">
                   <div class="card-title fw-bold">${resource.title || ''} ${progressLabel}</div>
-                  <div class="mb-1"><span class="badge bg-light text-dark">${resource.type || ''}</span></div>
+                  <div class="mb-1 d-flex gap-1">
+                    <span class="badge bg-light text-dark">${resource.type || ''}</span>
+                    <span class="badge bg-info">${resource.quarter || 'Q1'}</span>
+                  </div>
                   <div class="card-text">${resource.description || ''}</div>
                   <div class="project-name text-muted">${resource.project || ''}</div>
                     </div>

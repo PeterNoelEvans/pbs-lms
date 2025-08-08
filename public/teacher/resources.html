@@ -178,9 +178,20 @@
                 <div id="resourcesContent">
                     <div class="d-flex justify-content-between align-items-center mb-4">
                         <h2 id="currentSubjectTitle">Select a Subject</h2>
-                        <button class="btn btn-primary" onclick="showAddResourceModal()" style="display: none;" id="addResourceBtn">
-                            Add New Resource
-                        </button>
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="d-flex align-items-center">
+                                <label for="quarterFilter" class="form-label mb-0 me-2">Quarter:</label>
+                                <select id="quarterFilter" class="form-select" style="width: auto;">
+                                    <option value="Q1">Q1</option>
+                                    <option value="Q2" selected>Q2</option>
+                                    <option value="Q3">Q3</option>
+                                    <option value="Q4">Q4</option>
+                                </select>
+                            </div>
+                            <button class="btn btn-primary" onclick="showAddResourceModal()" style="display: none;" id="addResourceBtn">
+                                Add New Resource
+                            </button>
+                        </div>
                     </div>
                     <div id="topicsList">
                         <!-- Topics and their resources will be loaded here -->
@@ -314,6 +325,13 @@
         // Add event listener for save assessments button
         document.getElementById('saveAssessmentsBtn').addEventListener('click', saveLinkedAssessments);
 
+        // Add event listener for quarter filter
+        document.getElementById('quarterFilter').addEventListener('change', function() {
+            if (currentSubjectId) {
+                loadSubjectResources(currentSubjectId, document.getElementById('currentSubjectTitle').textContent);
+            }
+        });
+
         async function loadSubjects() {
             try {
                 const response = await fetch('/api/subjects', {
@@ -349,8 +367,9 @@
                 });
                 const structure = await structureResponse.json();
 
-                // Load resources
-                const resourcesResponse = await fetch(`/api/subjects/${subjectId}/resources`, {
+                // Load resources with quarter filter
+                const quarterFilter = document.getElementById('quarterFilter').value;
+                const resourcesResponse = await fetch(`/api/subjects/${subjectId}/resources?quarter=${quarterFilter}`, {
                     headers: {
                         'Authorization': `Bearer ${token}`
                     }
@@ -491,7 +510,10 @@
                         <div>
                             <h4>${safeTitleForHTML}</h4>
                             <p class="text-muted mb-2">${safeDescription}</p>
-                            <span class="resource-type-badge">${safeType}</span>
+                            <div class="d-flex gap-2 mb-2">
+                                <span class="resource-type-badge">${safeType}</span>
+                                <span class="badge bg-info">${resource.quarter || 'Q1'}</span>
+                            </div>
                         </div>
                         <div>
                             <button class="btn ${linkBtnClass} btn-sm me-2 link-assessments-btn"

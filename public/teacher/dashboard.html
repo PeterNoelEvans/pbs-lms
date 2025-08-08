@@ -83,8 +83,14 @@
                     <a class="nav-link" href="/teacher/manual-grading.html">Manual Grading</a>
                     <a class="nav-link" href="/teacher/core-subjects.html">Core Subjects</a>
                     <a class="nav-link" href="/teacher/progress.html"><i class="bi bi-graph-up"></i> Student Progress</a>
+                    <a class="nav-link" href="/teacher/student-performance-dashboard.html"><i class="bi bi-graph-up"></i> Performance Dashboard</a>
+                    <a class="nav-link" href="/teacher/engagement-analytics.html"><i class="bi bi-people"></i> Engagement Analytics</a>
+                    <a class="nav-link" href="/teacher/at-risk-students.html"><i class="bi bi-exclamation-triangle"></i> At-Risk Students</a>
+                    <a class="nav-link" href="/teacher/activity-patterns.html"><i class="bi bi-clock"></i> Activity Patterns</a>
                     <a class="nav-link" href="/teacher/session-analytics.html"><i class="bi bi-clock-history"></i> Session Analytics</a>
                     <a class="nav-link" href="/teacher/orphaned-resources.html">Orphaned Resources</a>
+                    <a class="nav-link" href="/teacher/database-export.html"><i class="bi bi-download"></i> Database Export</a>
+                    <a class="nav-link" href="/docs/teacher-dashboard-guide.md" target="_blank"><i class="bi bi-question-circle"></i> Dashboard Guide</a>
                     <button class="btn btn-danger mt-4" id="logoutBtn">Logout</button>
                 </nav>
             </div>
@@ -94,6 +100,33 @@
                 <div class="welcome-section">
                     <h1>Welcome, <span id="teacherName">Teacher</span>!</h1>
                     <p>Here's your overview for today</p>
+                </div>
+
+                <!-- Quick Help Section -->
+                <div class="stats-card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <h4><i class="bi bi-lightbulb"></i> Dashboard Quick Guide</h4>
+                            <p class="mb-2">Need help understanding the dashboard terms and metrics?</p>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <small><strong>📊 Performance Dashboard:</strong> Overall student performance and engagement</small><br>
+                                    <small><strong>👥 Engagement Analytics:</strong> Deep dive into student behavior patterns</small><br>
+                                    <small><strong>⚠️ At-Risk Students:</strong> Identify students needing immediate intervention</small>
+                                </div>
+                                <div class="col-md-6">
+                                    <small><strong>⏰ Activity Patterns:</strong> Analyze when students are most active</small><br>
+                                    <small><strong>📈 Progress Tracking:</strong> Monitor student progress over time</small><br>
+                                    <small><strong>📋 Database Export:</strong> Download comprehensive reports</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4 text-end">
+                            <a href="/docs/teacher-dashboard-guide.md" target="_blank" class="btn btn-light">
+                                <i class="bi bi-question-circle"></i> View Complete Guide
+                            </a>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="stats-card" id="quarterManagementCard" style="display:none;">
