@@ -23,6 +23,14 @@
         <div class="mb-3">
             <label for="classSelect" class="form-label"><strong>Class:</strong></label>
             <select id="classSelect" class="form-select d-inline-block w-auto"></select>
+            <label for="quarterSelect" class="form-label ms-4"><strong>Quarter:</strong></label>
+            <select id="quarterSelect" class="form-select d-inline-block w-auto">
+                <option value="">All Quarters</option>
+                <option value="Q1">Q1</option>
+                <option value="Q2">Q2</option>
+                <option value="Q3">Q3</option>
+                <option value="Q4">Q4</option>
+            </select>
             <label for="studentSelect" class="form-label ms-4"><strong>Student:</strong></label>
             <select id="studentSelect" class="form-select d-inline-block w-auto">
                 <option value="">All Students</option>
@@ -40,6 +48,7 @@
                             <th>Nickname</th>
                             <th>Class</th>
                             <th>Assessment</th>
+                            <th>Quarter</th>
                             <th>Attempts</th>
                             <th>Best Score</th>
                             <th>Last Score</th>
@@ -59,6 +68,21 @@
     let filteredProgress = [];
     let allStudents = [];
     let allStudentsWithProgress = []; // For the graph
+
+    // Fetch active quarter and set as default
+    fetch('/api/config/active-quarter', {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+        cache: 'no-store'
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.activeQuarter) {
+            document.getElementById('quarterSelect').value = data.activeQuarter;
+        }
+    })
+    .catch(error => {
+        console.error('Error fetching active quarter:', error);
+    });
 
     // Fetch classes for dropdown
     fetch('/api/teacher/classes', {
@@ -81,10 +105,14 @@
             });
             
             if (classes.length > 0) {
-                 loadProgressForClass(classes[0]);
-                 document.getElementById('classSelect').value = classes[0];
+                 setTimeout(() => {
+                     loadProgressForClass(classes[0]);
+                     document.getElementById('classSelect').value = classes[0];
+                 }, 100); // Small delay to ensure quarter is set first
             } else {
-                loadProgressForClass('');
+                 setTimeout(() => {
+                     loadProgressForClass('');
+                 }, 100);
             }
         } else {
             console.error("Received data is not an array:", data);
@@ -98,6 +126,10 @@
     document.getElementById('classSelect').onchange = function() {
         loadProgressForClass(this.value);
     };
+    document.getElementById('quarterSelect').onchange = function() {
+        const selectedClass = document.getElementById('classSelect').value;
+        loadProgressForClass(selectedClass);
+    };
     document.getElementById('studentSelect').onchange = function() {
         renderProgressTable();
         renderClassGraph();
@@ -108,7 +140,13 @@
              cache: 'no-store'
         }).then(res => res.json());
 
-        const detailedProgressPromise = fetch(`/api/teacher/progress?class=${encodeURIComponent(className)}`, {
+        const selectedQuarter = document.getElementById('quarterSelect').value;
+        let progressUrl = `/api/teacher/progress?class=${encodeURIComponent(className)}`;
+        if (selectedQuarter) {
+            progressUrl += `&quarter=${encodeURIComponent(selectedQuarter)}`;
+        }
+        
+        const detailedProgressPromise = fetch(progressUrl, {
             headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
             cache: 'no-store'
         }).then(res => res.json());
@@ -149,7 +187,14 @@
         tbody.innerHTML = '';
         filteredProgress = allProgress.filter(row => !selectedStudent || row.studentName === selectedStudent);
         if (filteredProgress.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="10" class="text-center">No progress data found.</td></tr>';
+            const selectedQuarter = document.getElementById('quarterSelect').value;
+            let message = 'No progress data found.';
+            
+            if (selectedQuarter && selectedQuarter !== '') {
+                message = `No assessments found for ${selectedQuarter}. Try selecting "All Quarters" to see all data, or switch to a different quarter.`;
+            }
+            
+            tbody.innerHTML = `<tr><td colspan="11" class="text-center text-muted"><i class="bi bi-info-circle me-2"></i>${message}</td></tr>`;
             return;
         }
         // Group by student
@@ -178,6 +223,7 @@
                     <td>${row.studentNickname || '-'}</td>
                     <td>${row.studentClass || '-'}</td>
                     <td>${row.assessmentTitle || '-'}</td>
+                    <td><span class="badge bg-primary">${row.assessmentQuarter || 'N/A'}</span></td>
                     <td>${attempts}</td>
                     <td>${bestScore}</td>
                     <td>${lastScore}</td>
@@ -295,12 +341,13 @@
             alert('No data to download.');
             return;
         }
-        const headers = ['Student','Nickname','Class','Assessment','Attempts','Best Score','Last Score','Last Attempt','Status'];
+        const headers = ['Student','Nickname','Class','Assessment','Quarter','Attempts','Best Score','Last Score','Last Attempt','Status'];
         const propertyMap = {
             "Student": "studentName",
             "Nickname": "studentNickname",
             "Class": "studentClass",
             "Assessment": "assessmentTitle",
+            "Quarter": "assessmentQuarter",
             "Attempts": "attempts",
             "Best Score": "bestScore",
             "Last Score": "lastScore",

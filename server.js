@@ -3460,6 +3460,7 @@ app.get('/api/student/assessments', auth, async (req, res) => {
 app.get('/api/teacher/progress', auth, async (req, res) => {
     try {
         const classFilter = req.query.class;
+        const quarterFilter = req.query.quarter;
         const teacher = await prisma.user.findUnique({
             where: { id: req.user.userId },
             include: {
@@ -3478,7 +3479,9 @@ app.get('/api/teacher/progress', auth, async (req, res) => {
                                             include: {
                                                 sections: {
                                                     include: {
-                                                        assessments: true
+                                                        assessments: quarterFilter ? {
+                                                            where: { quarter: quarterFilter }
+                                                        } : true
                                                     }
                                                 }
                                             }
@@ -3541,6 +3544,7 @@ app.get('/api/teacher/progress', auth, async (req, res) => {
                                         studentClass: student.class,
                                         studentPhoto: student.profilePicture,
                                         assessmentTitle: assessment.title || assessment.name,
+                                        assessmentQuarter: assessment.quarter, // Add quarter info
                                         attempts,
                                         maxAttempts: assessment.maxAttempts || '-',
                                         bestScore,
@@ -3564,7 +3568,16 @@ app.get('/api/teacher/progress', auth, async (req, res) => {
     }
 });
 
-
+// Endpoint to get the active quarter
+app.get('/api/config/active-quarter', auth, async (req, res) => {
+    try {
+        const activeQuarter = await getActiveQuarter();
+        res.json({ activeQuarter });
+    } catch (error) {
+        console.error('Error fetching active quarter:', error);
+        res.status(500).json({ error: 'Failed to fetch active quarter' });
+    }
+});
 
 // Endpoint to get all classes for teacher's students
 app.get('/api/teacher/classes', auth, async (req, res) => {
