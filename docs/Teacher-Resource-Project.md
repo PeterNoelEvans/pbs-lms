@@ -3,6 +3,9 @@
 ## Overview
 This project repurposes the existing portfolio system to create a teacher resource platform for EFL curriculum documentation. The system will provide structured access to teaching resources, organized by grade level and topics, with controlled access through school memberships.
 
+## Teacher Authorization
+**Access Control**: Only Peter Evans (peter@pbs.ac.th) can authorize new teachers to join the platform. This ensures quality control and maintains security. See [Teacher Authorization System](teacher-authorization-system.md) for complete details.
+
 ## Implementation Plan
 
 ### Phase 1: Core Infrastructure

@@ -734,6 +734,262 @@ app.post('/api/register', async (req, res) => {
     }
 });
 
+// Teacher Request Submission Endpoint
+app.post('/api/teacher-request', async (req, res) => {
+    try {
+        const { name, email, password, organization, message } = req.body;
+        
+        // Validate required fields
+        if (!name || !email || !password || !organization) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Name, email, password, and organization are required.' 
+            });
+        }
+        
+        // Check if email is already in use
+        const existingUser = await prisma.user.findFirst({
+            where: { email }
+        });
+        
+        if (existingUser) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'Email already in use. Please use a different email address.' 
+            });
+        }
+        
+        // Check if there's already a pending request for this email
+        const existingRequest = await prisma.teacherApprovalRequest.findUnique({
+            where: { email }
+        });
+        
+        if (existingRequest) {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'A teacher request with this email already exists. Please check your request status.' 
+            });
+        }
+        
+        // Hash password for storage
+        const hashedPassword = await bcrypt.hash(password, 10);
+        
+        // Create teacher approval request
+        const request = await prisma.teacherApprovalRequest.create({
+            data: {
+                name,
+                email,
+                password: hashedPassword,
+                organization,
+                message: message || null,
+                status: 'PENDING'
+            }
+        });
+        
+        console.log(`New teacher request submitted: ${name} (${email})`);
+        
+        res.json({
+            success: true,
+            message: 'Teacher request submitted successfully. You will be notified when reviewed.',
+            requestId: request.id
+        });
+        
+    } catch (error) {
+        console.error('Teacher request error:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Failed to submit teacher request. Please try again.' 
+        });
+    }
+});
+
+// Admin endpoint to list pending teacher requests (Peter Evans only)
+app.get('/api/admin/teacher-requests', auth, async (req, res) => {
+    try {
+        // Check if user is Peter Evans
+        const user = await prisma.user.findUnique({
+            where: { id: req.user.userId }
+        });
+        
+        if (!user || user.email.toLowerCase() !== 'peter@pbs.ac.th') {
+            return res.status(403).json({ 
+                success: false, 
+                error: 'Access denied. Only the administrator can view teacher requests.' 
+            });
+        }
+        
+        // Get all teacher requests
+        const requests = await prisma.teacherApprovalRequest.findMany({
+            orderBy: { requestedAt: 'desc' },
+            select: {
+                id: true,
+                name: true,
+                email: true,
+                organization: true,
+                message: true,
+                status: true,
+                requestedAt: true,
+                reviewedAt: true,
+                reviewNotes: true
+            }
+        });
+        
+        res.json({
+            success: true,
+            requests
+        });
+        
+    } catch (error) {
+        console.error('Error fetching teacher requests:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Failed to fetch teacher requests.' 
+        });
+    }
+});
+
+// Admin endpoint to approve teacher request (Peter Evans only)
+app.post('/api/admin/approve-teacher/:requestId', auth, async (req, res) => {
+    try {
+        const { requestId } = req.params;
+        const { notes } = req.body;
+        
+        // Check if user is Peter Evans
+        const admin = await prisma.user.findUnique({
+            where: { id: req.user.userId }
+        });
+        
+        if (!admin || admin.email.toLowerCase() !== 'peter@pbs.ac.th') {
+            return res.status(403).json({ 
+                success: false, 
+                error: 'Access denied. Only the administrator can approve teacher requests.' 
+            });
+        }
+        
+        // Get the teacher request
+        const request = await prisma.teacherApprovalRequest.findUnique({
+            where: { id: requestId }
+        });
+        
+        if (!request) {
+            return res.status(404).json({ 
+                success: false, 
+                error: 'Teacher request not found.' 
+            });
+        }
+        
+        if (request.status !== 'PENDING') {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'This request has already been reviewed.' 
+            });
+        }
+        
+        // Create the teacher account
+        const teacher = await prisma.user.create({
+            data: {
+                name: request.name,
+                email: request.email,
+                password: request.password, // Already hashed
+                role: 'TEACHER',
+                organization: request.organization,
+                active: true
+            }
+        });
+        
+        // Update the request status
+        await prisma.teacherApprovalRequest.update({
+            where: { id: requestId },
+            data: {
+                status: 'APPROVED',
+                reviewedAt: new Date(),
+                reviewedBy: admin.id,
+                reviewNotes: notes || null
+            }
+        });
+        
+        console.log(`Teacher request approved: ${request.name} (${request.email}) by ${admin.name}`);
+        
+        res.json({
+            success: true,
+            message: 'Teacher request approved. Account created successfully.',
+            teacherId: teacher.id
+        });
+        
+    } catch (error) {
+        console.error('Error approving teacher request:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Failed to approve teacher request.' 
+        });
+    }
+});
+
+// Admin endpoint to reject teacher request (Peter Evans only)
+app.post('/api/admin/reject-teacher/:requestId', auth, async (req, res) => {
+    try {
+        const { requestId } = req.params;
+        const { notes } = req.body;
+        
+        // Check if user is Peter Evans
+        const admin = await prisma.user.findUnique({
+            where: { id: req.user.userId }
+        });
+        
+        if (!admin || admin.email.toLowerCase() !== 'peter@pbs.ac.th') {
+            return res.status(403).json({ 
+                success: false, 
+                error: 'Access denied. Only the administrator can reject teacher requests.' 
+            });
+        }
+        
+        // Get the teacher request
+        const request = await prisma.teacherApprovalRequest.findUnique({
+            where: { id: requestId }
+        });
+        
+        if (!request) {
+            return res.status(404).json({ 
+                success: false, 
+                error: 'Teacher request not found.' 
+            });
+        }
+        
+        if (request.status !== 'PENDING') {
+            return res.status(400).json({ 
+                success: false, 
+                error: 'This request has already been reviewed.' 
+            });
+        }
+        
+        // Update the request status
+        await prisma.teacherApprovalRequest.update({
+            where: { id: requestId },
+            data: {
+                status: 'REJECTED',
+                reviewedAt: new Date(),
+                reviewedBy: admin.id,
+                reviewNotes: notes || null
+            }
+        });
+        
+        console.log(`Teacher request rejected: ${request.name} (${request.email}) by ${admin.name}`);
+        
+        res.json({
+            success: true,
+            message: 'Teacher request rejected.',
+            reason: notes || 'No reason provided'
+        });
+        
+    } catch (error) {
+        console.error('Error rejecting teacher request:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Failed to reject teacher request.' 
+        });
+    }
+});
+
 // Debug endpoint for checking user role
 app.get('/api/debug/user-role', auth, async (req, res) => {
     try {

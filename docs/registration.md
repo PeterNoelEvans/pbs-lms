@@ -1,35 +1,74 @@
 # Registration System Documentation
 
 ## Overview
-The registration system uses Prisma with SQLite as the database backend. This system handles both teacher and student registrations with appropriate role-based access.
+The registration system uses Prisma with SQLite as the database backend. This system handles student registrations and teacher approval requests with Peter Evans as the sole administrator who can authorize new teachers.
+
+## Teacher Authorization System
+**Only Peter Evans (peter@pbs.ac.th) can authorize new teachers.** The system implements a secure approval workflow where prospective teachers submit requests that must be approved before they can access the system.
 
 ## Database Schema
-The system uses the following Prisma schema:
+The system uses the following Prisma models:
 
+### User Model
 ```prisma
 model User {
-  id        Int      @id @default(autoincrement())
-  name      String
-  email     String   @unique
-  password  String
-  role      String
-  nickname  String
-  year      Int?
-  class     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                String              @id @default(uuid())
+  name              String
+  email             String
+  password          String
+  role              String              // ADMIN, TEACHER, STUDENT
+  organization      String              @default("PBS")
+  nickname          String?             @unique
+  yearLevel         Int?
+  class             String?
+  active            Boolean             @default(true)
+  // ... other fields
+  approvedTeacherRequests TeacherApprovalRequest[] // Teacher requests approved by this user
+}
+```
+
+### Teacher Approval Request Model
+```prisma
+model TeacherApprovalRequest {
+  id            String   @id @default(uuid())
+  name          String
+  email         String   @unique
+  password      String   // Hashed password
+  organization  String
+  message       String?  // Optional message from applicant
+  status        String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  requestedAt   DateTime @default(now())
+  reviewedAt    DateTime?
+  reviewedBy    String?  // User ID of Peter Evans
+  reviewNotes   String?  // Optional notes from reviewer
+  approvedBy    User?    @relation(fields: [reviewedBy], references: [id])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
 ```
 
 ## Registration Process
 
-### Teacher Registration
-1. Teacher enters:
+### Teacher Registration (New Authorization System)
+**For prospective teachers (requires approval):**
+
+1. **Submit Teacher Request** - Teacher candidate enters:
    - Full Name
-   - Nickname
    - Email (must be unique)
    - Password (must be at least 8 characters with letters and numbers)
-   - Role (teacher)
+   - Organization (PBS, Hospital, CodingSchool, etc.)
+   - Optional message explaining their request
+
+2. **Request Review** - System creates a pending approval request
+
+3. **Admin Approval** - Peter Evans reviews and either:
+   - **Approves**: Creates teacher account automatically
+   - **Rejects**: Request is denied with optional notes
+
+4. **Account Creation** - Upon approval, teacher account is created and they can log in
+
+### Direct Teacher Access
+- **Peter Evans (peter@pbs.ac.th)** can register directly as he is the system administrator
 
 ### Student Registration
 1. Student enters:
@@ -43,8 +82,8 @@ model User {
 
 ## API Endpoints
 
-### Registration
-- `POST /api/register`
+### Student Registration
+- `POST /api/register` (for students only)
   - Request body:
     ```json
     {
@@ -52,23 +91,38 @@ model User {
       "nickname": "Nickname",
       "email": "email@example.com",
       "password": "password123",
-      "role": "teacher|student",
-      "year": 1,  // Optional, for students only
-      "class": "M1/1"  // Optional, for students only
+      "role": "student",
+      "year": 1,
+      "class": "M1/1",
+      "organization": "PBS"
+    }
+    ```
+
+### Teacher Request Submission
+- `POST /api/teacher-request` (for prospective teachers)
+  - Request body:
+    ```json
+    {
+      "name": "Full Name",
+      "email": "email@example.com",
+      "password": "password123",
+      "organization": "PBS",
+      "message": "Optional message explaining request"
     }
     ```
   - Response:
     ```json
     {
       "success": true,
-      "token": "jwt_token",
-      "user": {
-        "name": "Full Name",
-        "email": "email@example.com",
-        "role": "teacher|student"
-      }
+      "message": "Teacher request submitted successfully. You will be notified when reviewed.",
+      "requestId": "uuid"
     }
     ```
+
+### Teacher Request Management (Peter Evans only)
+- `GET /api/admin/teacher-requests` - List all pending teacher requests
+- `POST /api/admin/approve-teacher/:requestId` - Approve a teacher request
+- `POST /api/admin/reject-teacher/:requestId` - Reject a teacher request
 
 ### Account Deletion
 - `POST /api/delete-account`

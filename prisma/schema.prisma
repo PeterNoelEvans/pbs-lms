@@ -40,6 +40,7 @@ model User {
   parent        User?     @relation("ParentChild", fields: [parentId], references: [id])
   assessmentSubmissions AssessmentSubmission[]
   sessions      UserSession[] // Track login sessions
+  approvedTeacherRequests TeacherApprovalRequest[] // Teacher requests approved by this user
 }
 
 model CoreSubject {
@@ -325,4 +326,21 @@ model UserSession {
 
   @@index([userId, startTime])
   @@index([startTime])
+}
+
+model TeacherApprovalRequest {
+  id            String   @id @default(uuid())
+  name          String
+  email         String   @unique
+  password      String   // Hashed password
+  organization  String
+  message       String?  // Optional message from applicant
+  status        String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  requestedAt   DateTime @default(now())
+  reviewedAt    DateTime?
+  reviewedBy    String?  // User ID of Peter Evans
+  reviewNotes   String?  // Optional notes from reviewer
+  approvedBy    User?    @relation(fields: [reviewedBy], references: [id])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 } 

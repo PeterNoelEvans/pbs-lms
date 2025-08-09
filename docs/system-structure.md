@@ -4,6 +4,16 @@
 
 The Learning Resource Hub is organized in a hierarchical structure that manages educational content. This document explains how different components relate to each other and how resources are organized.
 
+## Teacher Authorization System
+
+**Administrator**: Peter Evans (peter@pbs.ac.th) is the sole administrator with authority to:
+- Approve or reject new teacher requests
+- Manage all teacher accounts  
+- Control access to the platform
+
+**Teacher Access**: All prospective teachers must submit requests for approval
+**Student Access**: Open registration with standard validation
+
 ## Core Components
 
 ### 1. Subjects

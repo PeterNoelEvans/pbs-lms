@@ -1,7 +1,7 @@
 {
   "name": "teacher-resource-platform",
   "version": "1.0.0",
-  "description": "Teacher Resource Platform with MongoDB integration",
+  "description": "Teacher Resource Platform with Prisma/SQLite",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -18,21 +18,21 @@
   "dependencies": {
     "@prisma/client": "^6.13.0",
     "bcrypt": "^5.1.1",
-    "bcryptjs": "^2.4.3",
+
     "cors": "^2.8.5",
     "dotenv": "^16.0.3",
     "exceljs": "^4.4.0",
     "express": "^4.21.2",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
-    "mongoose": "^7.8.6",
+    
     "multer": "^1.4.5-lts.1",
     "nodemailer": "^6.10.0",
-    "react-beautiful-dnd": "^13.1.1",
-    "save-dev": "^0.0.1-security",
+
+
     "semver": "^7.7.1",
-    "simple-update-notifier": "^2.0.0",
-    "sqlite3": "^5.1.6"
+    "simple-update-notifier": "^2.0.0"
+    
   },
   "devDependencies": {
     "jest": "^29.5.0",

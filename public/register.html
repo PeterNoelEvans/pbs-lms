@@ -220,6 +220,12 @@
                 organization: document.getElementById('organization').value
             };
 
+            // Handle teacher registration differently
+            if (formData.role === 'teacher') {
+                await handleTeacherRequest(formData);
+                return;
+            }
+
             // Only add year and class for students
             if (formData.role === 'student') {
                 formData.year = parseInt(document.getElementById('year').value);
@@ -242,8 +248,8 @@
                         localStorage.setItem('token', data.token);
                         localStorage.setItem('userRole', data.user.role.toUpperCase());
                         localStorage.setItem('userName', data.user.name);
-                        // Redirect based on role
-                        window.location.href = formData.role === 'teacher' ? '/teacher/dashboard' : '/student/dashboard';
+                        // Redirect to student dashboard
+                        window.location.href = '/student/dashboard';
                     } else {
                         alert('Registration successful. Please login.');
                         window.location.href = '/login';
@@ -256,6 +262,41 @@
                 alert('An error occurred during registration. Please try again.');
             }
         });
+
+        async function handleTeacherRequest(formData) {
+            // Show a modal or prompt for additional message
+            const message = prompt('Optional: Please provide a brief message about your teaching background and why you\'d like to join the platform:');
+            
+            const teacherRequestData = {
+                name: formData.name,
+                email: formData.email,
+                password: formData.password,
+                organization: formData.organization,
+                message: message || ''
+            };
+
+            try {
+                const response = await fetch('/api/teacher-request', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(teacherRequestData)
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    alert(`Teacher request submitted successfully!\n\nYour request has been sent to the administrator for review.\nYou will be contacted once your request is processed.\n\nRequest ID: ${data.requestId}`);
+                    window.location.href = '/login.html';
+                } else {
+                    alert(data.error || 'Failed to submit teacher request. Please try again.');
+                }
+            } catch (error) {
+                console.error('Teacher request error:', error);
+                alert('An error occurred while submitting your teacher request. Please try again.');
+            }
+        }
 
         // Password validation feedback
         const passwordInput = document.getElementById('password');
