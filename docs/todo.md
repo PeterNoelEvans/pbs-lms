@@ -107,17 +107,21 @@
 ## 📋 ONGOING DEVELOPMENT
 
 ### Assessment System Enhancements
-- [ ] **Fix assessment quarter auto-selection**
-  - **Scope**: Assessment creation workflow
+- [x] **Fix assessment quarter auto-selection** ✅ **COMPLETED**
+  - **Scope**: Assessment creation workflow (`public/teacher/assessments.html`)
   - **Risk**: 🟡 MEDIUM - Teachers must manually change quarter on every assessment
   - **DoD**: Q2 selector at top of page automatically sets quarter field in assessment creation
-  - **Issue**: Q2 selector doesn't sync with assessment quarter field, requires manual change each time
+  - **Issue**: Q2 selector at page top doesn't sync with assessment quarter field (line 230), requires manual change each time
+  - **Root Cause**: quarterFilter dropdown (line ~87) doesn't trigger update to quarter field (line 230)
+  - **Solution**: Added event listener to sync quarterFilter changes with assessment form quarter field, visual feedback, and helpful tooltips
 
 - [ ] **Fix fill-in-the-blank assessment type**
-  - **Scope**: Student assessment portal
+  - **Scope**: Student assessment portal (`public/student/assessment.html`)
   - **Risk**: 🔴 HIGH - Assessment type completely non-functional
   - **DoD**: Fill-in-the-blank assessments render properly, students can type responses
-  - **Issue**: Saved fill-in-the-blank assessments don't render in student portal
+  - **Issue**: Assessment type "assignment" (Fill-in-the-Blank Text) has no case handler in switch statement
+  - **Root Cause**: Missing case 'assignment' in renderAssessment() switch statement (line 1007)
+  - **Solution**: Add case 'assignment' handler with text input fields for fill-in-the-blank functionality
 
 - [ ] **Create easy due date management interface**
   - **Scope**: Teacher assessment management
@@ -181,7 +185,7 @@
 - [ ] Complete API documentation
 - [ ] User guides
   - [ ] Admin guide
-  - [ ] Teacher guide  
+  - [ ] Teacher guide
   - [ ] Parent guide
   - [ ] Student guide
 - [ ] System architecture documentation
@@ -218,7 +222,7 @@
 - [ ] Multi-language support
 - [ ] Automated progress reports
 - [ ] Parent-teacher meeting scheduler
-- [ ] Student portfolio system
+- [ ] Student portfolio system 
 - [ ] AI-powered assessment recommendations
 - [ ] Voice recording for assessments
 - [ ] Collaborative learning features

@@ -70,7 +70,8 @@
         <div class="row mb-3">
             <div class="col-auto">
                 <label for="quarterFilter" class="form-label mb-0 me-2">Quarter:</label>
-                <select id="quarterFilter" class="form-select d-inline-block w-auto">
+                <select id="quarterFilter" class="form-select d-inline-block w-auto" 
+                        title="Filter assessments by quarter and auto-set new assessment quarter">
                     <option value="">All</option>
                     <option value="Q1">Q1</option>
                     <option value="Q2">Q2</option>
@@ -233,7 +234,9 @@
                                     <option value="Q3">Q3</option>
                                     <option value="Q4">Q4</option>
                                 </select>
-                                <small class="text-muted">Defaults to active quarter</small>
+                                <small class="text-muted">
+                                    <i class="bi bi-info-circle"></i> Auto-syncs with quarter filter above
+                                </small>
                             </div>
 
                             <div class="mb-3">
@@ -350,6 +353,12 @@
                     const quarterFilter = document.getElementById('quarterFilter');
                     if (quarterFilter) {
                         quarterFilter.value = activeQuarter;
+                        
+                        // Sync both quarter fields to ensure they start in sync
+                        const assessmentQuarter = document.getElementById('quarter');
+                        if (assessmentQuarter) {
+                            assessmentQuarter.value = activeQuarter;
+                        }
                     }
                     
                     console.log(`Set default quarter to: ${activeQuarter}`);
@@ -3875,6 +3884,20 @@ Ooh, exciting!|That sounds fun.</pre>
         }
         // Add event listeners for filter changes
         document.getElementById('quarterFilter').addEventListener('change', () => {
+            // Sync the quarter filter with the assessment form quarter field
+            const quarterFilter = document.getElementById('quarterFilter');
+            const assessmentQuarter = document.getElementById('quarter');
+            
+            if (quarterFilter && assessmentQuarter && quarterFilter.value) {
+                assessmentQuarter.value = quarterFilter.value;
+                
+                // Visual feedback to show the sync happened
+                assessmentQuarter.classList.add('bg-light');
+                setTimeout(() => {
+                    assessmentQuarter.classList.remove('bg-light');
+                }, 1000);
+            }
+            
             // Reload assessments with current filters
             const subjectId = document.getElementById('subjectSelect').value;
             loadExistingAssessments(subjectId || null);
