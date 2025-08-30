@@ -41,14 +41,25 @@
         }
     }
     function renderAssessment(assessment) {
+        // Debug: Log the entire assessment object
+        console.log('Full assessment data:', assessment);
+        console.log('Media files:', assessment.mediaFiles);
+        console.log('Assessment audio:', assessment.audio);
+        
         let html = `<h2>${assessment.title}</h2>`;
         html += `<p><strong>Description:</strong> ${assessment.description || ''}</p>`;
         html += `<p><strong>Type:</strong> ${assessment.type}</p>`;
         html += `<p><strong>Category:</strong> ${assessment.category || 'N/A'}</p>`;
         html += `<p><strong>Section:</strong> ${assessment.section?.part?.unit?.subject?.name || ''} > ${assessment.section?.part?.unit?.name || ''} > ${assessment.section?.part?.name || ''} > ${assessment.section?.name || ''}</p>`;
+        // Display media files from mediaFiles array (read-only view)
         if (assessment.mediaFiles && assessment.mediaFiles.length > 0) {
-            html += `<div class='mb-3'><strong>Media:</strong><br/>`;
-            assessment.mediaFiles.forEach(file => {
+            html += `<div class='mb-3'><strong>Media Files:</strong><br/>`;
+            // Remove duplicates by filtering unique file paths
+            const uniqueFiles = assessment.mediaFiles.filter((file, index, self) => 
+                index === self.findIndex(f => f.filePath === file.filePath)
+            );
+            
+            uniqueFiles.forEach((file, index) => {
                 if (file.type && file.type.startsWith('audio/')) {
                     html += `<audio controls src='${file.filePath}'></audio><br/>`;
                 } else if (file.type && file.type.startsWith('image/')) {

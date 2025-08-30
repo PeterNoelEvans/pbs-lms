@@ -98,7 +98,86 @@
             height: 54px;
         }
         .list-group-item:last-child {
-            margin-bottom: 15px !important;
+            margin-bottom: 0 !important;
+        }
+        
+        /* New styles for all-questions layout */
+        .question {
+            background-color: #ffffff;
+            border: 1px solid #dee2e6 !important;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        
+        .question-header {
+            border-bottom: 1px solid #e9ecef;
+            padding-bottom: 15px;
+        }
+        
+        .question-header h5 {
+            color: #495057;
+            margin-bottom: 0;
+        }
+        
+        .audio-player {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 15px;
+        }
+        
+        .audio-player .alert-info {
+            background-color: #d1ecf1;
+            border-color: #bee5eb;
+            color: #0c5460;
+        }
+        
+        .options-container {
+            margin-top: 20px;
+        }
+        
+        .multiple-choice-option {
+            position: relative;
+            padding: 15px 15px 15px 50px;
+            margin-bottom: 12px;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background-color: #ffffff;
+        }
+        
+        .multiple-choice-option:hover {
+            background-color: #f8f9fa;
+            border-color: #adb5bd;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .multiple-choice-option.selected {
+            background-color: #e7f3ff;
+            border-color: #0d6efd;
+            font-weight: 500;
+            box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.1);
+        }
+        
+        .radio-indicator {
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 20px;
+            height: 20px;
+            border: 2px solid #adb5bd;
+            border-radius: 50%;
+            background-color: #ffffff;
+            transition: all 0.2s ease;
+        }
+        
+        .multiple-choice-option.selected .radio-indicator {
+            background-color: #0d6efd;
+            border-color: #0d6efd;
+            box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.2);
         }
         
         /* Change-Sequence specific styles for mobile scrolling */
@@ -558,6 +637,8 @@
         // Global userAnswers object to store all answers
         window.userAnswers = [];
         
+
+        
         // Allow drop on drop targets
         function allowDrop(event) {
             event.preventDefault();
@@ -691,8 +772,17 @@
                         'Authorization': `Bearer ${token}`
                     }
                 });
+                
+                if (!response.ok) {
+                    if (response.status === 403) {
+                        // Assessment is closed/overdue
+                        showAssessmentClosed();
+                        return;
+                    }
+                    throw new Error('Failed to load assessment');
+                }
+                
                 const data = await response.json();
-                if (!response.ok) throw new Error('Failed to load assessment');
                 assessment = data;
                 // Make assessment data globally available for the emergency fix
                 window.assessment = assessment;
@@ -833,6 +923,12 @@
                 switch(assessment.type) {
                     case 'multiple-choice':
                         renderMultipleChoiceAssessment();
+                        break;
+                    case 'line-match':
+                        renderLineMatchAssessment();
+                        break;
+                    case 'phoneme-build':
+                        renderPhonemeBuildAssessment();
                         break;
                     case 'true-false':
                         renderTrueFalseAssessment();
@@ -1217,6 +1313,184 @@
                 `;
             }
         }
+        // --- Connect Match (Line) ---
+        function renderLineMatchAssessment() {
+            const container = document.getElementById('assessmentContainer');
+            const q = assessment.questions && assessment.questions[0];
+            const pairs = (q && Array.isArray(q.pairs)) ? q.pairs : [];
+            
+            // Debug logging
+            console.log('[LINE-MATCH] Assessment questions:', assessment.questions);
+            console.log('[LINE-MATCH] First question:', q);
+            console.log('[LINE-MATCH] Pairs:', pairs);
+            
+            // Process pairs to handle both text and images
+            const left = pairs.map(p => p.left);
+            const right = shuffleArray(pairs.map(p => p.right));
+            
+            console.log('[LINE-MATCH] Left items:', left);
+            console.log('[LINE-MATCH] Right items:', right);
+
+            container.innerHTML = `
+                <div class="card mb-3">
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-5" id="lineLeft"></div>
+                            <div class="col-md-2 text-center"><small class="text-muted">Tap left, then right to connect</small></div>
+                            <div class="col-md-5" id="lineRight"></div>
+                        </div>
+                        <div class="mt-3 d-flex gap-2">
+                            <button id="lineCheck" class="btn btn-info">Check Answers</button>
+                            <button id="lineSubmit" class="btn btn-success">Submit</button>
+                        </div>
+                    </div>
+                </div>`;
+
+            const leftDiv = document.getElementById('lineLeft');
+            const rightDiv = document.getElementById('lineRight');
+            
+            // Render left items (supporting both text and images)
+            leftDiv.innerHTML = left.map((item, i) => {
+                console.log(`[LINE-MATCH] Rendering left item ${i}:`, item);
+                if (item.kind === 'image') {
+                    console.log(`[LINE-MATCH] Rendering left image ${i}:`, item.value);
+                    return `<div class="border p-2 mb-2 selectable" data-side="L" data-index="${i}">
+                        <img src="${item.value}" alt="Left item ${i}" class="img-fluid" style="max-height: 100px;">
+                    </div>`;
+                } else {
+                    console.log(`[LINE-MATCH] Rendering left text ${i}:`, item.value || item);
+                    return `<div class="border p-2 mb-2 selectable" data-side="L" data-index="${i}">${escapeHtml(item.value || item)}</div>`;
+                }
+            }).join('');
+            
+            // Render right items (supporting both text and images)
+            rightDiv.innerHTML = right.map((item, i) => {
+                console.log(`[LINE-MATCH] Rendering right item ${i}:`, item);
+                if (item.kind === 'image') {
+                    console.log(`[LINE-MATCH] Rendering right image ${i}:`, item.value);
+                    return `<div class="border p-2 mb-2 selectable" data-side="R" data-index="${i}">
+                        <img src="${item.value}" alt="Right item ${i}" class="img-fluid" style="max-height: 100px;">
+                    </div>`;
+                } else {
+                    console.log(`[LINE-MATCH] Rendering right text ${i}:`, item.value || item);
+                    return `<div class="border p-2 mb-2 selectable" data-side="R" data-index="${i}">${escapeHtml(item.value || item)}</div>`;
+                }
+            }).join('');
+
+            const connections = [];
+            let pending = null;
+            container.querySelectorAll('.selectable').forEach(el => {
+                el.addEventListener('click', () => {
+                    const side = el.dataset.side;
+                    const idx = parseInt(el.dataset.index,10);
+                    if (!pending) {
+                        pending = { side, idx, el };
+                        el.classList.add('bg-primary','text-white');
+                    } else if (pending.side !== side) {
+                        // create connection
+                        const conn = pending.side === 'L' ? { left: pending.idx, right: idx } : { left: idx, right: pending.idx };
+                        connections.push(conn);
+                        pending.el.classList.remove('bg-primary','text-white');
+                        pending = null;
+                        el.classList.add('bg-success','text-white');
+                        setTimeout(()=>el.classList.remove('bg-success','text-white'),400);
+                    } else {
+                        pending.el.classList.remove('bg-primary','text-white');
+                        pending = null;
+                    }
+                });
+            });
+
+            document.getElementById('lineCheck').addEventListener('click', async ()=>{
+                const score = gradeLineMatch(pairs, connections, right);
+                showToast(`Score: ${score}%`);
+                await submitAssessment({ answers: { connections, right }, score });
+            });
+            document.getElementById('lineSubmit').addEventListener('click', async ()=>{
+                const score = gradeLineMatch(pairs, connections, right);
+                await submitAssessment({ answers: { connections, right }, score });
+            });
+        }
+
+        function gradeLineMatch(pairs, connections, rightColumn) {
+            let correct = 0;
+            const total = pairs.length || 1;
+            connections.forEach(c => {
+                const rightValue = rightColumn[c.right];
+                const leftPair = pairs[c.left];
+                
+                // Handle both old format (direct values) and new format (objects with kind/value)
+                if (leftPair && leftPair.right) {
+                    const expectedRight = leftPair.right.kind === 'image' ? leftPair.right.value : leftPair.right;
+                    const actualRight = rightValue.kind === 'image' ? rightValue.value : rightValue;
+                    
+                    if (expectedRight === actualRight) {
+                        correct++;
+                    }
+                }
+            });
+            return Math.round((correct/total)*100);
+        }
+
+        // --- Phoneme Builder ---
+        function renderPhonemeBuildAssessment() {
+            const container = document.getElementById('assessmentContainer');
+            const q = assessment.questions && assessment.questions[0];
+            const wordTpl = q?.word || '';
+            const correctTiles = Array.isArray(q?.correctTiles) ? q.correctTiles : [];
+            const tiles = shuffleArray(Array.isArray(q?.tiles) ? q.tiles : []);
+
+            const blanks = (wordTpl.match(/__/g) || []).length;
+            const initial = wordTpl.split('__').join('<span class="pb-blank border px-2 mx-1" data-slot></span>');
+
+            container.innerHTML = `
+                <div class="card mb-3"><div class="card-body">
+                    <div class="fs-4 mb-3" id="pbWord">${initial}</div>
+                    <div id="pbTiles" class="d-flex flex-wrap gap-2 mb-3"></div>
+                    <div class="d-flex gap-2">
+                        <button id="pbCheck" class="btn btn-info">Check Answers</button>
+                        <button id="pbSubmit" class="btn btn-success">Submit</button>
+                    </div>
+                </div></div>`;
+
+            const tileWrap = document.getElementById('pbTiles');
+            tileWrap.innerHTML = tiles.map(t=>`<button class="btn btn-outline-primary btn-sm pb-tile" data-val="${escapeHtml(t)}">${escapeHtml(t)}</button>`).join('');
+
+            const blanksEls = Array.from(container.querySelectorAll('[data-slot]'));
+            container.addEventListener('click', (e)=>{
+                const t = e.target;
+                if (t.classList.contains('pb-tile')) {
+                    const free = blanksEls.find(b=>!b.dataset.val);
+                    if (free) { free.textContent = t.dataset.val; free.dataset.val = t.dataset.val; }
+                } else if (t.hasAttribute('data-slot')) {
+                    t.textContent = ''; delete t.dataset.val;
+                }
+            });
+
+            function scorePhoneme() {
+                let correct = 0;
+                for (let i=0;i<blanks;i++) {
+                    const val = blanksEls[i]?.dataset.val || '';
+                    if (val === (correctTiles[i] || '')) correct++;
+                }
+                return Math.round((correct/(blanks||1))*100);
+            }
+            document.getElementById('pbCheck').addEventListener('click', async ()=>{
+                const score = scorePhoneme();
+                showToast(`Score: ${score}%`);
+                const answers = blanksEls.map(b=>b.dataset.val||'');
+                await submitAssessment({ answers, score });
+            });
+            document.getElementById('pbSubmit').addEventListener('click', async ()=>{
+                const score = scorePhoneme();
+                const answers = blanksEls.map(b=>b.dataset.val||'');
+                await submitAssessment({ answers, score });
+            });
+        }
+
+        function shuffleArray(arr){ return [...arr].sort(()=>Math.random()-0.5); }
+        function escapeHtml(str){ return (str||'').replace(/[&<>]/g, s=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[s])); }
+        function showToast(msg){ try{ alert(msg); }catch{} }
         
         function shuffleArray(array) {
             // Create a copy to avoid modifying the original
@@ -1233,7 +1507,7 @@
             window.location.href = '/login';
         }
         
-        function renderMultipleChoiceQuestion(question, questionDiv) {
+        function renderMultipleChoiceQuestion(question, questionDiv, questionIndex = 0) {
             // Debug info
             console.log('Rendering question:', JSON.stringify(question));
             console.log('Question keys:', Object.keys(question));
@@ -1298,8 +1572,8 @@
                 optionDiv.appendChild(radioIndicator);
                 
                 // Check if this option is already selected
-                if (userAnswers[currentQuestionIndex] && 
-                    userAnswers[currentQuestionIndex].selectedOption === optionIndex) {
+                if (userAnswers[questionIndex] && 
+                    userAnswers[questionIndex].selectedOption === optionIndex) {
                     optionDiv.classList.add('selected');
                     radioIndicator.style.backgroundColor = '#0d6efd';
                     radioIndicator.style.borderColor = '#0d6efd';
@@ -1326,29 +1600,35 @@
                     }
                     
                     // Save the answer
-                    updateMultipleChoiceAnswer(optionIndex);
+                    updateMultipleChoiceAnswer(optionIndex, questionIndex);
                 });
                 
                 optionsContainer.appendChild(optionDiv);
             });
             
+            // Explanation area (hidden until check/submit)
+            const explanationDiv = document.createElement('div');
+            explanationDiv.className = 'mt-2 text-muted';
+            explanationDiv.style.display = 'none';
+            questionDiv.appendChild(explanationDiv);
+
             questionDiv.appendChild(optionsContainer);
         }
         
-        function updateMultipleChoiceAnswer(optionIndex) {
+        function updateMultipleChoiceAnswer(optionIndex, questionIndex = 0) {
             // Make sure userAnswers is initialized
             if (!window.userAnswers) {
                 window.userAnswers = [];
             }
             
             // Initialize if not exists
-            if (!userAnswers[currentQuestionIndex]) {
-                userAnswers[currentQuestionIndex] = {};
+            if (!userAnswers[questionIndex]) {
+                userAnswers[questionIndex] = {};
             }
             
             // Save the selected option
-            userAnswers[currentQuestionIndex].selectedOption = optionIndex;
-            console.log('Updated answer:', userAnswers);
+            userAnswers[questionIndex].selectedOption = optionIndex;
+            console.log(`Updated answer for question ${questionIndex}:`, userAnswers);
         }
         
         function renderDragAndDropQuestion(question, questionDiv) {
@@ -1363,10 +1643,10 @@
                 return;
             }
             // ... existing code for other subtypes ...
-            // Support subtype: fill-in-blank, image-fill-blank, long-paragraph-fill-in-blank
+            // Support subtype: fill-in-blank, image-fill-blank (and legacy image-fill-in-blank), long-paragraph-fill-in-blank
             if (
-                question.subtype === 'fill-in-blank' || question.subtype === 'image-fill-blank' || question.subtype === 'long-paragraph-fill-in-blank' ||
-                (assessment.subtype === 'fill-in-blank') || (assessment.subtype === 'image-fill-blank') || (assessment.subtype === 'long-paragraph-fill-in-blank')
+                question.subtype === 'fill-in-blank' || question.subtype === 'image-fill-blank' || question.subtype === 'image-fill-in-blank' || question.subtype === 'long-paragraph-fill-in-blank' ||
+                (assessment.subtype === 'fill-in-blank') || (assessment.subtype === 'image-fill-blank') || (assessment.subtype === 'image-fill-in-blank') || (assessment.subtype === 'long-paragraph-fill-in-blank')
             ) {
                 // --- AUDIO PLAYER FOR DRAG-AND-DROP IF AUDIO FILE PRESENT ---
                 let audioFound = false;
@@ -1448,8 +1728,8 @@
                 sentencesContainer.style.margin = '0';
                 sentencesContainer.style.padding = '0';
                 (question.sentences || []).forEach((sentence, idx) => {
-                    // For image-fill-blank, show image and drop target vertically grouped
-                    if (question.subtype === 'image-fill-blank' || assessment.subtype === 'image-fill-blank') {
+                    // For image-fill-blank (and legacy image-fill-in-blank), show image and drop target vertically grouped
+                    if (question.subtype === 'image-fill-blank' || question.subtype === 'image-fill-in-blank' || assessment.subtype === 'image-fill-blank' || assessment.subtype === 'image-fill-in-blank') {
                         const groupDiv = document.createElement('div');
                         groupDiv.className = 'image-blank-group mb-4 text-center';
                         groupDiv.style.display = 'inline-block';
@@ -1500,8 +1780,8 @@
                     sentenceCard.style.boxShadow = 'none';
                     sentenceCard.style.background = '#fff';
                     sentenceCard.style.minHeight = 'unset';
-                    // If this is image-fill-blank, add the image above the sentence (always stack)
-                    if (question.subtype === 'image-fill-blank' || assessment.subtype === 'image-fill-blank') {
+                    // If this is image-fill-blank (and legacy image-fill-in-blank), add the image above the sentence (always stack)
+                    if (question.subtype === 'image-fill-blank' || question.subtype === 'image-fill-in-blank' || assessment.subtype === 'image-fill-blank' || assessment.subtype === 'image-fill-in-blank') {
                         const imageDiv = document.createElement('div');
                         imageDiv.className = 'card-img-top text-center';
                         const img = document.createElement('img');
@@ -1592,10 +1872,8 @@
                     if (totalCount > 0) {
                         score = Math.round((correctCount / totalCount) * 100);
                     }
-                    // Confirm submission
-                    if (confirm(`Are you sure you want to submit this assessment? Your score is ${score}%.`)) {
-                        await submitAssessment({ answers: answerData, score });
-                    }
+                    // Auto-submit without extra confirmation
+                    await submitAssessment({ answers: answerData, score });
                 });
                 questionDiv.appendChild(submitButton);
                 return;
@@ -1750,7 +2028,7 @@
             return false;
         }
         
-        function checkDragDropAnswers(questionDiv) {
+        async function checkDragDropAnswers(questionDiv) {
             const dropTargets = questionDiv.querySelectorAll('.drop-target.filled');
             let allCorrect = true;
             
@@ -1782,6 +2060,35 @@
             } else {
                 feedbackDiv.className = 'feedback alert alert-danger mt-3';
                 feedbackDiv.textContent = 'Some answers are incorrect. Try again!';
+            }
+
+            // Show per-target explanation if available via data-correct-answer
+            const expList = document.createElement('ul');
+            expList.className = 'mt-2';
+            questionDiv.querySelectorAll('.drop-target').forEach((t, i) => {
+                const correct = t.dataset.correctAnswer || '';
+                const user = t.dataset.userAnswer || '';
+                if (correct || user) {
+                    const li = document.createElement('li');
+                    li.textContent = user === correct ? `${user} ✓` : `${user || '(blank)'} → ${correct}`;
+                    expList.appendChild(li);
+                }
+            });
+            feedbackDiv.appendChild(expList);
+
+            // Record check as an attempt (auto-graded)
+            try {
+                const answerData = {};
+                const allTargets = questionDiv.querySelectorAll('.drop-target');
+                allTargets.forEach((t, i) => {
+                    answerData[`answer_${i}`] = t.dataset.userAnswer || '';
+                });
+                const total = allTargets.length || 1;
+                const correctCount = questionDiv.querySelectorAll('.drop-target.correct').length;
+                const score = Math.round((correctCount / total) * 100);
+                await submitAssessment({ answers: answerData, score });
+            } catch (err) {
+                console.error('Failed to record check attempt:', err);
             }
         }
         
@@ -1899,7 +2206,7 @@
             return false;
         }
         
-        function checkImageMatchingAnswers(questionDiv) {
+        async function checkImageMatchingAnswers(questionDiv) {
             const dropTargets = questionDiv.querySelectorAll('.image-drop-target.filled');
             let allCorrect = true;
             
@@ -1931,6 +2238,35 @@
             } else {
                 feedbackDiv.className = 'feedback alert alert-danger mt-3';
                 feedbackDiv.textContent = 'Some labels are incorrect. Try again!';
+            }
+
+            // Show per-target explanation summary
+            const expList2 = document.createElement('ul');
+            expList2.className = 'mt-2';
+            questionDiv.querySelectorAll('.image-drop-target').forEach((t, i) => {
+                const correct = t.dataset.correctAnswer || '';
+                const user = t.dataset.userAnswer || '';
+                if (correct || user) {
+                    const li = document.createElement('li');
+                    li.textContent = user === correct ? `${user} ✓` : `${user || '(blank)'} → ${correct}`;
+                    expList2.appendChild(li);
+                }
+            });
+            feedbackDiv.appendChild(expList2);
+
+            // Record check as an attempt (auto-graded)
+            try {
+                const answerData = {};
+                const allTargets = questionDiv.querySelectorAll('.image-drop-target');
+                allTargets.forEach((t, i) => {
+                    answerData[`answer_${i}`] = t.dataset.userAnswer || '';
+                });
+                const total = allTargets.length || 1;
+                const correctCount = questionDiv.querySelectorAll('.image-drop-target.correct').length;
+                const score = Math.round((correctCount / total) * 100);
+                await submitAssessment({ answers: answerData, score });
+            } catch (err) {
+                console.error('Failed to record image check attempt:', err);
             }
         }
         
@@ -2304,11 +2640,8 @@
                 score: score
             };
             
-            // Show submission confirmation dialog
-            if (confirm(`Are you sure you want to submit this assessment? Your score is ${score}%.`)) {
-                // Submit to the server
-                submitAssessment(submissionData);
-            }
+            // Auto-submit without confirmation
+            submitAssessment(submissionData);
         }
 
         // Add loader functions
@@ -2619,26 +2952,41 @@
             formData.append('media', window.recordedMedia.blob, `recording.${window.recordedMedia.type === 'video' ? 'webm' : 'webm'}`);
             formData.append('type', window.recordedMedia.type);
 
+            // Guard against navigation during upload and show spinner status
+            let uploading = true;
+            const beforeUnload = (e) => { if (uploading) { e.preventDefault(); e.returnValue = ''; } };
+            window.addEventListener('beforeunload', beforeUnload);
+            const uploadMsg = document.createElement('div');
+            uploadMsg.className = 'text-info mt-2';
+            uploadMsg.textContent = 'Uploading... Please wait';
+            document.getElementById(`question${questionIndex}`)?.appendChild(uploadMsg);
+
             fetch(`/api/assessments/${assessmentId}/submit-speaking`, {
                 method: 'POST',
                 body: formData
             })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    alert('Recording uploaded successfully');
-                    // Clear the recording
-                    window.recordedMedia = null;
-                    document.getElementById(`mediaPreview${questionIndex}`).innerHTML = '';
-                    document.getElementById(`uploadBtn${questionIndex}`).style.display = 'none';
-                } else {
-                    alert('Error uploading recording: ' + data.error);
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('Error uploading recording');
-            });
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        uploadMsg.textContent = 'Upload complete!';
+                        // Clear the recording
+                        window.recordedMedia = null;
+                        document.getElementById(`mediaPreview${questionIndex}`).innerHTML = '';
+                        document.getElementById(`uploadBtn${questionIndex}`).style.display = 'none';
+                    } else {
+                        uploadMsg.textContent = 'Upload failed. Please try again.';
+                        alert('Error uploading recording: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    uploadMsg.textContent = 'Upload failed. Please check your network.';
+                    alert('Error uploading recording');
+                })
+                .finally(() => {
+                    uploading = false;
+                    window.removeEventListener('beforeunload', beforeUnload);
+                });
         }
 
         function renderWritingQuestion(question, questionDiv, index) {
@@ -2756,12 +3104,40 @@
             hideLoader();
         }
         
+        function showAssessmentClosed() {
+            const container = document.getElementById('assessmentContainer');
+            container.style.display = 'block';
+            container.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="bi bi-clock-fill me-2"></i>
+                    <strong>Assessment Closed / การประเมินปิดแล้ว</strong><br>
+                    This assessment is no longer available. The submission deadline has passed.<br>
+                    วันครบกำหนดการทำแบบทดสอบนี้ได้ผ่านไปแล้ว ขอโทษด้วยครับ คุณไม่สามารถทำแบบทดสอบนี้ได้อีกต่อไปครับ
+                </div>
+                <div class="mt-3">
+                    <div class="card">
+                        <div class="card-body">
+                            <h5 class="card-title">Assessment Status / สถานะการประเมิน</h5>
+                            <p class="card-text text-muted">
+                                This assessment has reached its due date and is now closed for submissions.<br>
+                                วันครบกำหนดการทำแบบทดสอบนี้ได้ผ่านไปแล้ว ขอโทษด้วยครับ คุณไม่สามารถทำแบบทดสอบนี้ได้อีกต่อไปครับ
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <a href="/student/assessments" class="btn btn-primary mt-3">
+                    <i class="bi bi-arrow-left me-2"></i>Back to Assessments / กลับไปยังการประเมิน
+                </a>
+            `;
+            hideLoader();
+        }
+
         function showMaxAttemptsReached() {
             const container = document.getElementById('assessmentContainer');
             container.style.display = 'block';
             container.innerHTML = `
-                <div class="alert alert-warning">
-                    <i class="bi bi-exclamation-circle-fill me-2"></i>
+                <div class="alert alert-danger">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
                     You have reached the maximum number of attempts for this assessment.
                 </div>
                 <div class="mt-3">
@@ -3434,18 +3810,6 @@
                         ${attemptsHtml}
                         <div id="quizContainer" class="mb-4">
                             <div id="questionContainer"></div>
-                            
-                            <div class="mt-3 d-flex justify-content-between">
-                                <button id="prevQuestionBtn" class="btn btn-secondary" disabled>
-                                    <i class="bi bi-arrow-left"></i> Previous
-                                </button>
-                                <div>
-                                    <span id="questionCounter">1 of ${assessment.questions ? assessment.questions.length : 1}</span>
-                                </div>
-                                <button id="nextQuestionBtn" class="btn btn-primary" disabled>
-                                    Next <i class="bi bi-arrow-right"></i>
-                                </button>
-                            </div>
                         </div>
                         
                         <div class="mt-3">
@@ -3462,30 +3826,8 @@
                     window.userAnswers = [];
                 }
                 
-                // Set up navigation buttons
-                const prevBtn = document.getElementById('prevQuestionBtn');
-                const nextBtn = document.getElementById('nextQuestionBtn');
-                
-                // Enable navigation buttons if we have multiple questions
-                if (assessment.questions.length > 1) {
-                    nextBtn.disabled = false;
-                    nextBtn.addEventListener('click', function() {
-                        if (currentQuestionIndex < assessment.questions.length - 1) {
-                            currentQuestionIndex++;
-                            renderCurrentQuestion();
-                        }
-                    });
-                    
-                    prevBtn.addEventListener('click', function() {
-                        if (currentQuestionIndex > 0) {
-                            currentQuestionIndex--;
-                            renderCurrentQuestion();
-                        }
-                    });
-                }
-                
-                // Render the first question
-                renderCurrentQuestion();
+                // Render all questions at once (better UX)
+                renderAllQuestions();
             } else {
                 // If no questions are available
                 document.getElementById('questionContainer').innerHTML = `
@@ -3500,7 +3842,104 @@
             document.getElementById('submitBtn').addEventListener('click', submitMultipleChoiceAnswers);
         }
         
-        // Function to render the current question
+        // Function to render all questions at once (better UX)
+        function renderAllQuestions() {
+            const questionContainer = document.getElementById('questionContainer');
+            
+            // Clear the container
+            questionContainer.innerHTML = '';
+            
+            // Add audio player at the top if audio file is present
+            const hasAudio = assessment.mediaFiles && assessment.mediaFiles.some(file =>
+                (file.url || file.filePath) && (
+                    (file.url && (file.url.endsWith('.mp3') || file.url.endsWith('.wav') || file.url.endsWith('.ogg')))
+                    || (file.filePath && (file.filePath.endsWith('.mp3') || file.filePath.endsWith('.wav') || file.filePath.endsWith('.ogg')))
+                    || (file.type && file.type.startsWith('audio/'))
+                )
+            );
+            
+            if (hasAudio) {
+                const audioPlayer = document.createElement('div');
+                audioPlayer.className = 'audio-player mb-4';
+                const infoMessage = document.createElement('div');
+                infoMessage.className = 'alert alert-info';
+                infoMessage.innerHTML = '<i class="bi bi-volume-up me-2"></i><strong>Audio Instructions:</strong> Listen to the audio and answer all questions below.';
+                audioPlayer.appendChild(infoMessage);
+                
+                const audio = document.createElement('audio');
+                audio.controls = true;
+                audio.className = 'w-100 mb-2';
+                audio.loop = false; // Don't loop by default
+                
+                const audioFiles = assessment.mediaFiles.filter(file =>
+                    (file.url || file.filePath) && (
+                        (file.url && (file.url.endsWith('.mp3') || file.url.endsWith('.wav') || file.url.endsWith('.ogg')))
+                        || (file.filePath && (file.filePath.endsWith('.mp3') || file.filePath.endsWith('.wav') || file.filePath.endsWith('.ogg')))
+                        || (file.type && file.type.startsWith('audio/'))
+                    )
+                );
+                
+                if (audioFiles.length > 0) {
+                    audioFiles.forEach(file => {
+                        const source = document.createElement('source');
+                        source.src = file.url || file.filePath;
+                        const filePath = file.url || file.filePath;
+                        if (filePath.endsWith('.mp3')) source.type = 'audio/mpeg';
+                        else if (filePath.endsWith('.wav')) source.type = 'audio/wav';
+                        else if (filePath.endsWith('.ogg')) source.type = 'audio/ogg';
+                        else if (file.type && file.type.startsWith('audio/')) source.type = file.type;
+                        audio.appendChild(source);
+                    });
+                } else {
+                    const warningMsg = document.createElement('div');
+                    warningMsg.className = 'alert alert-warning mb-3';
+                    warningMsg.innerHTML = `
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        <strong>No audio found!</strong><br>
+                        This assessment requires an audio file that is missing. 
+                        Please contact your teacher and ask them to upload the audio file for this assessment (ID: ${assessment.id}).
+                    `;
+                    audioPlayer.appendChild(warningMsg);
+                }
+                
+                if (!audioPlayer.querySelector('.alert-warning')) {
+                    audio.innerHTML += 'Your browser does not support the audio element.';
+                    audioPlayer.appendChild(audio);
+                }
+                
+                questionContainer.appendChild(audioPlayer);
+            }
+            
+            // Render all questions
+            assessment.questions.forEach((question, index) => {
+                const questionDiv = document.createElement('div');
+                questionDiv.className = 'question p-3 border rounded mb-4';
+                questionDiv.id = `question-${index}`;
+                
+                // Add question number and title
+                const questionHeader = document.createElement('div');
+                questionHeader.className = 'question-header mb-3';
+                questionHeader.innerHTML = `
+                    <h5 class="mb-2">
+                        <span class="badge bg-primary me-2">Question ${index + 1}</span>
+                        ${question.text || `Question ${index + 1}`}
+                    </h5>
+                `;
+                questionDiv.appendChild(questionHeader);
+                
+                // Render the question content
+                if (question.type === 'multiple-choice') {
+                    renderMultipleChoiceQuestion(question, questionDiv, index);
+                } else {
+                    // Default to multiple choice if no specific type is set
+                    renderMultipleChoiceQuestion(question, questionDiv, index);
+                }
+                
+                questionContainer.appendChild(questionDiv);
+            });
+        }
+        
+        // Function to render the current question (keeping for backward compatibility)
         function renderCurrentQuestion() {
             const questionContainer = document.getElementById('questionContainer');
             const questionCounter = document.getElementById('questionCounter');
@@ -3606,6 +4045,10 @@
         // Function to submit multiple choice answers
         async function submitMultipleChoiceAnswers() {
             try {
+                let submitting = true;
+                const beforeUnload = (e) => { if (submitting) { e.preventDefault(); e.returnValue = ''; } };
+                window.addEventListener('beforeunload', beforeUnload);
+                showLoader();
                 // Check if all questions are answered
                 let allAnswered = true;
                 let score = 0;
@@ -3623,14 +4066,23 @@
                         if (correctOption !== undefined && selectedOption === correctOption) {
                             score++;
                         }
+                        // Show explanation for the selected option if available
+                        try {
+                            const qDivs = document.querySelectorAll('#questionContainer .question');
+                            const qDiv = qDivs[index];
+                            const explDiv = qDiv?.querySelector('.text-muted');
+                            if (explDiv && Array.isArray(question.explanations)) {
+                                const expl = question.explanations[selectedOption];
+                                if (expl) {
+                                    explDiv.textContent = `Explanation: ${expl}`;
+                                    explDiv.style.display = '';
+                                }
+                            }
+                        } catch {}
                     }
                 });
                 
-                if (!allAnswered) {
-                    if (!confirm('You have not answered all questions. Do you want to submit anyway?')) {
-                        return;
-                    }
-                }
+                // Proceed even if not all answered (no confirmation)
                 
                 // Calculate percentage score
                 const percentageScore = Math.round((score / totalQuestions) * 100);
@@ -3673,6 +4125,10 @@
             } catch (error) {
                 console.error('Error submitting assessment:', error);
                 alert(`Error submitting assessment: ${error.message}`);
+            } finally {
+                submitting = false;
+                window.removeEventListener('beforeunload', beforeUnload);
+                hideLoader();
             }
         }
 

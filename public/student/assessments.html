@@ -126,8 +126,17 @@
     </nav>
 
     <div class="container mt-4">
-        <h1>My Assessments</h1>
-        <p class="text-muted">Take quizzes and complete assignments for your enrolled subjects.</p>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <h1 id="pageTitle">My Assessments</h1>
+                <p class="text-muted" id="pageDescription">Take quizzes and complete assignments for your enrolled subjects.</p>
+            </div>
+            <div class="language-toggle">
+                <button class="btn btn-outline-secondary btn-sm" onclick="toggleLanguage()">
+                    <span id="langToggleText">ไทย</span>
+                </button>
+            </div>
+        </div>
 
         <div class="row mt-4">
             <div class="col-md-8">
@@ -214,7 +223,10 @@
             window.location.href = '/login';
         }
 
-        document.addEventListener('DOMContentLoaded', loadAssessments);
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize language and load assessments
+            updateLanguage();
+        });
 
         async function loadAssessments() {
             try {
@@ -366,15 +378,24 @@
                             const gridDiv = document.createElement('div');
                             gridDiv.className = 'assessments-grid';
                             partAssessments.forEach(assessment => {
+                                const lang = translations[currentLanguage];
                                 let statusBadge = '';
+                                let buttonText = '';
+                                let buttonDisabled = false;
+                                
                                 if (assessment.status === 'Completed') {
-                                    statusBadge = '<span class="badge bg-success ms-2">Completed</span>';
+                                    statusBadge = `<span class="badge bg-success ms-2">${lang.completed}</span>`;
+                                    buttonText = (assessment.type === 'multiple-choice' || assessment.type === 'quiz') ? lang.takeQuizAgain : lang.viewAssignment;
                                 } else if (assessment.status === 'In Progress') {
-                                    statusBadge = '<span class="badge bg-info ms-2">In Progress</span>';
-                                } else if (assessment.dueDate && new Date(assessment.dueDate) < new Date()) {
-                                    statusBadge = '<span class="badge bg-danger ms-2">Overdue</span>';
+                                    statusBadge = `<span class="badge bg-info ms-2">${lang.inProgress}</span>`;
+                                    buttonText = (assessment.type === 'multiple-choice' || assessment.type === 'quiz') ? lang.continueQuiz : lang.continueAssignment;
+                                } else if (assessment.isOverdue) {
+                                    statusBadge = `<span class="badge bg-danger ms-2">${lang.overdueClosed}</span>`;
+                                    buttonText = lang.assessmentClosed;
+                                    buttonDisabled = true;
                                 } else {
-                                    statusBadge = '<span class="badge bg-warning ms-2">Pending</span>';
+                                    statusBadge = `<span class="badge bg-warning ms-2">${lang.pending}</span>`;
+                                    buttonText = (assessment.type === 'multiple-choice' || assessment.type === 'quiz') ? lang.takeQuiz : lang.viewAssignment;
                                 }
                                 const card = document.createElement('div');
                                 card.className = 'assessment-card';
@@ -384,20 +405,22 @@
                                             <h5 class="mb-0">${assessment.title}</h5>
                                             <span class="badge-row">
                                             <span class="badge ${(assessment.type === 'multiple-choice' || assessment.type === 'quiz') ? 'badge-quiz text-white' : 'badge-assignment text-white'}">
-                                                ${(assessment.type === 'multiple-choice' || assessment.type === 'quiz') ? 'Multiple Choice' : 'Assignment'}
+                                                ${(assessment.type === 'multiple-choice' || assessment.type === 'quiz') ? lang.multipleChoice : lang.assignment}
                                             </span>
                                             ${statusBadge}
                                             </span>
                                         </div>
                                     </div>
                                     <div class="card-body">
-                                        <p>${assessment.description || 'No description provided.'}</p>
+                                        <p>${assessment.description || lang.noDescription}</p>
                                         <div class="path-info">
                                             <span>${assessment.subjectName} > ${assessment.unitName} > ${assessment.partName} > ${assessment.sectionName}</span>
                                         </div>
-                                        <button class="btn btn-primary view-assignment-btn" onclick="takeAssessment('${assessment.id}')">
-                                                ${(assessment.type === 'multiple-choice' || assessment.type === 'quiz') ? 'Take Quiz' : 'View Assignment'}
-                                            </button>
+                                        <button class="btn ${buttonDisabled ? 'btn-secondary' : 'btn-primary'} view-assignment-btn" 
+                                                onclick="${buttonDisabled ? 'return false;' : `takeAssessment('${assessment.id}')`}" 
+                                                ${buttonDisabled ? 'disabled' : ''}>
+                                            ${buttonText}
+                                        </button>
                                     </div>
                                 `;
                                 gridDiv.appendChild(card);
@@ -412,9 +435,10 @@
                 
             } catch (error) {
                 console.error('Error loading assessments:', error);
+                const lang = translations[currentLanguage];
                 document.getElementById('assessmentsContainer').innerHTML = `
                     <div class="alert alert-danger">
-                        Failed to load assessments. Please try again later.
+                        ${lang.failedToLoad}
                     </div>
                 `;
             }
@@ -422,6 +446,92 @@
 
         function takeAssessment(assessmentId) {
             window.location.href = `/student/assessment.html?id=${assessmentId}`;
+        }
+
+        // Language toggle functionality
+        let currentLanguage = 'en';
+        const translations = {
+            en: {
+                pageTitle: 'My Assessments',
+                pageDescription: 'Take quizzes and complete assignments for your enrolled subjects.',
+                langToggleText: 'ไทย',
+                completed: 'Completed',
+                inProgress: 'In Progress',
+                overdueClosed: 'Overdue - Assessment Closed',
+                pending: 'Pending',
+                takeQuizAgain: 'Take Quiz Again',
+                viewAssignment: 'View Assignment',
+                continueQuiz: 'Continue Quiz',
+                continueAssignment: 'Continue Assignment',
+                assessmentClosed: 'Assessment Closed',
+                takeQuiz: 'Take Quiz',
+                multipleChoice: 'Multiple Choice',
+                assignment: 'Assignment',
+                noDescription: 'No description provided.',
+                failedToLoad: 'Failed to load assessments. Please try again later.',
+                totalAssessments: 'Total Assessments:',
+                multipleChoiceCount: 'Multiple Choice:',
+                listeningComprehension: 'Listening Comprehension:',
+                speakingAssessment: 'Speaking Assessment:',
+                mixedAssessment: 'Mixed Assessment:',
+                matching: 'Matching:',
+                dragAndDrop: 'Drag-and-Drop:',
+                trueFalse: 'True/False:'
+            },
+            th: {
+                pageTitle: 'การประเมินของฉัน',
+                pageDescription: 'ทำแบบทดสอบและงานมอบหมายสำหรับวิชาที่ลงทะเบียน',
+                langToggleText: 'English',
+                completed: 'เสร็จสิ้น',
+                inProgress: 'กำลังดำเนินการ',
+                overdueClosed: 'เกินกำหนด - การประเมินปิดแล้ว',
+                pending: 'รอดำเนินการ',
+                takeQuizAgain: 'ทำแบบทดสอบอีกครั้ง',
+                viewAssignment: 'ดูงานมอบหมาย',
+                continueQuiz: 'ทำแบบทดสอบต่อ',
+                continueAssignment: 'ทำงานมอบหมายต่อ',
+                assessmentClosed: 'การประเมินปิดแล้ว',
+                takeQuiz: 'ทำแบบทดสอบ',
+                multipleChoice: 'แบบเลือกตอบ',
+                assignment: 'งานมอบหมาย',
+                noDescription: 'ไม่มีคำอธิบาย',
+                failedToLoad: 'ไม่สามารถโหลดการประเมินได้ กรุณาลองใหม่อีกครั้ง',
+                totalAssessments: 'การประเมินทั้งหมด:',
+                multipleChoiceCount: 'แบบเลือกตอบ:',
+                listeningComprehension: 'การฟังเพื่อความเข้าใจ:',
+                speakingAssessment: 'การประเมินการพูด:',
+                mixedAssessment: 'การประเมินแบบผสม:',
+                matching: 'การจับคู่:',
+                dragAndDrop: 'ลากและวาง:',
+                trueFalse: 'ถูก/ผิด:'
+            }
+        };
+
+        function toggleLanguage() {
+            currentLanguage = currentLanguage === 'en' ? 'th' : 'en';
+            updateLanguage();
+        }
+
+        function updateLanguage() {
+            const lang = translations[currentLanguage];
+            
+            // Update page elements
+            document.getElementById('pageTitle').textContent = lang.pageTitle;
+            document.getElementById('pageDescription').textContent = lang.pageDescription;
+            document.getElementById('langToggleText').textContent = lang.langToggleText;
+            
+            // Update stats labels
+            document.getElementById('totalAssessments').previousElementSibling.textContent = lang.totalAssessments;
+            document.getElementById('count-multiplechoice').previousElementSibling.textContent = lang.multipleChoiceCount;
+            document.getElementById('count-listening').previousElementSibling.textContent = lang.listeningComprehension;
+            document.getElementById('count-speaking').previousElementSibling.textContent = lang.speakingAssessment;
+            document.getElementById('count-mixed').previousElementSibling.textContent = lang.mixedAssessment;
+            document.getElementById('count-matching').previousElementSibling.textContent = lang.matching;
+            document.getElementById('count-dragdrop').previousElementSibling.textContent = lang.dragAndDrop;
+            document.getElementById('count-truefalse').previousElementSibling.textContent = lang.trueFalse;
+            
+            // Reload assessments to update language
+            loadAssessments();
         }
 
         // logout() function is now provided by logout.js utility

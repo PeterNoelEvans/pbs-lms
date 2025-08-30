@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -11,336 +8,328 @@ datasource db {
 }
 
 model User {
-  id                String              @id @default(uuid())
-  name              String
-  email             String
-  password          String
-  role              String              // ADMIN, TEACHER, STUDENT
-  organization      String              @default("PBS") // e.g., "PBS", "Hospital", "CodingSchool"
-  studentNumber     Int?                @unique // Student ID number (5-digit number, e.g., 12345, 67890)
-  nickname          String?             @unique
-  yearLevel         Int?
-  class             String?
-  active            Boolean             @default(true)
-  lastLogin         DateTime?
-  resetToken        String?
-  resetTokenExpiry  DateTime?
-  profilePicture    String?             // Path to profile picture
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-  studentProgress   StudentProgress[]
-  studentCourses    StudentCourse[]
-  subjectTeacher    SubjectTeacher[]
-  // Existing relationships
-  createdResources Resource[] @relation("resourceCreator")
-  assessments   Assessment[]
-  resourcesUsed ResourceUsage[]
-  children      User[]    @relation("ParentChild")
-  parentId      String?   
-  parent        User?     @relation("ParentChild", fields: [parentId], references: [id])
-  assessmentSubmissions AssessmentSubmission[]
-  sessions      UserSession[] // Track login sessions
-  approvedTeacherRequests TeacherApprovalRequest[] // Teacher requests approved by this user
+  id                      String                   @id @default(uuid())
+  name                    String
+  email                   String
+  password                String
+  role                    String
+  organization            String                   @default("PBS")
+  nickname                String?                  @unique
+  yearLevel               Int?
+  class                   String?
+  active                  Boolean                  @default(true)
+  lastLogin               DateTime?
+  resetToken              String?
+  resetTokenExpiry        DateTime?
+  profilePicture          String?
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  parentId                String?
+  studentNumber           Int?                     @unique
+  assessments             Assessment[]
+  assessmentSubmissions   AssessmentSubmission[]
+  createdResources        Resource[]               @relation("resourceCreator")
+  resourcesUsed           ResourceUsage[]
+  studentCourses          StudentCourse[]
+  studentProgress         StudentProgress[]
+  subjectTeacher          SubjectTeacher[]
+  approvedTeacherRequests TeacherApprovalRequest[]
+  parent                  User?                    @relation("ParentChild", fields: [parentId], references: [id])
+  children                User[]                   @relation("ParentChild")
+  sessions                UserSession[]
 }
 
 model CoreSubject {
-  id          String   @id @default(uuid())
-  name        String   @unique
+  id          String    @id @default(uuid())
+  name        String    @unique
   description String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
   subjects    Subject[]
 }
 
 model Subject {
-  id            String    @id @default(uuid())
-  name          String    // The book name (e.g. "Let's Find Out", "Project")
-  description   String?
-  yearLevel     Int
-  coreSubject   CoreSubject @relation(fields: [coreSubjectId], references: [id])
-  coreSubjectId String
-  teachers      SubjectTeacher[]
-  // Terminology configuration
-  unitTerm      String    @default("Unit")      // e.g. "Unit", "Chapter", "Module"
-  partTerm      String    @default("Part")      // e.g. "Lesson", "Topic", "Session"
-  sectionTerm   String    @default("Section")   // e.g. "Activity", "Exercise", "Task"
-  // Archive status fields
-  isArchived    Boolean   @default(false)
-  archivedAt    DateTime?
-  archiveReason String?
-  transferredAt DateTime?
-  // Existing fields
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  topics        Topic[]
-  units         Unit[]
-  weeklySchedules WeeklySchedule[]
+  id              String            @id @default(uuid())
+  name            String
+  description     String?
+  yearLevel       Int
+  coreSubjectId   String
+  unitTerm        String            @default("Unit")
+  partTerm        String            @default("Part")
+  sectionTerm     String            @default("Section")
+  isArchived      Boolean           @default(false)
+  archivedAt      DateTime?
+  archiveReason   String?
+  transferredAt   DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  studentCourses  StudentCourse[]
   studentProgress StudentProgress[]
-  studentCourses StudentCourse[]
+  coreSubject     CoreSubject       @relation(fields: [coreSubjectId], references: [id])
+  teachers        SubjectTeacher[]
+  topics          Topic[]
+  units           Unit[]
+  weeklySchedules WeeklySchedule[]
 
   @@unique([name, coreSubjectId, yearLevel])
 }
 
 model Topic {
-  id          String    @id @default(uuid())
-  name        String
-  description String?
-  order       Int
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  subject     Subject   @relation(fields: [subjectId], references: [id])
-  subjectId   String
-  resources   Resource[]
-  assessments Assessment[] @relation("TopicAssessments")
+  id              String            @id @default(uuid())
+  name            String
+  description     String?
+  order           Int
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  subjectId       String
+  assessments     Assessment[]      @relation("TopicAssessments")
+  resources       Resource[]
   studentProgress StudentProgress[]
+  subject         Subject           @relation(fields: [subjectId], references: [id])
 }
 
 model Resource {
-  id          String   @id @default(uuid())
-  title       String
-  description String?
-  type        String   // 'document', 'video', 'audio', 'link', 'poster'
-  url         String?  // For external links, videos, and audio
-  content     String?  // For HTML content
-  filePath    String?  // For uploaded files
-  thumbnail   String?  // For video thumbnails or poster previews
-  duration    Int?     // For audio/video duration in seconds
-  quarter     String   @default("Q1") // "Q1", "Q2", "Q3", "Q4" - NEW FIELD
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // NEW FIELDS
-  unit        Unit?    @relation(fields: [unitId], references: [id])
-  unitId      String?
-  part        Part?    @relation(fields: [partId], references: [id])
-  partId      String?
-  section     Section?   @relation("ResourceSection", fields: [sectionId], references: [id])
-  sectionId   String?
-  sections    Section[]  @relation("ResourceSections")
-
-  topic       Topic    @relation(fields: [topicId], references: [id])
-  topicId     String
-  createdBy   User     @relation("resourceCreator", fields: [userId], references: [id])
-  userId      String
-  usageCount  Int      @default(0)
-  usedBy      ResourceUsage[]
-  metadata    Json?    // For additional metadata like video quality, file size, etc.
-  weeklySchedules WeeklySchedule[]
-  assessments Assessment[] @relation("ResourceAssessments")
-
-  order       Int      @default(0) // Order for drag-and-drop sequencing
+  id              String           @id @default(uuid())
+  title           String
+  description     String?
+  type            String
+  url             String?
+  content         String?
+  filePath        String?
+  thumbnail       String?
+  duration        Int?
+  quarter         String           @default("Q1")
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  unitId          String?
+  partId          String?
+  sectionId       String?
+  topicId         String
+  userId          String
+  usageCount      Int              @default(0)
+  metadata        Json?
+  order           Int              @default(0)
+  createdBy       User             @relation("resourceCreator", fields: [userId], references: [id])
+  topic           Topic            @relation(fields: [topicId], references: [id])
+  section         Section?         @relation("ResourceSection", fields: [sectionId], references: [id])
+  part            Part?            @relation(fields: [partId], references: [id])
+  unit            Unit?            @relation(fields: [unitId], references: [id])
+  usedBy          ResourceUsage[]
+  assessments     Assessment[]     @relation("ResourceAssessments")
+  sections        Section[]        @relation("ResourceSections")
+  weeklySchedules WeeklySchedule[] @relation("ResourceToWeeklySchedule")
 }
 
 model ResourceUsage {
   id         String   @id @default(uuid())
-  resource   Resource @relation(fields: [resourceId], references: [id])
   resourceId String
-  user       User     @relation(fields: [userId], references: [id])
   userId     String
   usedAt     DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id])
+  resource   Resource @relation(fields: [resourceId], references: [id])
+
   @@unique([resourceId, userId])
 }
 
 model Unit {
-  id          String    @id @default(uuid())
+  id          String     @id @default(uuid())
   name        String
   description String?
   order       Int
-  subject     Subject   @relation(fields: [subjectId], references: [id])
   subjectId   String
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
   parts       Part[]
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
   resources   Resource[]
+  subject     Subject    @relation(fields: [subjectId], references: [id])
 }
 
 model Part {
-  id          String    @id @default(uuid())
+  id          String     @id @default(uuid())
   name        String
   description String?
   order       Int
-  unit        Unit      @relation(fields: [unitId], references: [id])
   unitId      String
-  sections    Section[]
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  unit        Unit       @relation(fields: [unitId], references: [id])
   resources   Resource[]
+  sections    Section[]
 }
 
 model Section {
-  id          String       @id @default(uuid())
-  name        String
-  description String?
-  order       Int
-  part        Part         @relation(fields: [partId], references: [id])
-  partId      String
-  assessments Assessment[]
-  resources   Resource[] @relation("ResourceSection")
-  resourcesMany Resource[] @relation("ResourceSections")
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  id            String       @id @default(uuid())
+  name          String
+  description   String?
+  order         Int
+  partId        String
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  assessments   Assessment[]
+  resources     Resource[]   @relation("ResourceSection")
+  part          Part         @relation(fields: [partId], references: [id])
+  resourcesMany Resource[]   @relation("ResourceSections")
 }
 
 model Assessment {
-  id          String    @id @default(uuid())
-  title       String
-  description String?
-  type        String   // 'quiz', 'matching', etc.
-  category    String?  // e.g., 'Grammar', 'Listening', 'Speaking', etc.
-  criteria    String?  // Grading criteria/rubric for manually graded assessments
-  questions   Json?     // For quizzes
-  dueDate     DateTime? // For assignments
-  quarter     String   @default("Q1") // "Q1", "Q2", "Q3", "Q4"
-  published   Boolean  @default(true)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  section     Section   @relation(fields: [sectionId], references: [id])
-  sectionId   String
-  createdBy   User      @relation(fields: [userId], references: [id])
-  userId      String
-  mediaFiles  MediaFile[] // For audio questions and other media
-  topic       Topic?    @relation("TopicAssessments", fields: [topicId], references: [id])
-  topicId     String?
-  weeklySchedule WeeklySchedule? @relation(fields: [weeklyScheduleId], references: [id])
+  id               String                 @id @default(uuid())
+  title            String
+  description      String?
+  type             String
+  category         String?
+  criteria         String?
+  questions        Json?
+  dueDate          DateTime?
+  quarter          String                 @default("Q1")
+  published        Boolean                @default(true)
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+  sectionId        String
+  userId           String
+  topicId          String?
   weeklyScheduleId String?
-  submissions AssessmentSubmission[]
-  maxAttempts Int? // Maximum allowed attempts for this assessment (null = unlimited)
-  resources   Resource[] @relation("ResourceAssessments")
+  maxAttempts      Int?
+  weeklySchedule   WeeklySchedule?        @relation(fields: [weeklyScheduleId], references: [id])
+  topic            Topic?                 @relation("TopicAssessments", fields: [topicId], references: [id])
+  createdBy        User                   @relation(fields: [userId], references: [id])
+  section          Section                @relation(fields: [sectionId], references: [id])
+  submissions      AssessmentSubmission[]
+  mediaFiles       MediaFile[]
+  resources        Resource[]             @relation("ResourceAssessments")
 }
 
 model MediaFile {
-  id            String     @id @default(uuid())
-  type          String     // 'audio', 'video', 'image'
-  url           String?    // For external media
-  filePath      String?    // For uploaded files
-  duration      Int?       // For audio/video duration in seconds
-  label         String?    // NEW: original field name or label
-  assessment    Assessment @relation(fields: [assessmentId], references: [id])
-  assessmentId  String
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
+  id           String     @id @default(uuid())
+  type         String
+  url          String?
+  filePath     String?
+  duration     Int?
+  assessmentId String
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  label        String?
+  assessment   Assessment @relation(fields: [assessmentId], references: [id])
 }
 
 model StudentProgress {
   id          String   @id @default(uuid())
-  student     User     @relation(fields: [studentId], references: [id])
   studentId   String
-  subject     Subject  @relation(fields: [subjectId], references: [id])
   subjectId   String
-  topic       Topic    @relation(fields: [topicId], references: [id])
   topicId     String
-  status      String   // 'NOT_STARTED', 'IN_PROGRESS', 'COMPLETED'
+  status      String
   score       Float?
   lastUpdated DateTime @default(now())
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  topic       Topic    @relation(fields: [topicId], references: [id])
+  subject     Subject  @relation(fields: [subjectId], references: [id])
+  student     User     @relation(fields: [studentId], references: [id])
 
   @@unique([studentId, subjectId, topicId])
 }
 
 model WeeklySchedule {
-  id          String      @id @default(uuid())
+  id          String       @id @default(uuid())
   weekNumber  Int
   startDate   DateTime
   endDate     DateTime
   objectives  String
-  subject     Subject     @relation(fields: [subjectId], references: [id], onDelete: Cascade)
   subjectId   String
-  resources   Resource[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
   assessments Assessment[]
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  subject     Subject      @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  resources   Resource[]   @relation("ResourceToWeeklySchedule")
 }
 
 model StudentCourse {
-    id        String   @id @default(cuid())
-    student   User     @relation(fields: [studentId], references: [id])
-    studentId String
-    subject   Subject  @relation(fields: [subjectId], references: [id])
-    subjectId String
-    createdAt DateTime @default(now())
-    updatedAt DateTime @updatedAt
+  id        String   @id @default(cuid())
+  studentId String
+  subjectId String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  subject   Subject  @relation(fields: [subjectId], references: [id])
+  student   User     @relation(fields: [studentId], references: [id])
 
-    @@unique([studentId, subjectId])
+  @@unique([studentId, subjectId])
 }
 
 model TeacherTransferLog {
-  id            String    @id @default(uuid())
+  id            String   @id @default(uuid())
   fromTeacherId String
   toTeacherId   String
-  subjectIds    String    // Store as comma-separated values
+  subjectIds    String
   transferredAt DateTime
   reason        String?
-  createdAt     DateTime  @default(now())
+  createdAt     DateTime @default(now())
 }
 
-// New model for managing teacher assignments
 model SubjectTeacher {
-    id            String    @id @default(uuid())
-    subject       Subject   @relation(fields: [subjectId], references: [id])
-    subjectId     String
-    teacher       User      @relation(fields: [teacherId], references: [id])
-    teacherId     String
-    isActive      Boolean   @default(true)
-    role          String    @default("EDITOR")  // EDITOR, VIEWER, OWNER
-    assignedAt    DateTime  @default(now())
-    removedAt     DateTime?
-    removeReason  String?
-    createdAt     DateTime  @default(now())
-    updatedAt     DateTime  @updatedAt
+  id           String    @id @default(uuid())
+  subjectId    String
+  teacherId    String
+  isActive     Boolean   @default(true)
+  role         String    @default("EDITOR")
+  assignedAt   DateTime  @default(now())
+  removedAt    DateTime?
+  removeReason String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  teacher      User      @relation(fields: [teacherId], references: [id])
+  subject      Subject   @relation(fields: [subjectId], references: [id])
 
-    @@unique([subjectId, teacherId])
+  @@unique([subjectId, teacherId])
 }
 
 model AssessmentSubmission {
-  id           String   @id @default(uuid())
+  id           String     @id @default(uuid())
   answers      Json?
-  comment      String?  // Teacher feedback/comment for manually graded assessments
+  comment      String?
   score        Float?
-  submittedAt  DateTime @default(now())
-  assessment   Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  submittedAt  DateTime   @default(now())
   assessmentId String
-  student      User      @relation(fields: [studentId], references: [id])
   studentId    String
-  attempts     Int?     // Total number of attempts
-  totalTime    Int?     // Accumulative time in seconds
-} 
+  attempts     Int?
+  totalTime    Int?
+  student      User       @relation(fields: [studentId], references: [id])
+  assessment   Assessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+}
 
 model Config {
-  id    Int    @id @default(1)
+  id    Int    @id @default(autoincrement())
   key   String @unique
   value String
-} 
+}
 
 model UserSession {
-  id          String   @id @default(uuid())
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId      String
-  startTime   DateTime @default(now())
-  endTime     DateTime? // null if session is still active
-  duration    Int?     // Duration in seconds (calculated when session ends)
-  ipAddress   String?  // Optional: track IP address
-  userAgent   String?  // Optional: track browser/device info
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id        String    @id @default(uuid())
+  userId    String
+  startTime DateTime  @default(now())
+  endTime   DateTime?
+  duration  Int?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, startTime])
   @@index([startTime])
 }
 
 model TeacherApprovalRequest {
-  id            String   @id @default(uuid())
-  name          String
-  email         String   @unique
-  password      String   // Hashed password
-  organization  String
-  message       String?  // Optional message from applicant
-  status        String   @default("PENDING") // PENDING, APPROVED, REJECTED
-  requestedAt   DateTime @default(now())
-  reviewedAt    DateTime?
-  reviewedBy    String?  // User ID of Peter Evans
-  reviewNotes   String?  // Optional notes from reviewer
-  approvedBy    User?    @relation(fields: [reviewedBy], references: [id])
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-} 
+  id           String    @id @default(uuid())
+  name         String
+  email        String    @unique
+  password     String
+  organization String
+  message      String?
+  status       String    @default("PENDING")
+  requestedAt  DateTime  @default(now())
+  reviewedAt   DateTime?
+  reviewedBy   String?
+  reviewNotes  String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  approvedBy   User?     @relation(fields: [reviewedBy], references: [id])
+}

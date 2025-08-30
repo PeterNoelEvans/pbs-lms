@@ -79,11 +79,11 @@
                 </select>
             </div>
             <div class="col-auto">
-                <label for="publishedFilter" class="form-label mb-0 me-2">Published:</label>
-                <select id="publishedFilter" class="form-select d-inline-block w-auto">
-                    <option value="">All</option>
-                    <option value="true">Published</option>
-                    <option value="false">Unpublished</option>
+                <label for="attachmentFilter" class="form-label mb-0 me-2">Status:</label>
+                <select id="attachmentFilter" class="form-select d-inline-block w-auto">
+                    <option value="" selected>All Assessments</option>
+                    <option value="attached">With Resources (Students can see)</option>
+                    <option value="unattached">Without Resources (Students cannot see)</option>
                 </select>
             </div>
         </div>
@@ -138,6 +138,8 @@
                                     <option value="matching">Matching</option>
                                     <option value="drag-and-drop">Drag and Drop</option>
                                     <option value="change-sequence">Change-Sequence</option>
+                                    <option value="line-match">Connect Match (Line)</option>
+                                    <option value="phoneme-build">Phoneme Builder</option>
                                     <option value="writing">Writing</option>
                                     <option value="writing-long">Writing (Long)</option>
                                     <option value="speaking">Speaking</option>
@@ -194,6 +196,30 @@
                                 </div>
                             </div>
                             
+                            <!-- Media Management Section -->
+                            <div class="mb-4" id="mediaManagementContainer">
+                                <div class="card">
+                                    <div class="card-header bg-warning bg-opacity-25">
+                                        <h5 class="mb-0">
+                                            <i class="bi bi-files me-2"></i>Media Management
+                                        </h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <p class="text-muted mb-3">
+                                            Manage all media files attached to this assessment. Remove unwanted files or add new ones.
+                                        </p>
+                                        <div id="currentMediaFiles">
+                                            <!-- Current media files will be displayed here -->
+                                        </div>
+                                        <div class="mt-3">
+                                            <button type="button" class="btn btn-outline-danger btn-sm" id="clearAllMediaBtn" style="display:none;">
+                                                <i class="bi bi-trash me-1"></i>Clear All Media
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
                             <div class="mb-3">
                                 <label for="dueDate" class="form-label">Due Date</label>
                                 <input type="datetime-local" class="form-control" id="dueDate">
@@ -207,6 +233,7 @@
                                     <option value="Q3">Q3</option>
                                     <option value="Q4">Q4</option>
                                 </select>
+                                <small class="text-muted">Defaults to active quarter</small>
                             </div>
 
                             <div class="mb-3">
@@ -303,6 +330,37 @@
         // Add event listener to logout button
         document.getElementById('logoutBtn').addEventListener('click', logout);
 
+        // Function to set active quarter as default for new assessments
+        async function setActiveQuarterAsDefault() {
+            try {
+                const response = await fetch('/api/config/active-quarter', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    const activeQuarter = data.activeQuarter;
+                    
+                    // Set assessment creation form quarter to active quarter
+                    const quarterSelect = document.getElementById('quarter');
+                    if (quarterSelect) {
+                        quarterSelect.value = activeQuarter;
+                    }
+                    
+                    // Also set the filter dropdown to active quarter (to show relevant assessments)
+                    const quarterFilter = document.getElementById('quarterFilter');
+                    if (quarterFilter) {
+                        quarterFilter.value = activeQuarter;
+                    }
+                    
+                    console.log(`Set default quarter to: ${activeQuarter}`);
+                } else {
+                    console.log('Failed to fetch active quarter, defaulting to Q1');
+                }
+            } catch (error) {
+                console.error('Error fetching active quarter:', error);
+            }
+        }
+
         // Load subjects when page loads
         document.addEventListener('DOMContentLoaded', () => {
             // Check authentication
@@ -312,6 +370,7 @@
             
             // Initialize the page
             loadSubjects();
+            setActiveQuarterAsDefault();
             loadExistingAssessments();
             updateQuestionOptions();
             
@@ -525,6 +584,18 @@
                             <i class="bi bi-upload"></i> Bulk Import Questions
                         </button>`;
                     break;
+                case 'line-match':
+                    buttonsContainer.innerHTML = `
+                        <button type="button" class="btn btn-outline-primary" onclick="addQuestion('line-match')">
+                            <i class="bi bi-diagram-3"></i> Add Connect Match
+                        </button>`;
+                    break;
+                case 'phoneme-build':
+                    buttonsContainer.innerHTML = `
+                        <button type="button" class="btn btn-outline-primary" onclick="addQuestion('phoneme-build')">
+                            <i class="bi bi-type"></i> Add Phoneme Builder
+                        </button>`;
+                    break;
                 case 'listening':
                     buttonsContainer.innerHTML = `
                         <button type="button" class="btn btn-outline-primary" onclick="addQuestion('listening')">
@@ -592,7 +663,7 @@
             // Always set questionsSection display at the end
             const questionsSection = document.getElementById('questionsSection');
             if (questionsSection) {
-                const showQuestions = ['multiple-choice', 'drag-and-drop', 'matching', 'true-false', 'mixed', 'assignment', 'change-sequence'].includes(type);
+                const showQuestions = ['multiple-choice', 'drag-and-drop', 'matching', 'true-false', 'mixed', 'assignment', 'change-sequence', 'line-match', 'phoneme-build'].includes(type);
                 questionsSection.style.display = showQuestions ? 'block' : 'none';
             }
             // Always show Create Assessment button for true-false
@@ -658,6 +729,7 @@
                                         <input type="radio" name="correct_${questionId}" required>
                                     </div>
                                     <input type="text" class="form-control" placeholder="Choice 1" required>
+                                    <input type="text" class="form-control" placeholder="Explanation (optional)">
                                     <button type="button" class="btn btn-outline-danger" onclick="removeChoice(this)">
                                         <i class="bi bi-dash"></i>
                                     </button>
@@ -666,6 +738,63 @@
                             <button type="button" class="btn btn-outline-primary btn-sm" onclick="addChoice('${questionId}')">
                                 <i class="bi bi-plus"></i> Add Choice
                             </button>
+                        </div>`;
+                    break;
+                case 'line-match':
+                    questionHtml += `
+                        <div class="d-flex justify-content-end mb-3">
+                            <button type="button" class="btn btn-outline-secondary" onclick="window.addLineMatchPair('${questionId}')">
+                                <i class="bi bi-plus"></i> Add Pair
+                            </button>
+                        </div>
+                        <div class="line-match-pairs">
+                            <div class="row mb-2 fw-semibold">
+                                <div class="col-md-5">Left (word or image)</div>
+                                <div class="col-md-5">Right (word or image)</div>
+                                <div class="col-md-2">Actions</div>
+                            </div>
+                            <div class="line-match-pair">
+                                <div class="row mb-2">
+                                    <div class="col-md-5">
+                                        <div class="mb-2">
+                                            <input type="text" class="form-control" name="lm_left_text_${questionId}_0" placeholder="e.g. cat">
+                                        </div>
+                                        <div class="mb-2">
+                                            <label class="form-label small">Or upload image:</label>
+                                            <input type="file" class="form-control" name="lm_left_image_${questionId}_0" accept="image/*">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-5">
+                                        <div class="mb-2">
+                                            <input type="text" class="form-control" name="lm_right_text_${questionId}_0" placeholder="e.g. word or description">
+                                        </div>
+                                        <div class="mb-2">
+                                            <label class="form-label small">Or upload image:</label>
+                                            <input type="file" class="form-control" name="lm_right_image_${questionId}_0" accept="image/*">
+                                        </div>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <button type="button" class="btn btn-outline-danger" onclick="this.closest('.line-match-pair').remove()">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>`;
+                    break;
+                case 'phoneme-build':
+                    questionHtml += `
+                        <div class="mb-3">
+                            <label class="form-label">Word Template (use __ for a phoneme blank)</label>
+                            <input type="text" class="form-control phoneme-word" placeholder="e.g. b__k">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Correct Tiles (comma-separated in order)</label>
+                            <input type="text" class="form-control phoneme-correct" placeholder="e.g. oo">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Available Tiles (include distractors, comma-separated)</label>
+                            <input type="text" class="form-control phoneme-tiles" placeholder="e.g. oo, oa, u, o">
                         </div>`;
                     break;
 
@@ -996,7 +1125,89 @@
             if (questionData) {
                 try {
                     console.log('Populating question data:', questionData);
-                    
+
+                    if (type === 'line-match') {
+                        const container = card.querySelector('.line-match-pairs');
+                        if (container && Array.isArray(questionData.pairs)) {
+                            // remove default pair rows except header
+                            container.querySelectorAll('.line-match-pair').forEach((r,i)=>{ if(i>0) r.remove(); });
+                            questionData.pairs.forEach((p, idx) => {
+                                if (idx === 0) {
+                                    // Handle both old format (direct values) and new format (objects with kind/value)
+                                    const leftValue = p.left?.kind === 'image' ? p.left.value : p.left;
+                                    const rightValue = p.right?.kind === 'image' ? p.right.value : p.right;
+                                    
+                                    container.querySelector(`input[name^="lm_left_text_"]`).value = leftValue || '';
+                                    container.querySelector(`input[name^="lm_right_text_"]`).value = rightValue || '';
+                                    
+                                    // Note: For existing assessments, we can't restore the file inputs
+                                    // but we can show the text values
+                                } else {
+                                    window.addLineMatchPair(questionId);
+                                    const pairDivs = container.querySelectorAll('.line-match-pair');
+                                    const last = pairDivs[pairDivs.length-1];
+                                    
+                                    const leftValue = p.left?.kind === 'image' ? p.left.value : p.left;
+                                    const rightValue = p.right?.kind === 'image' ? p.right.value : p.right;
+                                    
+                                    last.querySelector(`input[name^="lm_left_text_"]`).value = leftValue || '';
+                                    last.querySelector(`input[name^="lm_right_text_"]`).value = rightValue || '';
+                                }
+                            });
+                        }
+                    }
+                    if (type === 'phoneme-build') {
+                        card.querySelector('.phoneme-word').value = questionData.word || '';
+                        if (Array.isArray(questionData.correctTiles)) card.querySelector('.phoneme-correct').value = questionData.correctTiles.join(', ');
+                        if (Array.isArray(questionData.tiles)) card.querySelector('.phoneme-tiles').value = questionData.tiles.join(', ');
+                    }
+                    // Populate Multiple Choice questions
+                    if (type === 'multiple-choice') {
+                        const textArea = card.querySelector('.card-body textarea');
+                        if (textArea) {
+                            textArea.value = (questionData.text || questionData.question || questionData.prompt || '').toString();
+                        }
+
+                        const choicesContainer = card.querySelector('.choices-container');
+                        const options = Array.isArray(questionData.options)
+                            ? questionData.options
+                            : (Array.isArray(questionData.choices) ? questionData.choices : []);
+
+                        if (choicesContainer && options.length > 0) {
+                            // Ensure we have enough inputs to display all options
+                            let optionInputs = choicesContainer.querySelectorAll('input[type="text"]');
+                            const addChoiceBtn = choicesContainer.querySelector('.btn-outline-primary');
+                            let safetyCounter = 0;
+                            while (optionInputs.length < options.length && safetyCounter < 50) {
+                                if (addChoiceBtn) addChoiceBtn.click();
+                                optionInputs = choicesContainer.querySelectorAll('input[type="text"]');
+                                safetyCounter++;
+                            }
+
+                            // Populate option texts
+                            options.forEach((opt, i) => {
+                                if (optionInputs[i]) optionInputs[i].value = (opt ?? '').toString();
+                            });
+
+                            // Determine and set the correct option
+                            const radios = choicesContainer.querySelectorAll(`input[type="radio"][name="correct_${questionId}"]`);
+                            let correctIndex = undefined;
+                            if (typeof questionData.correctOption === 'number') {
+                                correctIndex = questionData.correctOption;
+                            } else if (typeof questionData.correctAnswer === 'number') {
+                                correctIndex = questionData.correctAnswer;
+                            } else if (typeof questionData.correctIndex === 'number') {
+                                correctIndex = questionData.correctIndex;
+                            } else if (typeof questionData.correct === 'string') {
+                                const idx = options.findIndex(o => (o || '').toString().trim().toLowerCase() === questionData.correct.toString().trim().toLowerCase());
+                                if (idx >= 0) correctIndex = idx;
+                            }
+                            if (typeof correctIndex === 'number' && radios[correctIndex]) {
+                                radios[correctIndex].checked = true;
+                            }
+                        }
+                    }
+
                     // For drag-and-drop, we need to show the right subtype fields
                     if (type === 'drag-and-drop') {
                         // Get subtype either from the question or from the assessment
@@ -1128,6 +1339,7 @@
                             <input type="radio" name="correct_${questionId}" required>
                         </div>
                         <input type="text" class="form-control" placeholder="Choice ${choiceCount}" required>
+                        <input type="text" class="form-control" placeholder="Explanation (optional)">
                         <button type="button" class="btn btn-outline-danger" onclick="removeChoice(this)">
                             <i class="bi bi-dash"></i>
                         </button>
@@ -1191,6 +1403,20 @@
                     url = '/api/teacher/assessments';
                 }
                 
+                // Add quarter filter if selected
+                const quarterFilter = document.getElementById('quarterFilter');
+                if (quarterFilter && quarterFilter.value) {
+                    const separator = url.includes('?') ? '&' : '?';
+                    url += `${separator}quarter=${encodeURIComponent(quarterFilter.value)}`;
+                }
+                
+                // Add attachment filter if selected
+                const attachmentFilter = document.getElementById('attachmentFilter');
+                if (attachmentFilter && attachmentFilter.value) {
+                    const separator = url.includes('?') ? '&' : '?';
+                    url += `${separator}attachment=${encodeURIComponent(attachmentFilter.value)}`;
+                }
+                
                 const response = await fetch(url, {
                     headers: {
                         'Authorization': `Bearer ${token}`
@@ -1239,6 +1465,7 @@
                         <div class="card-body">
                             <h6 class="card-title">
                                 ${assessment.title}
+                                ${assessment.type ? `<span class="badge bg-secondary ms-2">${formatAssessmentType(assessment.type)}</span>` : ''}
                                 ${assessment.unattached ? '<span class="badge bg-danger ms-2">Unattached</span>' : ''}
                             </h6>
                             <p class="card-text small">
@@ -1273,6 +1500,19 @@
             } catch (error) {
                 console.error('Error loading assessments:', error);
                 alert('Failed to load existing assessments');
+            }
+        }
+
+        // Helper to format assessment type nicely for the badge
+        function formatAssessmentType(type) {
+            try {
+                if (!type || typeof type !== 'string') return 'Unknown';
+                return type
+                    .split('-')
+                    .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+                    .join(' ');
+            } catch (e) {
+                return String(type);
             }
         }
 
@@ -1346,6 +1586,9 @@
                     }
                 }
                 
+                // Load and display current media files for management
+                displayCurrentMediaFiles(assessment.mediaFiles || []);
+                
                 if (assessment.dueDate) {
                     document.getElementById('dueDate').value = new Date(assessment.dueDate).toISOString().slice(0, 16);
                 } else {
@@ -1367,13 +1610,16 @@
                 // Clear existing questions
                 document.getElementById('questionsList').innerHTML = '';
 
-                // Add existing questions 
-                if (Array.isArray(assessment.questions) && assessment.questions.length > 0) {
-                    for (const question of assessment.questions) {
-                        console.log('Adding question:', question);
-                        addQuestion(question.type || assessment.type, question);
-                    }
-                } else if (assessment.type === 'drag-and-drop' && assessment.subtype === 'long-paragraph-fill-in-blank') {
+                        // Add existing questions 
+        if (Array.isArray(assessment.questions) && assessment.questions.length > 0) {
+            // Clear any existing questions first to prevent duplicates
+            document.getElementById('questionsList').innerHTML = '';
+            
+            for (const question of assessment.questions) {
+                console.log('Adding question:', question);
+                addQuestion(question.type || assessment.type, question);
+            }
+        } else if (assessment.type === 'drag-and-drop' && assessment.subtype === 'long-paragraph-fill-in-blank') {
                     // Special case: Sometimes drag-and-drop questions are stored at the assessment level
                     // Create a synthetic question from the assessment properties
                     const syntheticQuestion = {
@@ -1429,8 +1675,57 @@
                 // Gather all change-sequence question cards
                 const questionCards = document.querySelectorAll('.question-card[data-type="change-sequence"]');
                 questions = Array.from(questionCards).map(card => getQuestionData(card));
+            } else if (type === 'line-match') {
+                questions = getLineMatchQuestions();
+            } else if (type === 'phoneme-build') {
+                questions = getPhonemeBuildQuestions();
             }
-            formData.set('questions', JSON.stringify(questions));
+            
+            // For line-match assessments, we need to handle file uploads separately
+            if (type === 'line-match') {
+                console.log('[DEBUG SAVE] Line-match questions before processing:', questions);
+                
+                // Create a clean version of questions for JSON serialization (without File objects)
+                const cleanQuestions = questions.map((question, qIndex) => ({
+                    ...question,
+                    pairs: question.pairs.map((pair, pIndex) => ({
+                        left: pair.left.kind === 'image' ? { kind: 'image', value: `line_match_left_${qIndex}_${pIndex}` } : pair.left,
+                        right: pair.right.kind === 'image' ? { kind: 'image', value: `line_match_right_${qIndex}_${pIndex}` } : pair.right
+                    }))
+                }));
+                
+                console.log('[DEBUG SAVE] Clean questions for JSON:', cleanQuestions);
+                
+                // Extract files from questions and add them to formData
+                questions.forEach((question, qIndex) => {
+                    console.log(`[DEBUG SAVE] Processing question ${qIndex}:`, question);
+                    question.pairs.forEach((pair, pIndex) => {
+                        console.log(`[DEBUG SAVE] Processing pair ${pIndex}:`, pair);
+                        const leftFile = pair.left.kind === 'image' ? pair.left.value : null;
+                        const rightFile = pair.right.kind === 'image' ? pair.right.value : null;
+                        
+                        console.log(`[DEBUG SAVE] Left file:`, leftFile);
+                        console.log(`[DEBUG SAVE] Right file:`, rightFile);
+                        
+                        // Add files to formData with unique names
+                        if (leftFile) {
+                            formData.append(`line_match_left_${qIndex}_${pIndex}`, leftFile);
+                            console.log(`[DEBUG SAVE] Added left file to formData: line_match_left_${qIndex}_${pIndex}`);
+                        }
+                        if (rightFile) {
+                            formData.append(`line_match_right_${qIndex}_${pIndex}`, rightFile);
+                            console.log(`[DEBUG SAVE] Added right file to formData: line_match_right_${qIndex}_${pIndex}`);
+                        }
+                    });
+                });
+                
+                // Store the clean questions (with file placeholders) for JSON serialization
+                const questionsJson = JSON.stringify(cleanQuestions);
+                console.log('[DEBUG SAVE] Questions JSON to be sent:', questionsJson);
+                formData.set('questions', questionsJson);
+            } else {
+                formData.set('questions', JSON.stringify(questions));
+            }
             // Add subtype if drag-and-drop
             if (type === 'drag-and-drop') {
                 const subtypeValue = document.getElementById('subtype').value;
@@ -2542,6 +2837,12 @@ Ooh, exciting!|That sounds fun.</pre>
                     // Gather all change-sequence question cards
                     const questionCards = document.querySelectorAll('.question-card[data-type="change-sequence"]');
                     questions = Array.from(questionCards).map(card => getQuestionData(card));
+                } else if (type === 'line-match') {
+                    console.log('[DEBUG] Getting line-match questions...');
+                    questions = getLineMatchQuestions();
+                    console.log('[DEBUG] Line-match questions collected:', questions);
+                } else if (type === 'phoneme-build') {
+                    questions = getPhonemeBuildQuestions();
                 }
                 
                 // Build form data
@@ -2556,8 +2857,39 @@ Ooh, exciting!|That sounds fun.</pre>
                     formData.append('subtype', subtype);
                 }
                 
-                // Add questions as JSON string
-                formData.set('questions', JSON.stringify(questions));
+                // For line-match assessments, we need to handle file uploads separately
+                if (type === 'line-match') {
+                    console.log('[DEBUG] Processing line-match questions for form submission:', questions);
+                    
+                    // Extract files from questions and add them to formData
+                    questions.forEach((question, qIndex) => {
+                        console.log(`[DEBUG] Processing question ${qIndex}:`, question);
+                        question.pairs.forEach((pair, pIndex) => {
+                            const leftFile = pair.left.kind === 'image' ? pair.left.value : null;
+                            const rightFile = pair.right.kind === 'image' ? pair.right.value : null;
+                            
+                            console.log(`[DEBUG] Pair ${pIndex}: leftFile=${leftFile}, rightFile=${rightFile}`);
+                            
+                            // Add files to formData with unique names
+                            if (leftFile) {
+                                formData.append(`line_match_left_${qIndex}_${pIndex}`, leftFile);
+                                console.log(`[DEBUG] Added left file: line_match_left_${qIndex}_${pIndex}`);
+                            }
+                            if (rightFile) {
+                                formData.append(`line_match_right_${qIndex}_${pIndex}`, rightFile);
+                                console.log(`[DEBUG] Added right file: line_match_right_${qIndex}_${pIndex}`);
+                            }
+                        });
+                    });
+                    
+                    // Store the original questions with file objects (server will process these)
+                    const questionsJson = JSON.stringify(questions);
+                    console.log('[DEBUG] Setting questions JSON:', questionsJson);
+                    formData.set('questions', questionsJson);
+                } else {
+                    // Add questions as JSON string for other types
+                    formData.set('questions', JSON.stringify(questions));
+                }
                 
                 // Add criteria if provided
                 if (criteria) {
@@ -2586,6 +2918,12 @@ Ooh, exciting!|That sounds fun.</pre>
                 const originalText = submitBtn.textContent;
                 submitBtn.disabled = true;
                 submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Creating...';
+                
+                // Log what we're about to send
+                console.log('[DEBUG] About to send formData to server:');
+                for (let [key, value] of formData.entries()) {
+                    console.log(`[DEBUG] FormData entry: ${key} = ${value}`);
+                }
                 
                 // Send request to create assessment
                 const response = await fetch(`/api/sections/${sectionId}/assessments`, {
@@ -2886,8 +3224,17 @@ Ooh, exciting!|That sounds fun.</pre>
                 const optionInputs = card.querySelectorAll('.input-group input[type="text"]');
                 const radioInputs = card.querySelectorAll('.input-group input[type="radio"]');
                 
-                // Get options
-                const options = Array.from(optionInputs).map(input => input.value.trim());
+                // Get options and explanations (paired fields: [choice, explanation])
+                const options = [];
+                const explanations = [];
+                for (let i = 0; i < optionInputs.length; i += 2) {
+                    const choice = optionInputs[i]?.value?.trim() || '';
+                    const expl = optionInputs[i + 1]?.value?.trim() || '';
+                    if (choice) {
+                        options.push(choice);
+                        explanations.push(expl);
+                    }
+                }
                 
                 // Find which option is selected as correct
                 let correctOption = -1;
@@ -2902,6 +3249,7 @@ Ooh, exciting!|That sounds fun.</pre>
                     type: 'multiple-choice',
                     text: questionText,
                     options: options,
+                    explanations: explanations,
                     correctOption: correctOption
                 };
                 
@@ -3110,6 +3458,118 @@ Ooh, exciting!|That sounds fun.</pre>
                 questions.push(question);
             });
             
+            return questions;
+        }
+
+        // New: collect Connect Match (Line) questions
+        function getLineMatchQuestions() {
+            const questions = [];
+            console.log('[DEBUG] Looking for line-match question cards...');
+            const cards = document.querySelectorAll('.question-card[data-type="line-match"]');
+            console.log('[DEBUG] Found line-match cards:', cards.length);
+            
+            // Also check if there are any questions in the questionsList
+            const questionsList = document.getElementById('questionsList');
+            console.log('[DEBUG] Questions list element:', questionsList);
+            console.log('[DEBUG] Questions list innerHTML length:', questionsList?.innerHTML?.length);
+            
+            cards.forEach(card => {
+                console.log('[DEBUG] Processing card:', card.id);
+                console.log('[DEBUG] Card HTML:', card.outerHTML.substring(0, 200) + '...');
+                
+                const pairRows = card.querySelectorAll('.line-match-pair');
+                console.log('[DEBUG] Found pair rows:', pairRows.length);
+                
+                const pairs = [];
+                pairRows.forEach((row, rowIndex) => {
+                    console.log(`[DEBUG] Processing row ${rowIndex}:`, row);
+                    // Get text values
+                    const leftText = row.querySelector('input[name^="lm_left_text_"]')?.value?.trim();
+                    const rightText = row.querySelector('input[name^="lm_right_text_"]')?.value?.trim();
+                    
+                    console.log('[DEBUG] Left text:', leftText, 'Right text:', rightText);
+                    
+                    // Get image files
+                    const leftImage = row.querySelector('input[name^="lm_left_image_"]')?.files?.[0];
+                    const rightImage = row.querySelector('input[name^="lm_right_image_"]')?.files?.[0];
+                    
+                    console.log('[DEBUG] Left image file:', leftImage);
+                    console.log('[DEBUG] Right image file:', rightImage);
+                    if (leftImage) console.log('[DEBUG] Left image details:', { name: leftImage.name, size: leftImage.size, type: leftImage.type });
+                    if (rightImage) console.log('[DEBUG] Right image details:', { name: rightImage.name, size: rightImage.size, type: rightImage.type });
+                    
+                    // Create pair object with both text and image support
+                    const left = leftImage ? { kind: 'image', value: leftImage } : { kind: 'text', value: leftText };
+                    const right = rightImage ? { kind: 'image', value: rightImage } : { kind: 'text', value: rightText };
+                    
+                    console.log('[DEBUG] Created pair objects:', { left, right });
+                    
+                    // Only add if at least one side has content
+                    if ((leftText || leftImage) && (rightText || rightImage)) {
+                        console.log('[DEBUG] Adding pair:', { left, right });
+                        pairs.push({ left, right });
+                    } else {
+                        console.log('[DEBUG] Skipping pair - missing content');
+                    }
+                });
+                if (pairs.length > 0) {
+                    console.log('[DEBUG] Adding question with pairs:', pairs);
+                    questions.push({ type: 'line-match', pairs });
+                } else {
+                    console.log('[DEBUG] No pairs found for this card');
+                }
+            });
+            console.log('[DEBUG] Final questions array:', questions);
+            return questions;
+        }
+
+        // Helper: add a new pair row to a line-match card
+        window.addLineMatchPair = function(questionId) {
+            const container = document.querySelector(`#${questionId} .line-match-pairs`);
+            const idx = container.querySelectorAll('.line-match-pair').length;
+            const div = document.createElement('div');
+            div.className = 'line-match-pair';
+            div.innerHTML = `
+                <div class="row mb-2">
+                    <div class="col-md-5">
+                        <div class="mb-2">
+                            <input type="text" class="form-control" name="lm_left_text_${questionId}_${idx}" placeholder="e.g. cat">
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small">Or upload image:</label>
+                            <input type="file" class="form-control" name="lm_left_image_${questionId}_${idx}" accept="image/*">
+                        </div>
+                    </div>
+                    <div class="col-md-5">
+                        <div class="mb-2">
+                            <input type="text" class="form-control" name="lm_right_text_${questionId}_${idx}" placeholder="e.g. word or description">
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small">Or upload image:</label>
+                            <input type="file" class="form-control" name="lm_right_image_${questionId}_${idx}" accept="image/*">
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <button type="button" class="btn btn-outline-danger" onclick="this.closest('.line-match-pair').remove()"><i class="bi bi-trash"></i></button>
+                    </div>
+                </div>`;
+            container.appendChild(div);
+        }
+
+        // New: collect Phoneme Builder questions
+        function getPhonemeBuildQuestions() {
+            const questions = [];
+            const cards = document.querySelectorAll('.question-card[data-type="phoneme-build"]');
+            cards.forEach(card => {
+                const word = card.querySelector('.phoneme-word')?.value?.trim() || '';
+                const correct = (card.querySelector('.phoneme-correct')?.value || '')
+                    .split(',').map(s => s.trim()).filter(Boolean);
+                const tiles = (card.querySelector('.phoneme-tiles')?.value || '')
+                    .split(',').map(s => s.trim()).filter(Boolean);
+                if (word && correct.length > 0 && tiles.length > 0) {
+                    questions.push({ type: 'phoneme-build', word, correctTiles: correct, tiles });
+                }
+            });
             return questions;
         }
 
@@ -3338,11 +3798,11 @@ Ooh, exciting!|That sounds fun.</pre>
             );
         }
 
-        // Add filter logic for quarter and published
+        // Add filter logic for quarter and attachment status
         function getAssessmentFilters() {
             const quarter = document.getElementById('quarterFilter').value;
-            const published = document.getElementById('publishedFilter').value;
-            return { quarter, published };
+            const attachment = document.getElementById('attachmentFilter').value;
+            return { quarter, attachment };
         }
         async function fetchAssessmentsWithFilters() {
             const { quarter, published } = getAssessmentFilters();
@@ -3356,10 +3816,168 @@ Ooh, exciting!|That sounds fun.</pre>
             // const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
             // ...rest of your fetch logic...
         }
-        document.getElementById('quarterFilter').addEventListener('change', fetchAssessmentsWithFilters);
-        document.getElementById('publishedFilter').addEventListener('change', fetchAssessmentsWithFilters);
-        // ...existing code to call fetchAssessmentsWithFilters() on page load...
-        // ... existing code ...
+        // Add event listeners for filter changes
+        document.getElementById('quarterFilter').addEventListener('change', () => {
+            // Reload assessments with current filters
+            const subjectId = document.getElementById('subjectSelect').value;
+            loadExistingAssessments(subjectId || null);
+        });
+        
+        document.getElementById('attachmentFilter').addEventListener('change', () => {
+            // Reload assessments with current filters  
+            const subjectId = document.getElementById('subjectSelect').value;
+            loadExistingAssessments(subjectId || null);
+        });
+        
+        // Media Management Functions
+        function displayCurrentMediaFiles(mediaFiles) {
+            const container = document.getElementById('currentMediaFiles');
+            const clearAllBtn = document.getElementById('clearAllMediaBtn');
+            
+            if (!mediaFiles || mediaFiles.length === 0) {
+                container.innerHTML = '<p class="text-muted">No media files attached to this assessment.</p>';
+                clearAllBtn.style.display = 'none';
+                return;
+            }
+            
+            // Remove duplicates by filtering unique file paths and also by content similarity
+            const uniqueFiles = [];
+            const seenPaths = new Set();
+            const seenNames = new Set();
+            
+            mediaFiles.forEach(file => {
+                const fileName = file.filePath.split('/').pop();
+                const filePath = file.filePath;
+                
+                // Check if we've seen this exact path or filename before
+                if (!seenPaths.has(filePath) && !seenNames.has(fileName)) {
+                    uniqueFiles.push(file);
+                    seenPaths.add(filePath);
+                    seenNames.add(fileName);
+                }
+            });
+            
+            // Show duplicate warning if duplicates exist
+            if (uniqueFiles.length < mediaFiles.length) {
+                const duplicateCount = mediaFiles.length - uniqueFiles.length;
+                container.innerHTML = `<div class="alert alert-warning mb-3">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    <strong>Duplicate Files Detected:</strong> ${duplicateCount} duplicate file(s) found and will be automatically cleaned up.
+                    <br><small class="text-muted">You can remove individual duplicates or use "Clear All Media" to start fresh.</small>
+                </div>`;
+            }
+            
+            let html = '<div class="list-group">';
+            uniqueFiles.forEach((file, index) => {
+                const isAudio = file.type && file.type.startsWith('audio/');
+                const isImage = file.type && file.type.startsWith('image/');
+                
+                html += '<div class="list-group-item d-flex justify-content-between align-items-center">';
+                
+                if (isAudio) {
+                    html += `<audio controls src="${file.filePath}" style="max-width: 200px;"></audio>`;
+                } else if (isImage) {
+                    html += `<img src="${file.filePath}" alt="Image" style="max-width: 100px; max-height: 100px;" class="me-2">`;
+                }
+                
+                html += `<span class="text-muted small">${file.filePath.split('/').pop()}</span>`;
+                html += `<button type="button" class="btn btn-danger btn-sm" onclick="removeMediaFile('${file.id}', '${file.filePath}')">`;
+                html += '<i class="bi bi-trash"></i> Remove</button>';
+                html += '</div>';
+            });
+            html += '</div>';
+            
+            container.innerHTML += html;
+            clearAllBtn.style.display = 'block';
+        }
+        
+        async function removeMediaFile(mediaFileId, filePath) {
+            if (!confirm(`Are you sure you want to remove "${filePath.split('/').pop()}"? This action cannot be undone.`)) {
+                return;
+            }
+            
+            try {
+                const assessmentId = document.getElementById('assessmentForm').dataset.assessmentId;
+                if (!assessmentId) {
+                    alert('No assessment selected for editing.');
+                    return;
+                }
+                
+                const response = await fetch(`/api/assessments/${assessmentId}/media/${mediaFileId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (response.ok) {
+                    // Reload the assessment to refresh media files
+                    await loadAssessment(assessmentId);
+                    alert('Media file removed successfully!');
+                } else {
+                    // Check if response is JSON
+                    const contentType = response.headers.get('content-type');
+                    if (contentType && contentType.includes('application/json')) {
+                        const error = await response.json();
+                        alert(`Failed to remove media file: ${error.message || 'Unknown error'}`);
+                    } else {
+                        alert(`Failed to remove media file: Server returned ${response.status}`);
+                    }
+                }
+            } catch (error) {
+                console.error('Error removing media file:', error);
+                alert('Failed to remove media file. Please try again.');
+            }
+        }
+        
+        async function clearAllMedia() {
+            if (!confirm('Are you sure you want to remove ALL media files from this assessment? This action cannot be undone.')) {
+                return;
+            }
+            
+            try {
+                const assessmentId = document.getElementById('assessmentForm').dataset.assessmentId;
+                if (!assessmentId) {
+                    alert('No assessment selected for editing.');
+                    return;
+                }
+                
+                // Get current media files
+                const response = await fetch(`/api/assessments/${assessmentId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (!response.ok) throw new Error('Failed to fetch assessment');
+                const assessment = await response.json();
+                
+                if (!assessment.mediaFiles || assessment.mediaFiles.length === 0) {
+                    alert('No media files to remove.');
+                    return;
+                }
+                
+                // Remove each media file
+                for (const file of assessment.mediaFiles) {
+                    await fetch(`/api/assessments/${assessmentId}/media/${file.id}`, {
+                        method: 'DELETE',
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                }
+                
+                // Reload the assessment
+                await loadAssessment(assessmentId);
+                alert('All media files removed successfully!');
+                
+            } catch (error) {
+                console.error('Error clearing all media:', error);
+                alert('Failed to clear all media files. Please try again.');
+            }
+        }
+        
+        // Add event listener for clear all media button
+        document.addEventListener('DOMContentLoaded', function() {
+            const clearAllBtn = document.getElementById('clearAllMediaBtn');
+            if (clearAllBtn) {
+                clearAllBtn.addEventListener('click', clearAllMedia);
+            }
+        });
     </script>
     <!-- Modal for viewing assessment as teacher -->
     <div class="modal fade" id="viewAssessmentModal" tabindex="-1" aria-labelledby="viewAssessmentModalLabel" aria-hidden="true">

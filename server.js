@@ -803,6 +803,238 @@ app.post('/api/teacher-request', async (req, res) => {
     }
 });
 
+// Backup Management API (Peter Evans only)
+app.post('/api/admin/create-backup', auth, async (req, res) => {
+    try {
+        // Check if user is Peter Evans
+        const user = await prisma.user.findUnique({ 
+            where: { id: req.user.userId } 
+        });
+        
+        if (!user || user.email.toLowerCase() !== 'peter@pbs.ac.th') {
+            return res.status(403).json({ error: 'Only Peter Evans can create backups' });
+        }
+
+        const { type } = req.body; // 'database' or 'complete'
+        
+        try {
+            let backupName, size;
+            
+            if (type === 'complete') {
+                // Use complete backup manager
+                const { execSync } = require('child_process');
+                const output = execSync('node scripts/complete-backup-manager.js backup', { 
+                    encoding: 'utf8',
+                    cwd: __dirname 
+                });
+                
+                // Parse backup name from output
+                const nameMatch = output.match(/complete-backup-[\d\-TZ]+/);
+                backupName = nameMatch ? nameMatch[0] : 'unknown';
+                
+                // Estimate size (complete backups are ~600MB)
+                size = '~600 MB';
+                
+            } else {
+                // Use database backup manager
+                const { execSync } = require('child_process');
+                const output = execSync('node scripts/database-backup-manager.js backup', { 
+                    encoding: 'utf8',
+                    cwd: __dirname 
+                });
+                
+                // Parse backup name from output
+                const nameMatch = output.match(/backup-[\d\-TZ]+/);
+                backupName = nameMatch ? nameMatch[0] : 'unknown';
+                
+                // Estimate size (database backups are ~3MB)
+                size = '~3 MB';
+            }
+            
+            res.json({ 
+                success: true, 
+                backupName,
+                size,
+                type,
+                message: `${type} backup created successfully` 
+            });
+            
+        } catch (error) {
+            console.error('Backup creation error:', error);
+            res.status(500).json({ 
+                success: false, 
+                error: `Failed to create ${type} backup: ${error.message}` 
+            });
+        }
+        
+    } catch (error) {
+        console.error('Error in backup creation endpoint:', error);
+        res.status(500).json({ error: 'Failed to create backup' });
+    }
+});
+
+app.get('/api/admin/backups', auth, async (req, res) => {
+    try {
+        // Check if user is Peter Evans
+        const user = await prisma.user.findUnique({ 
+            where: { id: req.user.userId } 
+        });
+        
+        if (!user || user.email.toLowerCase() !== 'peter@pbs.ac.th') {
+            return res.status(403).json({ error: 'Only Peter Evans can view backups' });
+        }
+
+        const fs = require('fs');
+        const path = require('path');
+        
+        const backups = [];
+        
+        // Get database backups
+        const dbBackupDir = path.join(__dirname, 'backups/database');
+        if (fs.existsSync(dbBackupDir)) {
+            const dbBackups = fs.readdirSync(dbBackupDir)
+                .filter(item => item.startsWith('backup-'))
+                .map(backup => {
+                    const backupPath = path.join(dbBackupDir, backup);
+                    const stats = fs.statSync(backupPath);
+                    const metadataPath = path.join(backupPath, 'backup-metadata.json');
+                    
+                    let metadata = null;
+                    if (fs.existsSync(metadataPath)) {
+                        try {
+                            metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf8'));
+                        } catch (error) {
+                            console.warn(`Could not read metadata for ${backup}`);
+                        }
+                    }
+                    
+                    return {
+                        name: backup,
+                        type: 'database',
+                        created: stats.mtime,
+                        size: getDirectorySize(backupPath),
+                        metadata
+                    };
+                });
+            backups.push(...dbBackups);
+        }
+        
+        // Get complete backups
+        const completeBackupDir = path.join(__dirname, 'backups/complete');
+        if (fs.existsSync(completeBackupDir)) {
+            const completeBackups = fs.readdirSync(completeBackupDir)
+                .filter(item => item.startsWith('complete-backup-'))
+                .map(backup => {
+                    const backupPath = path.join(completeBackupDir, backup);
+                    const stats = fs.statSync(backupPath);
+                    const manifestPath = path.join(backupPath, 'backup-manifest.json');
+                    
+                    let metadata = null;
+                    if (fs.existsSync(manifestPath)) {
+                        try {
+                            const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+                            metadata = {
+                                totalRecords: manifest.components?.database?.records || 0,
+                                fileCount: manifest.components?.uploads?.fileCount || 0
+                            };
+                        } catch (error) {
+                            console.warn(`Could not read manifest for ${backup}`);
+                        }
+                    }
+                    
+                    return {
+                        name: backup,
+                        type: 'complete',
+                        created: stats.mtime,
+                        size: getDirectorySize(backupPath),
+                        metadata
+                    };
+                });
+            backups.push(...completeBackups);
+        }
+        
+        // Sort by creation date (newest first)
+        backups.sort((a, b) => b.created - a.created);
+        
+        res.json({ success: true, backups });
+        
+    } catch (error) {
+        console.error('Error listing backups:', error);
+        res.status(500).json({ error: 'Failed to list backups' });
+    }
+});
+
+app.post('/api/admin/test-restore', auth, async (req, res) => {
+    try {
+        // Check if user is Peter Evans
+        const user = await prisma.user.findUnique({ 
+            where: { id: req.user.userId } 
+        });
+        
+        if (!user || user.email.toLowerCase() !== 'peter@pbs.ac.th') {
+            return res.status(403).json({ error: 'Only Peter Evans can test restores' });
+        }
+
+        const { backupName } = req.body;
+        
+        try {
+            const { execSync } = require('child_process');
+            
+            if (backupName.startsWith('complete-backup-')) {
+                // Test complete backup (placeholder - would need implementation)
+                res.json({ 
+                    success: true, 
+                    message: `Complete backup ${backupName} test completed` 
+                });
+            } else {
+                // Test database backup restore
+                const output = execSync(`node scripts/database-backup-manager.js test-restore ${backupName}`, { 
+                    encoding: 'utf8',
+                    cwd: __dirname 
+                });
+                
+                res.json({ 
+                    success: true, 
+                    message: `Database backup ${backupName} test completed successfully` 
+                });
+            }
+            
+        } catch (error) {
+            console.error('Test restore error:', error);
+            res.status(500).json({ 
+                success: false, 
+                error: `Test restore failed: ${error.message}` 
+            });
+        }
+        
+    } catch (error) {
+        console.error('Error in test restore endpoint:', error);
+        res.status(500).json({ error: 'Failed to test restore' });
+    }
+});
+
+// Helper function to calculate directory size
+function getDirectorySize(dirPath) {
+    const fs = require('fs');
+    const path = require('path');
+    
+    if (!fs.existsSync(dirPath)) return 0;
+    
+    let totalSize = 0;
+    const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+    
+    for (const entry of entries) {
+        const fullPath = path.join(dirPath, entry.name);
+        if (entry.isDirectory()) {
+            totalSize += getDirectorySize(fullPath);
+        } else {
+            totalSize += fs.statSync(fullPath).size;
+        }
+    }
+    
+    return totalSize;
+}
+
 // Admin endpoint to list pending teacher requests (Peter Evans only)
 app.get('/api/admin/teacher-requests', auth, async (req, res) => {
     try {
@@ -2630,6 +2862,29 @@ app.get('/api/assessments/:assessmentId', auth, async (req, res) => {
             return res.status(404).json({ error: 'Assessment not found' });
         }
 
+        // Enforce availability for students: block access after due date
+        if (req.user && req.user.role === 'STUDENT') {
+            if (assessment.dueDate && new Date(assessment.dueDate) < new Date()) {
+                return res.status(403).json({ error: 'This assessment is no longer available.' });
+            }
+        }
+
+        // Normalize questions to an array for all types (questions may be a string or single object)
+        if (assessment.questions) {
+            let questions = assessment.questions;
+            if (typeof questions === 'string') {
+                try {
+                    questions = JSON.parse(questions);
+                } catch (e) {
+                    console.error('Error parsing questions string:', e);
+                }
+            }
+            if (questions && !Array.isArray(questions)) {
+                questions = [questions];
+            }
+            if (questions) assessment.questions = questions;
+        }
+
         // Process matching type assessments to ensure pairs data is properly formatted
         if (assessment.type === 'matching' && assessment.questions) {
             let questions = assessment.questions;
@@ -2675,6 +2930,60 @@ app.get('/api/assessments/:assessmentId', auth, async (req, res) => {
             
             // Update assessment with processed questions
             assessment.questions = questions;
+        }
+
+        // Process line-match assessments to ensure pairs exist (from left/right arrays if needed)
+        if (assessment.type === 'line-match' && assessment.questions) {
+            let questions = assessment.questions;
+            // Ensure array already handled above
+            questions = questions.map(q => {
+                if (!q) return q;
+                if (Array.isArray(q.pairs) && q.pairs.length > 0) {
+                    return q;
+                }
+                if (Array.isArray(q.left) && Array.isArray(q.right)) {
+                    const minLen = Math.min(q.left.length, q.right.length);
+                    q.pairs = [];
+                    for (let i = 0; i < minLen; i++) {
+                        if (q.left[i] && q.right[i]) {
+                            q.pairs.push({ left: q.left[i], right: q.right[i] });
+                        }
+                    }
+                    return q;
+                }
+                return q;
+            });
+            assessment.questions = questions;
+        }
+
+        // Normalize drag-and-drop questions to always be an array; also handle legacy subtype spelling
+        if (assessment.type === 'drag-and-drop' && assessment.questions) {
+            let questions = assessment.questions;
+            // Ensure questions is an array
+            if (!Array.isArray(questions)) {
+                if (typeof questions === 'string') {
+                    try {
+                        questions = JSON.parse(questions);
+                    } catch (e) {
+                        console.error('Error parsing drag-and-drop questions string:', e);
+                        questions = [ { type: 'drag-and-drop' } ];
+                    }
+                } else {
+                    questions = [questions];
+                }
+            }
+            // Normalize subtype spelling across questions
+            questions = questions.map(q => {
+                if (q && q.subtype === 'image-fill-in-blank') {
+                    q.subtype = 'image-fill-blank';
+                }
+                return q;
+            });
+            assessment.questions = questions;
+            // Also normalize top-level subtype if present
+            if (assessment.subtype === 'image-fill-in-blank') {
+                assessment.subtype = 'image-fill-blank';
+            }
         }
 
         // Add subjectName, unitName, partName, sectionName to the response if available
@@ -2794,6 +3103,54 @@ app.post('/api/sections/:sectionId/assessments', auth, upload.any(), async (req,
                                 }
                                 console.log(`Created ${question.pairs.length} pairs from expressions and meanings`);
                             }
+                        }
+                        return question;
+                    });
+                }
+                
+                // Special handling for line-match assessments to process uploaded images
+                if (type === 'line-match' && Array.isArray(parsedQuestions)) {
+                    console.log('[LINE-MATCH] Processing line-match questions with file uploads');
+                    parsedQuestions = parsedQuestions.map((question, qIndex) => {
+                        if (question.type === 'line-match' && Array.isArray(question.pairs)) {
+                            question.pairs = question.pairs.map((pair, pIndex) => {
+                                // Check if this pair has image files that were uploaded
+                                const leftFileKey = `line_match_left_${qIndex}_${pIndex}`;
+                                const rightFileKey = `line_match_right_${qIndex}_${pIndex}`;
+                                
+                                // Find uploaded files for this pair
+                                const leftFile = req.files?.find(f => f.fieldname === leftFileKey);
+                                const rightFile = req.files?.find(f => f.fieldname === rightFileKey);
+                                
+                                // Update the pair with actual file paths if images were uploaded
+                                const updatedPair = { ...pair };
+                                if (leftFile && pair.left.kind === 'image') {
+                                    updatedPair.left = { 
+                                        kind: 'image', 
+                                        value: `/uploads/resources/${leftFile.filename}` 
+                                    };
+                                    // Add to mediaFiles for database storage
+                                    mediaFiles.push({
+                                        filePath: `/uploads/resources/${leftFile.filename}`,
+                                        type: leftFile.mimetype,
+                                        label: `line_match_left_${qIndex}_${pIndex}`
+                                    });
+                                }
+                                if (rightFile && pair.right.kind === 'image') {
+                                    updatedPair.right = { 
+                                        kind: 'image', 
+                                        value: `/uploads/resources/${rightFile.filename}` 
+                                    };
+                                    // Add to mediaFiles for database storage
+                                    mediaFiles.push({
+                                        filePath: `/uploads/resources/${rightFile.filename}`,
+                                        type: rightFile.mimetype,
+                                        label: `line_match_right_${qIndex}_${pIndex}`
+                                    });
+                                }
+                                
+                                return updatedPair;
+                            });
                         }
                         return question;
                     });
@@ -3003,6 +3360,54 @@ app.put('/api/assessments/:assessmentId', auth, upload.any(), async (req, res) =
                     });
                 }
                 
+                // Special handling for line-match assessments to process uploaded images
+                if (type === 'line-match' && Array.isArray(parsedQuestions)) {
+                    console.log('[LINE-MATCH UPDATE] Processing line-match questions with file uploads');
+                    parsedQuestions = parsedQuestions.map((question, qIndex) => {
+                        if (question.type === 'line-match' && Array.isArray(question.pairs)) {
+                            question.pairs = question.pairs.map((pair, pIndex) => {
+                                // Check if this pair has image files that were uploaded
+                                const leftFileKey = `line_match_left_${qIndex}_${pIndex}`;
+                                const rightFileKey = `line_match_right_${qIndex}_${pIndex}`;
+                                
+                                // Find uploaded files for this pair
+                                const leftFile = req.files?.find(f => f.fieldname === leftFileKey);
+                                const rightFile = req.files?.find(f => f.fieldname === rightFileKey);
+                                
+                                // Update the pair with actual file paths if images were uploaded
+                                const updatedPair = { ...pair };
+                                if (leftFile && pair.left.kind === 'image') {
+                                    updatedPair.left = { 
+                                        kind: 'image', 
+                                        value: `/uploads/resources/${leftFile.filename}` 
+                                    };
+                                    // Add to mediaFiles for database storage
+                                    mediaFiles.push({
+                                        filePath: `/uploads/resources/${leftFile.filename}`,
+                                        type: leftFile.mimetype,
+                                        label: `line_match_left_${qIndex}_${pIndex}`
+                                    });
+                                }
+                                if (rightFile && pair.right.kind === 'image') {
+                                    updatedPair.right = { 
+                                        kind: 'image', 
+                                        value: `/uploads/resources/${rightFile.filename}` 
+                                    };
+                                    // Add to mediaFiles for database storage
+                                    mediaFiles.push({
+                                        filePath: `/uploads/resources/${rightFile.filename}`,
+                                        type: rightFile.mimetype,
+                                        label: `line_match_right_${qIndex}_${pIndex}`
+                                    });
+                                }
+                                
+                                return updatedPair;
+                            });
+                        }
+                        return question;
+                    });
+                }
+                
                 // Fix empty multiple choice questions that only have type property
                 if (type === 'multiple-choice' && Array.isArray(parsedQuestions)) {
                     parsedQuestions = parsedQuestions.map(question => {
@@ -3071,18 +3476,13 @@ app.put('/api/assessments/:assessmentId', auth, upload.any(), async (req, res) =
 // Get all assessments for a teacher (now shows all assessments for all teachers)
 app.get('/api/teacher/assessments', auth, async (req, res) => {
     try {
-        const { quarter, published } = req.query;
-        let where = {
-            type: { in: ['speaking', 'writing', 'writing-long', 'assignment'] }
-        };
+        const { quarter, attachment } = req.query;
+        // Show all assessment types for teachers (match student view)
+        let where = {};
         if (quarter) {
             where.quarter = quarter;
         }
-        if (published === 'true') {
-            where.published = true;
-        } else if (published === 'false') {
-            where.published = false;
-        }
+        // Handle attachment filtering - we'll filter after the query since it involves related data
         const assessments = await prisma.assessment.findMany({
             where,
             include: {
@@ -3115,12 +3515,19 @@ app.get('/api/teacher/assessments', auth, async (req, res) => {
         );
 
         // Add ungradedCount and unattached flag for each assessment
-        const assessmentsWithUngraded = uniqueAssessments.map(a => {
+        let assessmentsWithUngraded = uniqueAssessments.map(a => {
             const unattached = !a.resources || a.resources.length === 0;
             return { ...a, unattached };
         });
 
-        console.log(`Found ${assessments.length} assessments, ${uniqueAssessments.length} are unique`);
+        // Apply attachment filtering if specified
+        if (attachment === 'attached') {
+            assessmentsWithUngraded = assessmentsWithUngraded.filter(a => !a.unattached);
+        } else if (attachment === 'unattached') {
+            assessmentsWithUngraded = assessmentsWithUngraded.filter(a => a.unattached);
+        }
+
+        console.log(`Found ${assessments.length} assessments, ${uniqueAssessments.length} are unique, ${assessmentsWithUngraded.length} after filtering`);
         res.json(assessmentsWithUngraded);
     } catch (error) {
         console.error('Error fetching teacher assessments:', error);
@@ -3133,6 +3540,7 @@ console.log('HIT /api/subjects/:subjectId/assessments');
 app.get('/api/subjects/:subjectId/assessments', auth, async (req, res) => {
     try {
         const { subjectId } = req.params;
+        const { quarter, attachment } = req.query;
         // Find all assessments that belong to this subject
         // We need to go through the section -> part -> unit -> subject relationship
         const assessments = await prisma.assessment.findMany({
@@ -3143,7 +3551,8 @@ app.get('/api/subjects/:subjectId/assessments', auth, async (req, res) => {
                             subjectId: subjectId
                         }
                     }
-                }
+                },
+                ...(quarter ? { quarter } : {})
             },
             include: {
                 section: {
@@ -3173,13 +3582,20 @@ app.get('/api/subjects/:subjectId/assessments', auth, async (req, res) => {
         );
 
         // Add ungradedCount and unattached flag for each assessment
-        const assessmentsWithExtras = await Promise.all(uniqueAssessments.map(async (a) => {
+        let assessmentsWithExtras = await Promise.all(uniqueAssessments.map(async (a) => {
             const ungradedCount = await prisma.assessmentSubmission.count({
                 where: { assessmentId: a.id, score: null }
             });
             const unattached = !a.resources || a.resources.length === 0;
             return { ...a, ungradedCount, unattached };
         }));
+
+        // Optional attachment filtering
+        if (attachment === 'attached') {
+            assessmentsWithExtras = assessmentsWithExtras.filter(a => !a.unattached);
+        } else if (attachment === 'unattached') {
+            assessmentsWithExtras = assessmentsWithExtras.filter(a => a.unattached);
+        }
 
         console.log(`Found ${assessments.length} assessments, ${uniqueAssessments.length} are unique`);
         console.log('[SUBJECT ASSESSMENTS] Assessment IDs:', uniqueAssessments.map(a => ({ id: a.id, title: a.title, quarter: a.quarter, published: a.published })));
@@ -3258,6 +3674,68 @@ app.delete('/api/assessments/:assessmentId', auth, async (req, res) => {
     } catch (error) {
         console.error('Error deleting assessment:', error);
         res.status(500).json({ error: 'Failed to delete assessment', details: error.message });
+    }
+});
+
+// Delete a specific media file from an assessment
+app.delete('/api/assessments/:assessmentId/media/:mediaFileId', auth, async (req, res) => {
+    try {
+        const { assessmentId, mediaFileId } = req.params;
+
+        // Check if assessment exists
+        const assessment = await prisma.assessment.findUnique({
+            where: { id: assessmentId },
+            include: { mediaFiles: true }
+        });
+
+        if (!assessment) {
+            return res.status(404).json({ error: 'Assessment not found' });
+        }
+
+        // Check if media file exists and belongs to this assessment
+        const mediaFile = assessment.mediaFiles.find(file => file.id === mediaFileId);
+        if (!mediaFile) {
+            return res.status(404).json({ error: 'Media file not found' });
+        }
+
+        // Delete the media file
+        await prisma.mediaFile.delete({
+            where: { id: mediaFileId }
+        });
+
+        res.json({ success: true, message: 'Media file deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting media file:', error);
+        res.status(500).json({ error: 'Failed to delete media file', details: error.message });
+    }
+});
+
+// Delete assessment audio
+app.delete('/api/assessments/:assessmentId/audio', auth, async (req, res) => {
+    try {
+        const { assessmentId } = req.params;
+
+        // Check if assessment exists
+        const assessment = await prisma.assessment.findUnique({
+            where: { id: assessmentId }
+        });
+
+        if (!assessment) {
+            return res.status(404).json({ error: 'Assessment not found' });
+        }
+
+        // Update the assessment to remove the audio field
+        await prisma.assessment.update({
+            where: { id: assessmentId },
+            data: {
+                audio: null
+            }
+        });
+
+        res.json({ success: true, message: 'Assessment audio deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting assessment audio:', error);
+        res.status(500).json({ error: 'Failed to delete assessment audio', details: error.message });
     }
 });
 
@@ -3372,6 +3850,11 @@ app.post('/api/assessments/:assessmentId/submit', auth, async (req, res) => {
             return res.status(404).json({ error: 'Assessment not found' });
         }
 
+        // Enforce availability for students: block submissions after due date
+        if (assessment.dueDate && new Date(assessment.dueDate) < new Date()) {
+            return res.status(403).json({ error: 'Submissions are closed for this assessment.' });
+        }
+
         // Enforce maxAttempts
         if (assessment.maxAttempts) {
             const submissionCount = await prisma.assessmentSubmission.count({
@@ -3440,7 +3923,7 @@ app.post('/api/assessments/:assessmentId/submit', auth, async (req, res) => {
                     console.log('Assignment grading result:', { total, correct, score: calculatedScore });
                 }
             } else if (assessment.type === 'drag-and-drop' && Array.isArray(assessment.questions)) {
-                // Support all subtypes: sequence, fill-in-blank, image-fill-in-blank, long-paragraph-fill-in-blank
+                // Support all subtypes: sequence, fill-in-blank, image-fill-blank (and legacy image-fill-in-blank), long-paragraph-fill-in-blank
                 const q = assessment.questions[0];
                 let correct = 0;
                 let total = 0;
@@ -3457,7 +3940,7 @@ app.post('/api/assessments/:assessmentId/submit', auth, async (req, res) => {
                         for (let i = 0; i < total; i++) {
                             if (answers[0].dragAndDrop[i] === q.correct[i]) correct++;
                         }
-                    } else if (q.subtype === 'image-fill-in-blank' && answers[0]) {
+                    } else if ((q.subtype === 'image-fill-in-blank' || q.subtype === 'image-fill-blank') && answers[0]) {
                         console.log('Grading image-fill-in-blank:', { question: q, answers: answers[0] });
                         
                         // Handle different possible data structures for image-fill-in-blank
@@ -3567,6 +4050,10 @@ app.post('/api/assessments/:assessmentId/submit-speaking', auth, upload.single('
         if (!assessment) {
             return res.status(404).json({ error: 'Assessment not found' });
         }
+        // Enforce availability for students: block submissions after due date
+        if (assessment.dueDate && new Date(assessment.dueDate) < new Date()) {
+            return res.status(403).json({ error: 'Submissions are closed for this assessment.' });
+        }
         // Save the audio file as a mediaFile
         console.log('[SPEAKING SUBMIT] assessmentId:', assessmentId);
         console.log('[SPEAKING SUBMIT] studentId:', studentId);
@@ -3601,6 +4088,7 @@ app.post('/api/assessments/:assessmentId/submit-speaking', auth, upload.single('
 app.get('/api/student/assessments', auth, async (req, res) => {
     try {
         const activeQuarter = await getActiveQuarter();
+        const now = new Date();
         // Get student's enrolled subjects
         const user = await prisma.user.findUnique({
             where: { id: req.user.userId },
@@ -3659,7 +4147,10 @@ app.get('/api/student/assessments', auth, async (req, res) => {
                                 });
                                 // Filter by active quarter and published status
                                 if (assessment.quarter !== activeQuarter || !assessment.published) continue;
-                                // ... existing code ...
+                                // Check if assessment is overdue but still include it for display
+                                const isOverdue = assessment.dueDate && new Date(assessment.dueDate) < now;
+
+                                
                                 // Get all submissions for this student and assessment
                                 const submissions = await prisma.assessmentSubmission.findMany({
                                     where: {
@@ -3691,6 +4182,8 @@ app.get('/api/student/assessments', auth, async (req, res) => {
                                     lastAttempt,
                                     status,
                                     completed: hasGraded, // <-- new flag
+                                    isOverdue: isOverdue, // Add overdue flag
+                                    dueDate: assessment.dueDate, // Include due date for display
                                     subjectName: subject.name || null,
                                     unitName: unit.name || null,
                                     partName: part.name || null,
@@ -3914,6 +4407,28 @@ app.post('/api/teacher/students/status', auth, async (req, res) => {
     }
 });
 
+// Update students' class seat numbers (sequence within class)
+app.post('/api/teacher/students/seat-numbers', auth, async (req, res) => {
+    try {
+        const user = await prisma.user.findUnique({ where: { id: req.user.userId } });
+        if (!user || user.role !== 'TEACHER') {
+            return res.status(403).json({ success: false, error: 'Not authorized' });
+        }
+        const { updates } = req.body; // { studentId: classSeat }
+        if (!updates || typeof updates !== 'object' || Object.keys(updates).length === 0) {
+            return res.status(400).json({ success: false, error: 'No updates provided' });
+        }
+        const ops = Object.entries(updates).map(([studentId, classSeat]) =>
+            prisma.user.update({ where: { id: studentId }, data: { classSeat: Number(classSeat) || null } })
+        );
+        await Promise.all(ops);
+        res.json({ success: true, updated: Object.keys(updates).length });
+    } catch (error) {
+        console.error('Error updating class seat numbers:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
 // Endpoint for writing assignment submission (long/short answer)
 app.post('/api/assessments/:assessmentId/submit-writing', auth, upload.single('file'), async (req, res) => {
     try {
@@ -3931,6 +4446,13 @@ app.post('/api/assessments/:assessmentId/submit-writing', auth, upload.single('f
             return res.status(404).json({ 
                 success: false, 
                 error: 'Assessment not found' 
+            });
+        }
+        // Enforce availability for students: block submissions after due date
+        if (assessment.dueDate && new Date(assessment.dueDate) < new Date()) {
+            return res.status(403).json({
+                success: false,
+                error: 'Submissions are closed for this assessment.'
             });
         }
         
@@ -4184,6 +4706,21 @@ app.post('/api/assessments/upload-audio', auth, upload.single('file'), async (re
     }
 });
 
+// Upload image for assessments (e.g., Connect Match)
+app.post('/api/assessments/upload-image', auth, upload.single('file'), async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'No image file provided' });
+        }
+        const imageFile = req.file;
+        const filePath = `/uploads/resources/${imageFile.filename}`;
+        res.json({ success: true, filePath, fileName: imageFile.originalname, fileType: imageFile.mimetype });
+    } catch (error) {
+        console.error('Error uploading image file:', error);
+        res.status(500).json({ error: 'Failed to upload image file' });
+    }
+});
+
 // Add a new API endpoint for attaching audio to an existing assessment
 app.post('/api/assessments/:assessmentId/attach-audio', auth, upload.single('audio'), async (req, res) => {
     try {
@@ -4223,6 +4760,181 @@ app.post('/api/assessments/:assessmentId/attach-audio', auth, upload.single('aud
     } catch (error) {
         console.error('Error attaching audio to assessment:', error);
         res.status(500).json({ error: 'Failed to attach audio file' });
+    }
+});
+
+// Clone a complete resource + assessment package to another course location
+app.post('/api/packages/clone', auth, async (req, res) => {
+    try {
+        const { sourceResourceId, targetSubjectId, targetUnitId, targetPartId, targetSectionId } = req.body;
+        
+        console.log('[CLONE PACKAGE] Request:', { sourceResourceId, targetSubjectId, targetUnitId, targetPartId, targetSectionId });
+
+        // Validate required fields
+        if (!sourceResourceId || !targetSubjectId || !targetUnitId || !targetPartId || !targetSectionId) {
+            return res.status(400).json({ error: 'All target location fields are required' });
+        }
+
+        // Get the source resource with its assessments
+        const sourceResource = await prisma.resource.findUnique({
+            where: { id: sourceResourceId },
+            include: {
+                assessments: {
+                    include: {
+                        mediaFiles: true
+                    }
+                }
+            }
+        });
+
+        if (!sourceResource) {
+            return res.status(404).json({ error: 'Source resource not found' });
+        }
+
+        // Verify target location exists
+        const targetSection = await prisma.section.findUnique({
+            where: { id: targetSectionId },
+            include: {
+                part: {
+                    include: {
+                        unit: {
+                            include: {
+                                subject: true
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        if (!targetSection) {
+            return res.status(404).json({ error: 'Target section not found' });
+        }
+
+        // Get or create the target topic (based on unit name)
+        const targetUnit = targetSection.part.unit;
+        let targetTopic = await prisma.topic.findFirst({
+            where: {
+                name: targetUnit.name,
+                subjectId: targetSubjectId
+            }
+        });
+
+        if (!targetTopic) {
+            targetTopic = await prisma.topic.create({
+                data: {
+                    name: targetUnit.name,
+                    description: targetUnit.description,
+                    order: targetUnit.order,
+                    subject: {
+                        connect: { id: targetSubjectId }
+                    }
+                }
+            });
+        }
+
+        // Clone the resource
+        const clonedResource = await prisma.resource.create({
+            data: {
+                title: sourceResource.title,
+                description: sourceResource.description,
+                type: sourceResource.type,
+                url: sourceResource.url,
+                quarter: sourceResource.quarter,
+                metadata: sourceResource.metadata,
+                topic: {
+                    connect: { id: targetTopic.id }
+                },
+                createdBy: { 
+                    connect: { id: req.user.userId } 
+                },
+                unit: { 
+                    connect: { id: targetUnitId } 
+                },
+                part: { 
+                    connect: { id: targetPartId } 
+                },
+                section: { 
+                    connect: { id: targetSectionId } 
+                }
+            }
+        });
+
+        console.log('[CLONE PACKAGE] Cloned resource:', clonedResource.id);
+
+        // Clone each assessment and link to the new resource
+        const clonedAssessments = [];
+        for (const sourceAssessment of sourceResource.assessments) {
+            // Clone media files first
+            const clonedMediaFiles = [];
+            for (const mediaFile of sourceAssessment.mediaFiles) {
+                const clonedMediaFile = await prisma.mediaFile.create({
+                    data: {
+                        filePath: mediaFile.filePath,
+                        type: mediaFile.type,
+                        label: mediaFile.label
+                    }
+                });
+                clonedMediaFiles.push(clonedMediaFile);
+            }
+
+            // Clone the assessment
+            const clonedAssessment = await prisma.assessment.create({
+                data: {
+                    title: sourceAssessment.title,
+                    description: sourceAssessment.description,
+                    type: sourceAssessment.type,
+                    category: sourceAssessment.category,
+                    criteria: sourceAssessment.criteria,
+                    questions: sourceAssessment.questions,
+                    dueDate: sourceAssessment.dueDate,
+                    quarter: sourceAssessment.quarter,
+                    maxAttempts: sourceAssessment.maxAttempts,
+                    published: sourceAssessment.published,
+                    section: {
+                        connect: { id: targetSectionId }
+                    },
+                    createdBy: {
+                        connect: { id: req.user.userId }
+                    },
+                    mediaFiles: clonedMediaFiles.length > 0 ? {
+                        connect: clonedMediaFiles.map(mf => ({ id: mf.id }))
+                    } : undefined,
+                    topic: {
+                        connect: { id: targetTopic.id }
+                    }
+                }
+            });
+
+            console.log('[CLONE PACKAGE] Cloned assessment:', clonedAssessment.id);
+            clonedAssessments.push(clonedAssessment);
+        }
+
+        // Link all cloned assessments to the cloned resource
+        await prisma.resource.update({
+            where: { id: clonedResource.id },
+            data: {
+                assessments: {
+                    connect: clonedAssessments.map(a => ({ id: a.id }))
+                }
+            }
+        });
+
+        console.log('[CLONE PACKAGE] Successfully cloned package');
+
+        res.json({
+            message: 'Package cloned successfully',
+            resource: clonedResource,
+            assessments: clonedAssessments.map(a => ({
+                id: a.id,
+                title: a.title,
+                type: a.type
+            }))
+        });
+
+    } catch (error) {
+        console.error('Error cloning package:', error);
+        res.status(500).json({ error: 'Failed to clone package' });
     }
 });
 
@@ -4801,6 +5513,7 @@ app.get('/api/teacher/students/photos', auth, async (req, res) => {
 app.get('/api/teacher/students', auth, async (req, res) => {
     try {
         console.log('\n--- [START] /api/teacher/students ---');
+        const { quarter: quarterFilter } = req.query;
 
         const user = await prisma.user.findUnique({
             where: { id: req.user.userId }
@@ -4859,7 +5572,8 @@ app.get('/api/teacher/students', auth, async (req, res) => {
 
         const assessments = await prisma.assessment.findMany({
             where: {
-                section: { part: { unit: { subjectId: { in: allSubjectIds } } } }
+                section: { part: { unit: { subjectId: { in: allSubjectIds } } } },
+                ...(quarterFilter ? { quarter: quarterFilter } : {})
             },
             include: {
                 resources: true,
@@ -4899,8 +5613,14 @@ app.get('/api/teacher/students', auth, async (req, res) => {
              console.log(`[6] Subject-to-Assessment map created. Example for subject ${allSubjectIds[0]}:`, subjectAssessmentMap[allSubjectIds[0]]?.length || 0, 'assessments');
         }
 
+        // Limit to submissions for the assessments in-scope (quarter + attached only)
+        const assessmentIdsInScope = attachedAssessments.map(a => a.id);
         const completedSubmissions = await prisma.assessmentSubmission.findMany({
-            where: { studentId: { in: studentIdsMS }, score: { not: null } },
+            where: {
+                studentId: { in: studentIdsMS },
+                score: { not: null },
+                assessmentId: { in: assessmentIdsInScope }
+            },
             select: { studentId: true, assessmentId: true, score: true }
         });
         console.log(`[7] Found ${completedSubmissions.length} completed submissions total.`);

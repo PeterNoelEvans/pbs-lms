@@ -277,9 +277,29 @@
                     <div class="alert alert-info">
                         <i class="bi bi-info-circle"></i> You can select multiple assessments to link to this resource. Hold Ctrl/Cmd to select multiple items.
                     </div>
-                    <div class="mb-3">
-                        <label for="assessmentSearch" class="form-label">Search Assessments</label>
-                        <input type="text" class="form-control" id="assessmentSearch" placeholder="Type to search...">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label for="assessmentSearch" class="form-label">Search Assessments</label>
+                            <input type="text" class="form-control" id="assessmentSearch" placeholder="Type to search...">
+                        </div>
+                        <div class="col-md-3">
+                            <label for="assessmentQuarterFilter" class="form-label">Quarter</label>
+                            <select id="assessmentQuarterFilter" class="form-select">
+                                <option value="">All</option>
+                                <option value="Q1">Q1</option>
+                                <option value="Q2">Q2</option>
+                                <option value="Q3">Q3</option>
+                                <option value="Q4">Q4</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label for="assessmentAttachmentFilter" class="form-label">Status</label>
+                            <select id="assessmentAttachmentFilter" class="form-select">
+                                <option value="">All</option>
+                                <option value="unattached" selected>Only Unattached</option>
+                                <option value="attached">Only Attached</option>
+                            </select>
+                        </div>
                     </div>
                     <div class="table-responsive">
                         <table class="table table-hover">
@@ -698,7 +718,20 @@
             try {
                 console.log('Fetching subject assessments...');
                 // Load assessments for the current subject only
-                const assessmentsResponse = await fetch(`/api/subjects/${currentSubjectId}/assessments`, {
+                // Fetch active quarter
+                const aqRes = await fetch('/api/config/active-quarter', { headers: { 'Authorization': `Bearer ${token}` } });
+                let activeQuarter = 'Q1';
+                if (aqRes.ok) { const data = await aqRes.json(); activeQuarter = data.activeQuarter || 'Q1'; }
+                
+                // Set default filters
+                document.getElementById('assessmentQuarterFilter').value = activeQuarter;
+
+                const quarter = document.getElementById('assessmentQuarterFilter').value;
+                const attachment = document.getElementById('assessmentAttachmentFilter').value;
+
+                const listUrl = `/api/subjects/${currentSubjectId}/assessments?${quarter ? `quarter=${encodeURIComponent(quarter)}&` : ''}${attachment ? `attachment=${encodeURIComponent(attachment)}` : ''}`.replace(/[&?]$/, '');
+
+                const assessmentsResponse = await fetch(listUrl, {
                     headers: {
                         'Authorization': `Bearer ${token}`
                     }
@@ -734,8 +767,10 @@
                     </tr>
                 `).join('');
 
-                // Add search functionality
+                // Wire up filters and search functionality
                 const searchInput = document.getElementById('assessmentSearch');
+                const quarterSelect = document.getElementById('assessmentQuarterFilter');
+                const attachmentSelect = document.getElementById('assessmentAttachmentFilter');
                 searchInput.addEventListener('input', function(e) {
                     const searchTerm = e.target.value.toLowerCase();
                     const rows = tbody.getElementsByTagName('tr');
@@ -749,6 +784,30 @@
                         row.style.display = matches ? '' : 'none';
                     }
                 });
+
+                async function reloadAssessmentList() {
+                    const q = document.getElementById('assessmentQuarterFilter').value;
+                    const a = document.getElementById('assessmentAttachmentFilter').value;
+                    const url = `/api/subjects/${currentSubjectId}/assessments?${q ? `quarter=${encodeURIComponent(q)}&` : ''}${a ? `attachment=${encodeURIComponent(a)}` : ''}`.replace(/[&?]$/, '');
+                    const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+                    const list = await res.json();
+                    const linkedIdsReload = new Set(linkedAssessments.map(x => x.id));
+                    tbody.innerHTML = list.map(assessment => `
+                        <tr>
+                            <td>
+                                <input type="checkbox" class="form-check-input assessment-checkbox" 
+                                       value="${assessment.id}" 
+                                       ${linkedIdsReload.has(assessment.id) ? 'checked' : ''}>
+                            </td>
+                            <td>${assessment.title}</td>
+                            <td><span class="badge bg-secondary">${assessment.type}</span></td>
+                            <td>${assessment.category || 'N/A'}</td>
+                        </tr>
+                    `).join('');
+                }
+
+                quarterSelect.addEventListener('change', reloadAssessmentList);
+                attachmentSelect.addEventListener('change', reloadAssessmentList);
 
                 console.log('Showing modal...');
                 linkAssessmentsModal.show();

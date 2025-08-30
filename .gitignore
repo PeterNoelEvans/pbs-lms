@@ -17,6 +17,8 @@ yarn-error.log*
 *.sqlite
 *.sqlite3
 !/data/.gitkeep
+/prisma/dev.db
+/prisma/test-restore.db
 
 # Editor directories and files
 .idea/
@@ -35,16 +37,19 @@ ehthumbs.db
 Thumbs.db
 
 # Logs
-logs
+logs/
 *.log
 
-# Backup files
+# Backup files and directories
 *.backup
 *-backup*
+/backups/
+backup-*
 
 # Temporary files
 *.tmp
 /temp
+/mkdir
 
 # Runtime data
 pids
@@ -52,9 +57,68 @@ pids
 *.seed
 *.pid.lock
 
-# Sensitive data
+# Sensitive data and passwords
 PBS_passwords.txt
 Phumdham-pswds.txt
+/passwords
+cookies.txt
+
+# User uploads and media files
+/uploads/resources/
+/uploads/thumbnails/
+*.mp3
+*.mp4
+*.webm
+*.m4a
+*.heic
+*.jpeg
+*.jpg
+*.png
+*.gif
+*.bmp
+*.tiff
+*.webp
+# Keep example files and scripts in uploads/
+!/uploads/*.py
+!/uploads/*.md
+!/uploads/course-docs/
 
 # Project specific
 portfolios/data temp/
+
+# Build and distribution
+/dist/
+/build/
+
+# Cache
+.cache/
+*.cache
+
+# Lock files (keep package-lock.json for consistency)
+# yarn.lock
+
+# Local configuration
+/config/local.js
+
+# Testing
+/coverage/
+.nyc_output/
+
+# Development tools
+.cursor/
+.vscode/
+
+# Scripts that might contain sensitive data
+startup-script.ps1
+*.bat
+!/backup-ignored-files.bat
+!/restore-backup.bat
+!/start.bat
+!/start2.bat
+!/setup-auto-start.bat
+
+# Exclude sensitive root level files
+/admin.html
+/dashboard.html
+/schools.html
+/topics.html

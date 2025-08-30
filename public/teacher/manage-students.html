@@ -96,6 +96,7 @@
                             <table class="table table-hover align-middle" id="studentsTable">
                                 <thead class="table-light">
                                     <tr>
+                                        <th style="width:90px;">Seat #</th>
                                         <th id="sortName" style="cursor:pointer;">Name <span id="sortNameArrow" class="small"></span></th>
                                         <th id="sortNickname" style="cursor:pointer;">Nickname <span id="sortNicknameArrow" class="small"></span></th>
                                         <th>Email</th>
@@ -227,6 +228,9 @@
             const progressWidth = progressPercent !== 'N/A' ? progressPercent : 0;
 
             tr.innerHTML = `
+                <td style="width:90px;">
+                    <input type="number" min="1" max="60" class="form-control form-control-sm seat-input" value="${student.classSeat ?? ''}" data-student-id="${student.id}" placeholder="#">
+                </td>
                 <td>
                     <img src="${student.profilePicture || '/images/default-avatar.png'}" class="rounded-circle me-2" alt="Photo" width="32" height="32" style="object-fit: cover;">
                     ${student.name}
@@ -267,6 +271,42 @@
            saveBtn.classList.add('btn-warning');
            saveBtn.innerHTML = '<i class="bi bi-exclamation-triangle-fill me-2"></i>Save Changes';
        }
+    }
+
+    // Save changes (status + seat numbers)
+    async function saveChanges() {
+        // Collect seat number updates
+        const seatInputs = document.querySelectorAll('.seat-input');
+        const updates = {};
+        seatInputs.forEach(inp => {
+            const val = inp.value.trim();
+            if (val !== '') updates[inp.dataset.studentId] = parseInt(val, 10);
+        });
+
+        // Update seat numbers first
+        if (Object.keys(updates).length > 0) {
+            await fetch('/api/teacher/students/seat-numbers', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ updates })
+            });
+        }
+
+        // Update active statuses if any toggled
+        if (Object.keys(changed).length > 0) {
+            await fetch('/api/teacher/students/status', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ changes: changed })
+            });
+            changed = {};
+        }
+
+        const saveBtn = document.getElementById('saveBtn');
+        saveBtn.classList.remove('btn-warning');
+        saveBtn.classList.add('btn-success');
+        saveBtn.innerHTML = '<i class="bi bi-check-circle-fill me-2"></i>Saved';
+        await loadAllStudents();
     }
     
     async function saveChanges() {
