@@ -1480,6 +1480,7 @@
                             <p class="card-text small">
                                 Questions: ${assessment.questions.length}
                             </p>
+                            ${getDueDateDisplay(assessment)}
                             <div class="btn-group">
                                 <button class="btn btn-sm btn-secondary" onclick="openAssessmentView('${assessment.id}')">
                                     <i class="bi bi-eye"></i> View
@@ -1501,6 +1502,62 @@
                 console.error('Error loading assessments:', error);
                 alert('Failed to load existing assessments');
             }
+        }
+
+        // Function to display due date information for assessments
+        function getDueDateDisplay(assessment) {
+            if (!assessment.dueDate) {
+                return '<p class="card-text small text-muted"><i class="bi bi-calendar-x"></i> No due date set</p>';
+            }
+            
+            const dueDate = new Date(assessment.dueDate);
+            const now = new Date();
+            const isOverdue = dueDate < now;
+            const daysUntilDue = Math.ceil((dueDate - now) / (1000 * 60 * 60 * 24));
+            
+            // Format the date nicely
+            const formattedDate = dueDate.toLocaleDateString('en-US', {
+                weekday: 'short',
+                month: 'short', 
+                day: 'numeric',
+                year: dueDate.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
+            });
+            
+            const formattedTime = dueDate.toLocaleTimeString('en-US', {
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true
+            });
+            
+            // Determine the styling based on urgency
+            let badgeClass = '';
+            let iconClass = '';
+            let urgencyText = '';
+            
+            if (isOverdue) {
+                badgeClass = 'text-danger';
+                iconClass = 'bi-exclamation-triangle-fill';
+                urgencyText = ` (${Math.abs(daysUntilDue)} day${Math.abs(daysUntilDue) !== 1 ? 's' : ''} overdue!)`;
+            } else if (daysUntilDue <= 1) {
+                badgeClass = 'text-warning';
+                iconClass = 'bi-clock-fill';
+                urgencyText = daysUntilDue === 0 ? ' (Due today!)' : ' (Due tomorrow!)';
+            } else if (daysUntilDue <= 3) {
+                badgeClass = 'text-info';
+                iconClass = 'bi-clock';
+                urgencyText = ` (${daysUntilDue} days)`;
+            } else {
+                badgeClass = 'text-muted';
+                iconClass = 'bi-calendar-event';
+                urgencyText = ` (${daysUntilDue} days)`;
+            }
+            
+            return `
+                <p class="card-text small ${badgeClass}">
+                    <i class="bi ${iconClass}"></i> 
+                    <strong>Due:</strong> ${formattedDate} at ${formattedTime}${urgencyText}
+                </p>
+            `;
         }
 
         // Helper to format assessment type nicely for the badge

@@ -213,6 +213,35 @@
             color: #155724 !important;
             border-color: #b6e2c6 !important;
         }
+        
+        /* Compact alert styles for due date notifications */
+        .alert-sm {
+            font-size: 0.85rem;
+            padding: 0.375rem 0.75rem !important;
+            margin-bottom: 0.5rem !important;
+        }
+        
+        /* Due date badge styling */
+        .badge {
+            font-size: 0.75rem;
+        }
+        
+        /* Make cards with overdue items stand out more */
+        .card:has(.bg-danger) {
+            border-color: #dc3545 !important;
+            border-width: 2px !important;
+        }
+        
+        /* Make cards with urgent items slightly emphasized */  
+        .card:has(.bg-warning) {
+            border-color: #ffc107 !important;
+            border-width: 1.5px !important;
+        }
+        
+        /* Ensure badges are visible and well-spaced */
+        .badge + .badge {
+            margin-left: 0.25rem;
+        }
     </style>
 </head>
 <body class="bg-light">
@@ -362,15 +391,20 @@
         }
 
         function renderResourceCard(resource, assessmentButtonsHtml, cardClass = '', progressLabel = '') {
+            // Calculate due date information for assessments
+            const dueDateInfo = getResourceDueDateInfo(resource);
+            
             return `
             <div class="col-12 col-sm-6 col-md-4 col-lg-3">
               <div class="card resource-card h-100 ${cardClass}">
                 <div class="card-body">
                   <div class="card-title fw-bold">${resource.title || ''} ${progressLabel}</div>
-                  <div class="mb-1 d-flex gap-1">
+                  <div class="mb-1 d-flex gap-1 flex-wrap">
                     <span class="badge bg-light text-dark">${resource.type || ''}</span>
                     <span class="badge bg-info">${resource.quarter || 'Q1'}</span>
+                    ${dueDateInfo.badge}
                   </div>
+                  ${dueDateInfo.alertHtml}
                   <div class="card-text">${resource.description || ''}</div>
                   <div class="project-name text-muted">${resource.project || ''}</div>
                     </div>
@@ -385,6 +419,91 @@
             `;
         }
 
+        // Function to calculate due date information for a resource
+        function getResourceDueDateInfo(resource) {
+            if (!resource.assessments || resource.assessments.length === 0) {
+                return { badge: '', alertHtml: '' };
+            }
+            
+            const now = new Date();
+            let earliestDueDate = null;
+            let hasOverdue = false;
+            let urgentCount = 0;
+            let dueDates = [];
+            
+            // Analyze all assessments linked to this resource
+            for (const assessment of resource.assessments) {
+                if (assessment.dueDate) {
+                    const dueDate = new Date(assessment.dueDate);
+                    dueDates.push({
+                        date: dueDate,
+                        title: assessment.title,
+                        isOverdue: dueDate < now
+                    });
+                    
+                    if (!earliestDueDate || dueDate < earliestDueDate) {
+                        earliestDueDate = dueDate;
+                    }
+                    
+                    if (dueDate < now) {
+                        hasOverdue = true;
+                    } else {
+                        // Check if due within 3 days (urgent)
+                        const threeDaysFromNow = new Date();
+                        threeDaysFromNow.setDate(now.getDate() + 3);
+                        if (dueDate <= threeDaysFromNow) {
+                            urgentCount++;
+                        }
+                    }
+                }
+            }
+            
+            // No due dates found
+            if (!earliestDueDate) {
+                return { badge: '', alertHtml: '' };
+            }
+            
+            // Generate badge and alert based on urgency
+            let badge = '';
+            let alertHtml = '';
+            
+            if (hasOverdue) {
+                badge = '<span class="badge bg-danger"><i class="bi bi-exclamation-triangle-fill"></i> OVERDUE</span>';
+                const overdueCount = dueDates.filter(d => d.isOverdue).length;
+                alertHtml = `<div class="alert alert-danger alert-sm p-2 mb-2">
+                    <small><i class="bi bi-clock-history"></i> ${overdueCount} assessment${overdueCount > 1 ? 's' : ''} overdue!</small>
+                </div>`;
+            } else if (urgentCount > 0) {
+                badge = '<span class="badge bg-warning text-dark"><i class="bi bi-clock"></i> DUE SOON</span>';
+                const daysUntilDue = Math.ceil((earliestDueDate - now) / (1000 * 60 * 60 * 24));
+                alertHtml = `<div class="alert alert-warning alert-sm p-2 mb-2">
+                    <small><i class="bi bi-clock"></i> Due in ${daysUntilDue} day${daysUntilDue > 1 ? 's' : ''} (${formatDate(earliestDueDate)})</small>
+                </div>`;
+            } else {
+                // Show next due date if within 2 weeks
+                const twoWeeksFromNow = new Date();
+                twoWeeksFromNow.setDate(now.getDate() + 14);
+                if (earliestDueDate <= twoWeeksFromNow) {
+                    const daysUntilDue = Math.ceil((earliestDueDate - now) / (1000 * 60 * 60 * 24));
+                    badge = '<span class="badge bg-success"><i class="bi bi-calendar-check"></i> UPCOMING</span>';
+                    alertHtml = `<div class="alert alert-info alert-sm p-2 mb-2">
+                        <small><i class="bi bi-calendar3"></i> Due ${formatDate(earliestDueDate)} (${daysUntilDue} days)</small>
+                    </div>`;
+                }
+            }
+            
+            return { badge, alertHtml };
+        }
+        
+        // Helper function to format dates nicely
+        function formatDate(date) {
+            return date.toLocaleDateString('en-US', { 
+                month: 'short', 
+                day: 'numeric',
+                weekday: 'short'
+            });
+        }
+        
         // logout() function is now provided by logout.js utility
     </script>
 </body>

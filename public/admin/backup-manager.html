@@ -356,14 +356,44 @@
             const dbBackups = currentBackups.filter(b => b.type === 'database').length;
             const completeBackups = currentBackups.filter(b => b.type === 'complete').length;
             const totalSize = currentBackups.reduce((sum, backup) => sum + (backup.size || 0), 0);
-            const lastBackup = currentBackups.length > 0 ? 
-                Math.max(...currentBackups.map(b => new Date(b.created).getTime())) : null;
+            
+            // Find the most recent backup with better error handling
+            let lastBackup = null;
+            let mostRecentDate = null;
+            
+            if (currentBackups.length > 0) {
+                try {
+                    const validDates = currentBackups
+                        .map(b => ({ backup: b, date: new Date(b.created) }))
+                        .filter(item => !isNaN(item.date.getTime()));
+                    
+                    if (validDates.length > 0) {
+                        const latest = validDates.reduce((latest, current) => 
+                            current.date > latest.date ? current : latest
+                        );
+                        lastBackup = latest.date.getTime();
+                        mostRecentDate = latest.date;
+                    }
+                } catch (error) {
+                    console.error('Error calculating last backup time:', error);
+                }
+            }
 
             document.getElementById('dbBackupCount').textContent = dbBackups;
             document.getElementById('completeBackupCount').textContent = completeBackups;
             document.getElementById('totalStorage').textContent = formatBytes(totalSize);
-            document.getElementById('lastBackup').textContent = lastBackup ? 
-                formatRelativeTime(new Date(lastBackup)) : 'Never';
+            
+            const lastBackupElement = document.getElementById('lastBackup');
+            if (lastBackup) {
+                const timeText = formatRelativeTime(new Date(lastBackup));
+                lastBackupElement.textContent = timeText;
+                lastBackupElement.title = `Last backup: ${mostRecentDate.toLocaleString()}`;
+                lastBackupElement.style.color = '';
+            } else {
+                lastBackupElement.textContent = 'Never';
+                lastBackupElement.title = '';
+                lastBackupElement.style.color = '';
+            }
         }
 
         async function createDatabaseBackup() {
@@ -514,13 +544,31 @@
         function formatRelativeTime(date) {
             const now = new Date();
             const diff = now - date;
+            
+            // Handle invalid dates
+            if (isNaN(date.getTime())) {
+                return 'Invalid date';
+            }
+            
+            // Handle future dates (shouldn't happen, but just in case)
+            if (diff < 0) {
+                return 'Just created';
+            }
+            
+            // Calculate time units
+            const seconds = Math.floor(diff / 1000);
             const minutes = Math.floor(diff / 60000);
             const hours = Math.floor(diff / 3600000);
             const days = Math.floor(diff / 86400000);
 
+            // Return appropriate format
+            if (seconds < 30) return 'Just now';
+            if (minutes < 1) return `${seconds}s ago`;
             if (minutes < 60) return `${minutes}m ago`;
             if (hours < 24) return `${hours}h ago`;
-            return `${days}d ago`;
+            if (days < 30) return `${days}d ago`;
+            if (days < 365) return `${Math.floor(days/30)}mo ago`;
+            return `${Math.floor(days/365)}y ago`;
         }
 
         function showNotification(type, message) {

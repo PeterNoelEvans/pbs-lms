@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quarterly Reports - Teacher Portal</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { background: #f8f9fa; }
+        .quarter-card { 
+            border-left: 4px solid #007bff; 
+            transition: all 0.3s ease;
+        }
+        .quarter-card:hover { 
+            box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15); 
+            transform: translateY(-2px);
+        }
+        .quarter-card.q1 { border-left-color: #28a745; }
+        .quarter-card.q2 { border-left-color: #17a2b8; }
+        .quarter-card.q3 { border-left-color: #ffc107; }
+        .quarter-card.q4 { border-left-color: #dc3545; }
+        .stats-grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); 
+            gap: 1rem; 
+            margin-bottom: 2rem;
+        }
+        .stat-card {
+            background: white;
+            border-radius: 8px;
+            padding: 1.5rem;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .stat-number {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #007bff;
+        }
+        .comparison-section {
+            background: white;
+            border-radius: 8px;
+            padding: 2rem;
+            margin: 2rem 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .progress-table th, .progress-table td { 
+            vertical-align: middle; 
+            text-align: center;
+        }
+        .quarter-selector {
+            position: sticky;
+            top: 0;
+            background: white;
+            z-index: 100;
+            border-bottom: 1px solid #dee2e6;
+            padding: 1rem 0;
+            margin-bottom: 2rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid mt-3">
+        <!-- Header -->
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1 class="mb-0"><i class="bi bi-graph-up"></i> Quarterly Reports</h1>
+            <a href="/teacher/dashboard.html" class="btn btn-outline-primary">
+                <i class="bi bi-arrow-left"></i> Back to Dashboard
+            </a>
+        </div>
+
+        <!-- Quarter Selector -->
+        <div class="quarter-selector">
+            <div class="row">
+                <div class="col-md-6">
+                    <label for="quarterCompare" class="form-label"><strong>Compare Quarters:</strong></label>
+                    <div class="btn-group" role="group" id="quarterTabs">
+                        <input type="radio" class="btn-check" name="quarterMode" id="q1q2" value="q1q2" checked>
+                        <label class="btn btn-outline-primary" for="q1q2">Q1 vs Q2</label>
+                        
+                        <input type="radio" class="btn-check" name="quarterMode" id="q3q4" value="q3q4">
+                        <label class="btn btn-outline-primary" for="q3q4">Q3 vs Q4</label>
+                        
+                        <input type="radio" class="btn-check" name="quarterMode" id="allQuarters" value="all">
+                        <label class="btn btn-outline-primary" for="allQuarters">All Quarters</label>
+                        
+                        <input type="radio" class="btn-check" name="quarterMode" id="singleQuarter" value="single">
+                        <label class="btn btn-outline-primary" for="singleQuarter">Single Quarter</label>
+                    </div>
+                </div>
+                <div class="col-md-3" id="singleQuarterSelect" style="display: none;">
+                    <label class="form-label"><strong>Select Quarter:</strong></label>
+                    <select id="quarterSelect" class="form-select">
+                        <option value="Q1">Q1</option>
+                        <option value="Q2">Q2</option>
+                        <option value="Q3">Q3</option>
+                        <option value="Q4">Q4</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label"><strong>Class Filter:</strong></label>
+                    <select id="classSelect" class="form-select">
+                        <option value="">All Classes</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading indicator -->
+        <div id="loadingIndicator" class="text-center my-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2">Loading quarterly data...</p>
+        </div>
+
+        <!-- Quarterly Overview Cards -->
+        <div id="quarterlyOverview" class="row mb-4" style="display: none;">
+            <!-- Q1 Card -->
+            <div class="col-md-6 mb-3" id="q1Card">
+                <div class="card quarter-card q1">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0"><i class="bi bi-1-square"></i> First Quarter (Q1)</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="stats-grid">
+                            <div class="stat-card">
+                                <div class="stat-number" id="q1Students">0</div>
+                                <div class="text-muted">Active Students</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number" id="q1Assessments">0</div>
+                                <div class="text-muted">Assessments</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number" id="q1AvgScore">0%</div>
+                                <div class="text-muted">Avg Score</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number" id="q1Completion">0%</div>
+                                <div class="text-muted">Completion Rate</div>
+                            </div>
+                        </div>
+                        <canvas id="q1Chart" width="400" height="200"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Q2 Card -->
+            <div class="col-md-6 mb-3" id="q2Card">
+                <div class="card quarter-card q2">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0"><i class="bi bi-2-square"></i> Second Quarter (Q2)</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="stats-grid">
+                            <div class="stat-card">
+                                <div class="stat-number" id="q2Students">0</div>
+                                <div class="text-muted">Active Students</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number" id="q2Assessments">0</div>
+                                <div class="text-muted">Assessments</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number" id="q2AvgScore">0%</div>
+                                <div class="text-muted">Avg Score</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-number" id="q2Completion">0%</div>
+                                <div class="text-muted">Completion Rate</div>
+                            </div>
+                        </div>
+                        <canvas id="q2Chart" width="400" height="200"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quarter Comparison Section -->
+        <div id="comparisonSection" class="comparison-section" style="display: none;">
+            <h3><i class="bi bi-bar-chart"></i> Quarter Comparison Analysis</h3>
+            <div class="row">
+                <div class="col-md-8">
+                    <canvas id="comparisonChart" width="600" height="300"></canvas>
+                </div>
+                <div class="col-md-4">
+                    <div class="card">
+                        <div class="card-header"><strong>Key Insights</strong></div>
+                        <div class="card-body" id="insightsContent">
+                            <div class="text-muted">Loading insights...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Detailed Progress Table -->
+        <div id="progressTable" class="card" style="display: none;">
+            <div class="card-header">
+                <h5><i class="bi bi-table"></i> Detailed Progress Report</h5>
+                <div class="float-end">
+                    <button id="exportBtn" class="btn btn-success btn-sm">
+                        <i class="bi bi-download"></i> Export to Excel
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped progress-table">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Student</th>
+                                <th>Class</th>
+                                <th>Q1 Assessments</th>
+                                <th>Q1 Avg Score</th>
+                                <th>Q1 Progress</th>
+                                <th>Q2 Assessments</th>
+                                <th>Q2 Avg Score</th>
+                                <th>Q2 Progress</th>
+                                <th>Overall Trend</th>
+                            </tr>
+                        </thead>
+                        <tbody id="progressTableBody">
+                            <!-- Data will be populated by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let quarterlyData = {};
+        let currentMode = 'q1q2';
+        let currentClass = '';
+
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {
+            loadClasses();
+            setupEventListeners();
+            loadQuarterlyData();
+        });
+
+        function setupEventListeners() {
+            // Quarter mode change
+            document.querySelectorAll('input[name="quarterMode"]').forEach(radio => {
+                radio.addEventListener('change', function() {
+                    currentMode = this.value;
+                    toggleSingleQuarterSelect();
+                    loadQuarterlyData();
+                });
+            });
+
+            // Class filter change
+            document.getElementById('classSelect').addEventListener('change', function() {
+                currentClass = this.value;
+                loadQuarterlyData();
+            });
+
+            // Single quarter select
+            document.getElementById('quarterSelect').addEventListener('change', function() {
+                if (currentMode === 'single') {
+                    loadQuarterlyData();
+                }
+            });
+
+            // Export button
+            document.getElementById('exportBtn').addEventListener('click', exportToExcel);
+        }
+
+        function toggleSingleQuarterSelect() {
+            const singleSelect = document.getElementById('singleQuarterSelect');
+            singleSelect.style.display = currentMode === 'single' ? 'block' : 'none';
+        }
+
+        async function loadClasses() {
+            try {
+                const response = await fetch('/api/teacher/classes', {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                const data = await response.json();
+                
+                const classSelect = document.getElementById('classSelect');
+                data.classes.forEach(className => {
+                    const option = document.createElement('option');
+                    option.value = className;
+                    option.textContent = className;
+                    classSelect.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading classes:', error);
+            }
+        }
+
+        async function loadQuarterlyData() {
+            showLoading(true);
+            
+            try {
+                let quarters = [];
+                
+                switch(currentMode) {
+                    case 'q1q2':
+                        quarters = ['Q1', 'Q2'];
+                        break;
+                    case 'q3q4':
+                        quarters = ['Q3', 'Q4'];
+                        break;
+                    case 'all':
+                        quarters = ['Q1', 'Q2', 'Q3', 'Q4'];
+                        break;
+                    case 'single':
+                        quarters = [document.getElementById('quarterSelect').value];
+                        break;
+                }
+
+                quarterlyData = {};
+                
+                for (const quarter of quarters) {
+                    const url = `/api/teacher/quarter-report?quarter=${quarter}${currentClass ? '&class=' + currentClass : ''}`;
+                    const response = await fetch(url, {
+                        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                    });
+                    const data = await response.json();
+                    quarterlyData[quarter] = data;
+                }
+
+                renderQuarterlyView();
+                showLoading(false);
+                
+            } catch (error) {
+                console.error('Error loading quarterly data:', error);
+                showLoading(false);
+                showError('Failed to load quarterly data. Please try again.');
+            }
+        }
+
+        function renderQuarterlyView() {
+            // Show/hide cards based on mode
+            if (currentMode === 'q1q2' || currentMode === 'all') {
+                document.getElementById('q1Card').style.display = 'block';
+                document.getElementById('q2Card').style.display = 'block';
+                updateQuarterCard('Q1', quarterlyData.Q1);
+                updateQuarterCard('Q2', quarterlyData.Q2);
+            } else {
+                document.getElementById('q1Card').style.display = 'none';
+                document.getElementById('q2Card').style.display = 'none';
+            }
+
+            // Update comparison section
+            renderComparisonChart();
+            generateInsights();
+            renderProgressTable();
+
+            // Show content
+            document.getElementById('quarterlyOverview').style.display = 'block';
+            document.getElementById('comparisonSection').style.display = 'block';
+            document.getElementById('progressTable').style.display = 'block';
+        }
+
+        function updateQuarterCard(quarter, data) {
+            if (!data) return;
+
+            const prefix = quarter.toLowerCase();
+            const students = data.students ? data.students.length : 0;
+            const assessments = data.assessments ? data.assessments.length : 0;
+            const avgScore = data.averageScore || 0;
+            const completion = data.completionRate || 0;
+
+            document.getElementById(prefix + 'Students').textContent = students;
+            document.getElementById(prefix + 'Assessments').textContent = assessments;
+            document.getElementById(prefix + 'AvgScore').textContent = Math.round(avgScore) + '%';
+            document.getElementById(prefix + 'Completion').textContent = Math.round(completion) + '%';
+
+            // Create mini chart for the quarter
+            createQuarterChart(prefix + 'Chart', data);
+        }
+
+        function createQuarterChart(canvasId, data) {
+            const canvas = document.getElementById(canvasId);
+            const ctx = canvas.getContext('2d');
+
+            // Clear any existing chart
+            if (canvas.chart) {
+                canvas.chart.destroy();
+            }
+
+            const assessmentTitles = data.assessments ? data.assessments.map(a => a.title || 'Assessment').slice(0, 5) : [];
+            const scores = data.assessments ? data.assessments.map(a => a.averageScore || 0).slice(0, 5) : [];
+
+            canvas.chart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: assessmentTitles,
+                    datasets: [{
+                        label: 'Average Score',
+                        data: scores,
+                        backgroundColor: 'rgba(54, 162, 235, 0.6)',
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: {
+                                callback: function(value) {
+                                    return value + '%';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderComparisonChart() {
+            const canvas = document.getElementById('comparisonChart');
+            const ctx = canvas.getContext('2d');
+
+            // Clear existing chart
+            if (canvas.chart) {
+                canvas.chart.destroy();
+            }
+
+            const quarters = Object.keys(quarterlyData);
+            const avgScores = quarters.map(q => quarterlyData[q]?.averageScore || 0);
+            const completionRates = quarters.map(q => quarterlyData[q]?.completionRate || 0);
+
+            canvas.chart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: quarters,
+                    datasets: [
+                        {
+                            label: 'Average Score (%)',
+                            data: avgScores,
+                            backgroundColor: 'rgba(75, 192, 192, 0.6)',
+                            borderColor: 'rgba(75, 192, 192, 1)',
+                            borderWidth: 1
+                        },
+                        {
+                            label: 'Completion Rate (%)',
+                            data: completionRates,
+                            backgroundColor: 'rgba(255, 206, 86, 0.6)',
+                            borderColor: 'rgba(255, 206, 86, 1)',
+                            borderWidth: 1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            ticks: {
+                                callback: function(value) {
+                                    return value + '%';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function generateInsights() {
+            const insightsContent = document.getElementById('insightsContent');
+            const quarters = Object.keys(quarterlyData);
+            
+            if (quarters.length < 2) {
+                insightsContent.innerHTML = '<div class="text-muted">Need at least 2 quarters for comparison insights.</div>';
+                return;
+            }
+
+            let insights = [];
+
+            // Compare Q1 vs Q2 if available
+            if (quarterlyData.Q1 && quarterlyData.Q2) {
+                const q1Score = quarterlyData.Q1.averageScore || 0;
+                const q2Score = quarterlyData.Q2.averageScore || 0;
+                const scoreDiff = q2Score - q1Score;
+
+                if (scoreDiff > 5) {
+                    insights.push(`<div class="alert alert-success alert-sm"><i class="bi bi-trending-up"></i> <strong>Improvement:</strong> Q2 scores are ${Math.round(scoreDiff)}% higher than Q1</div>`);
+                } else if (scoreDiff < -5) {
+                    insights.push(`<div class="alert alert-warning alert-sm"><i class="bi bi-trending-down"></i> <strong>Decline:</strong> Q2 scores are ${Math.round(Math.abs(scoreDiff))}% lower than Q1</div>`);
+                } else {
+                    insights.push(`<div class="alert alert-info alert-sm"><i class="bi bi-arrow-right"></i> <strong>Stable:</strong> Q1 and Q2 performance is consistent</div>`);
+                }
+
+                const q1Completion = quarterlyData.Q1.completionRate || 0;
+                const q2Completion = quarterlyData.Q2.completionRate || 0;
+                const completionDiff = q2Completion - q1Completion;
+
+                if (completionDiff > 10) {
+                    insights.push(`<div class="alert alert-success alert-sm"><i class="bi bi-check-circle"></i> <strong>Engagement Up:</strong> Q2 completion rate improved by ${Math.round(completionDiff)}%</div>`);
+                } else if (completionDiff < -10) {
+                    insights.push(`<div class="alert alert-warning alert-sm"><i class="bi bi-exclamation-triangle"></i> <strong>Engagement Down:</strong> Q2 completion rate dropped by ${Math.round(Math.abs(completionDiff))}%</div>`);
+                }
+            }
+
+            if (insights.length === 0) {
+                insights.push('<div class="text-muted">No significant trends detected.</div>');
+            }
+
+            insightsContent.innerHTML = insights.join('');
+        }
+
+        function renderProgressTable() {
+            const tbody = document.getElementById('progressTableBody');
+            tbody.innerHTML = '';
+
+            // This would need student-level data aggregation
+            // For now, show a message
+            tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">Detailed student progress table would be implemented with student-level quarter data aggregation.</td></tr>';
+        }
+
+        function exportToExcel() {
+            // Implementation for Excel export
+            alert('Excel export would be implemented here with quarterly data');
+        }
+
+        function showLoading(show) {
+            document.getElementById('loadingIndicator').style.display = show ? 'block' : 'none';
+            document.getElementById('quarterlyOverview').style.display = show ? 'none' : 'block';
+            document.getElementById('comparisonSection').style.display = show ? 'none' : 'block';
+            document.getElementById('progressTable').style.display = show ? 'none' : 'block';
+        }
+
+        function showError(message) {
+            const container = document.querySelector('.container-fluid');
+            const alert = document.createElement('div');
+            alert.className = 'alert alert-danger alert-dismissible fade show';
+            alert.innerHTML = `
+                <strong>Error!</strong> ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            container.insertBefore(alert, container.firstChild);
+        }
+    </script>
+</body>
+</html>

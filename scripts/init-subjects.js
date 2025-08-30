@@ -99,7 +99,7 @@ async function initializeSubjects() {
             }
         ]) {
             // Find existing unit
-            let existingUnit = await prisma.unit.findFirst({
+            const existingUnit = await prisma.unit.findFirst({
                 where: {
                     subjectId: englishSubject.id,
                     name: unit.name
@@ -129,7 +129,7 @@ async function initializeSubjects() {
             // Create parts for the unit
             for (const part of unit.parts) {
                 // Find existing part
-                let existingPart = await prisma.part.findFirst({
+                const existingPart = await prisma.part.findFirst({
                     where: {
                         unitId: createdUnit.id,
                         name: part.name

@@ -66,7 +66,7 @@ async function setupNewSchool() {
         
         // Update schools.js config
         const schoolsConfigPath = path.join(__dirname, '..', 'config', 'schools.js');
-        let configContent = fs.readFileSync(schoolsConfigPath, 'utf8');
+        const configContent = fs.readFileSync(schoolsConfigPath, 'utf8');
         
         // Extract existing schools array
         const schoolsMatch = configContent.match(/const schools = \[([\s\S]*?)(\s*\/\/ Add more schools as needed\s*)\]/);

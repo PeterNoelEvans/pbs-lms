@@ -888,7 +888,7 @@ app.post('/api/resources', auth, upload.fields([
         }
         
         // Prepare metadata object
-        let metadata = {};
+        const metadata = {};
         if (audioPath) {
             metadata.audioPath = audioPath;
         }
@@ -2000,7 +2000,7 @@ app.post('/api/sections/:sectionId/assessments', auth, upload.any(), async (req,
         }
 
         // Handle file uploads if any (accept any field name)
-        let mediaFiles = req.files ? req.files.map(file => ({
+        const mediaFiles = req.files ? req.files.map(file => ({
             filePath: `/uploads/resources/${file.filename}`,
             type: file.mimetype,
             label: file.fieldname
@@ -2590,7 +2590,7 @@ app.post('/api/assessments/:assessmentId/submit', auth, async (req, res) => {
                 const q = assessment.questions[0];
                 if (q && q.pairs && answers && answers[0]) {
                     let correct = 0;
-                    let total = q.pairs.length;
+                    const total = q.pairs.length;
                     for (let i = 0; i < total; i++) {
                         const correctIndex = i;
                         const userIndex = answers[0][`option-${i}`] ? parseInt(answers[0][`option-${i}`].replace('match-', '')) : null;
@@ -2601,7 +2601,7 @@ app.post('/api/assessments/:assessmentId/submit', auth, async (req, res) => {
             } else if ((assessment.type === 'quiz' || assessment.type === 'multiple-choice') && Array.isArray(assessment.questions)) {
                 // Multiple choice quiz
                 let correct = 0;
-                let total = assessment.questions.length;
+                const total = assessment.questions.length;
                 for (let i = 0; i < total; i++) {
                     const q = assessment.questions[i];
                     if (q && typeof q.correctAnswerIndex === 'number' && answers && answers[i] !== undefined) {
@@ -2618,7 +2618,7 @@ app.post('/api/assessments/:assessmentId/submit', auth, async (req, res) => {
                     const correctAnswers = q.answers;
                     const studentAnswers = answers.studentAnswers;
                     let correct = 0;
-                    let total = correctAnswers.length;
+                    const total = correctAnswers.length;
                     
                     // Compare each student answer with the corresponding correct answer
                     for (let i = 0; i < total; i++) {
@@ -2828,7 +2828,7 @@ app.get('/api/student/assessments', auth, async (req, res) => {
             return res.json({ assessments: [] });
         }
 
-        let assessments = [];
+        const assessments = [];
         for (const course of user.studentCourses) {
             const subject = course.subject;
             if (!subject || !subject.units) continue;
@@ -2899,7 +2899,7 @@ app.get('/api/teacher/progress', auth, async (req, res) => {
 
         const { subjectId, class: classFilter } = req.query;
         
-        let whereClause = {
+        const whereClause = {
             role: 'STUDENT',
             active: true // Only include active students
         };
@@ -3043,7 +3043,7 @@ app.post('/api/assessments/:assessmentId/submit-writing', auth, upload.single('f
     try {
         const { assessmentId } = req.params;
         const studentId = req.user.userId;
-        let { text } = req.body;
+        const { text } = req.body;
         let filePath = null;
         
         // Verify the assessment exists
@@ -3639,7 +3639,7 @@ app.post('/api/assessments/submissions/:submissionId/delete-file', auth, async (
         // Find the submission
         const submission = await prisma.assessmentSubmission.findUnique({ where: { id: submissionId } });
         if (!submission) return res.status(404).json({ error: 'Submission not found' });
-        let answers = submission.answers || {};
+        const answers = submission.answers || {};
         let changed = false;
         // Remove file from disk
         const absPath = path.join(__dirname, filePath.startsWith('/') ? filePath.slice(1) : filePath);
@@ -3821,7 +3821,7 @@ app.get('/api/teacher/students/photos', auth, async (req, res) => {
     try {
         const { class: studentClass } = req.query;
 
-        let whereClause = {
+        const whereClause = {
             role: 'STUDENT',
             active: true,
         };

@@ -9,6 +9,7 @@ const { PrismaClient } = require('@prisma/client');
 const multer = require('multer');
 const fs = require('fs');
 const { getActiveQuarter, setActiveQuarter } = require('./utils/configManager');
+const logger = require('./utils/logger');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -17,6 +18,9 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Request logging middleware
+app.use(logger.requestLogger);
 
 // Simple redirect for trailing slashes
 app.use((req, res, next) => {
@@ -191,7 +195,7 @@ app.post('/api/login', async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('Login error:', error);
+        logger.logError(error, 'User login failed');
         res.status(500).json({ 
             success: false, 
             error: error.message 
@@ -229,7 +233,7 @@ app.post('/api/logout', auth, async (req, res) => {
 
         res.json({ success: true, message: 'Logged out successfully' });
     } catch (error) {
-        console.error('Logout error:', error);
+        logger.logError(error, 'User logout failed');
         res.status(500).json({ 
             success: false, 
             error: error.message 
@@ -292,7 +296,7 @@ app.get('/api/user-sessions/:userId', auth, async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('Error fetching session data:', error);
+        logger.logError(error, 'Session data fetch failed');
         res.status(500).json({ error: 'Failed to fetch session data' });
     }
 });
@@ -401,7 +405,7 @@ app.get('/api/user-sessions/:userId/frequency', auth, async (req, res) => {
             }))
         });
     } catch (error) {
-        console.error('Error analyzing login frequency:', error);
+        logger.logError(error, 'Login frequency analysis failed');
         res.status(500).json({ error: 'Failed to analyze login frequency' });
     }
 });
@@ -538,7 +542,7 @@ app.get('/api/class-sessions/frequency', auth, async (req, res) => {
             }))
         });
     } catch (error) {
-        console.error('Error analyzing class session frequency:', error);
+        logger.logError(error, 'Class session frequency analysis failed');
         res.status(500).json({ error: 'Failed to analyze class session frequency' });
     }
 });
@@ -570,7 +574,7 @@ app.get('/api/auth/check', auth, async (req, res) => {
             email: user.email
         });
     } catch (error) {
-        console.error('Auth check error:', error);
+        logger.logError(error, 'Authentication check failed');
         res.status(500).json({ 
             authenticated: false,
             error: 'Failed to check authentication status'
@@ -610,7 +614,7 @@ app.post('/api/core-subjects', auth, async (req, res) => {
 
         res.json(coreSubject);
     } catch (error) {
-        console.error('Error creating core subject:', error);
+        logger.logError(error, 'Core subject creation failed');
         res.status(500).json({ error: 'Failed to create core subject' });
     }
 });
@@ -624,7 +628,7 @@ app.get('/api/core-subjects', auth, async (req, res) => {
         });
         res.json(coreSubjects);
     } catch (error) {
-        console.error('Error fetching core subjects:', error);
+        logger.logError(error, 'Core subjects fetch failed');
         res.status(500).json({ error: 'Failed to fetch core subjects' });
     }
 });
@@ -726,7 +730,7 @@ app.post('/api/register', async (req, res) => {
             }
         });
     } catch (error) {
-        console.error('Registration error:', error);
+        logger.logError(error, 'User registration failed');
         res.status(500).json({ 
             success: false, 
             error: error.message 
@@ -1732,7 +1736,9 @@ app.get('/api/subjects/:subjectId/resources', auth, async (req, res) => {
                         assessments: resourceWithAssessments.assessments.map(a => ({
                             id: a.id,
                             title: a.title,
-                            type: a.type
+                            type: a.type,
+                            dueDate: a.dueDate,
+                            quarter: a.quarter
                         }))
                     });
                 }
@@ -1805,7 +1811,7 @@ app.post('/api/resources', auth, upload.fields([
         }
         
         // Prepare metadata object
-        let metadata = {};
+        const metadata = {};
         if (audioPath) {
             metadata.audioPath = audioPath;
         }
@@ -3051,7 +3057,7 @@ app.post('/api/sections/:sectionId/assessments', auth, upload.any(), async (req,
         }
 
         // Handle file uploads if any (accept any field name)
-        let mediaFiles = req.files ? req.files.map(file => ({
+        const mediaFiles = req.files ? req.files.map(file => ({
             filePath: `/uploads/resources/${file.filename}`,
             type: file.mimetype,
             label: file.fieldname
@@ -3478,7 +3484,7 @@ app.get('/api/teacher/assessments', auth, async (req, res) => {
     try {
         const { quarter, attachment } = req.query;
         // Show all assessment types for teachers (match student view)
-        let where = {};
+        const where = {};
         if (quarter) {
             where.quarter = quarter;
         }
@@ -3876,7 +3882,7 @@ app.post('/api/assessments/:assessmentId/submit', auth, async (req, res) => {
                 const q = assessment.questions[0];
                 if (q && q.pairs && answers && answers[0]) {
                     let correct = 0;
-                    let total = q.pairs.length;
+                    const total = q.pairs.length;
                     for (let i = 0; i < total; i++) {
                         const correctIndex = i;
                         const userIndex = answers[0][`option-${i}`] ? parseInt(answers[0][`option-${i}`].replace('match-', '')) : null;
@@ -3887,7 +3893,7 @@ app.post('/api/assessments/:assessmentId/submit', auth, async (req, res) => {
             } else if ((assessment.type === 'quiz' || assessment.type === 'multiple-choice') && Array.isArray(assessment.questions)) {
                 // Multiple choice quiz
                 let correct = 0;
-                let total = assessment.questions.length;
+                const total = assessment.questions.length;
                 for (let i = 0; i < total; i++) {
                     const q = assessment.questions[i];
                     if (q && typeof q.correctAnswerIndex === 'number' && answers && answers[i] !== undefined) {
@@ -3904,7 +3910,7 @@ app.post('/api/assessments/:assessmentId/submit', auth, async (req, res) => {
                     const correctAnswers = q.answers;
                     const studentAnswers = answers.studentAnswers;
                     let correct = 0;
-                    let total = correctAnswers.length;
+                    const total = correctAnswers.length;
                     
                     // Compare each student answer with the corresponding correct answer
                     for (let i = 0; i < total; i++) {
@@ -4121,7 +4127,7 @@ app.get('/api/student/assessments', auth, async (req, res) => {
             return res.json({ assessments: [] });
         }
 
-        let assessments = [];
+        const assessments = [];
         for (const course of user.studentCourses) {
             const subject = course.subject;
             if (!subject || !subject.units) continue;
@@ -4246,7 +4252,7 @@ app.get('/api/teacher/progress', auth, async (req, res) => {
         if (!teacher || !teacher.subjectTeacher) {
             return res.json({ progress: [] });
         }
-        let progress = [];
+        const progress = [];
         for (const subjT of teacher.subjectTeacher) {
             const subject = subjT.subject;
             if (!subject || !subject.units) continue;
@@ -4434,7 +4440,7 @@ app.post('/api/assessments/:assessmentId/submit-writing', auth, upload.single('f
     try {
         const { assessmentId } = req.params;
         const studentId = req.user.userId;
-        let { text } = req.body;
+        const { text } = req.body;
         let filePath = null;
         
         // Verify the assessment exists
@@ -5230,7 +5236,7 @@ app.post('/api/assessments/submissions/:submissionId/delete-file', auth, async (
         // Find the submission
         const submission = await prisma.assessmentSubmission.findUnique({ where: { id: submissionId } });
         if (!submission) return res.status(404).json({ error: 'Submission not found' });
-        let answers = submission.answers || {};
+        const answers = submission.answers || {};
         let changed = false;
         // Remove file from disk
         const absPath = path.join(__dirname, filePath.startsWith('/') ? filePath.slice(1) : filePath);
