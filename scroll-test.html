@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Scroll Position Test</title>
+    <style>
+        body { height: 300vh; padding: 20px; }
+        .test-section { 
+            height: 50vh; 
+            background: linear-gradient(45deg, #f0f0f0, #e0e0e0);
+            margin: 20px 0; 
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            border: 2px solid #ccc;
+        }
+        button { 
+            padding: 10px 20px; 
+            font-size: 16px; 
+            margin: 10px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-section">Section 1 - Scroll down to test</div>
+    <div class="test-section">Section 2 - Middle of page</div>
+    <div class="test-section">
+        Section 3 - Test Area<br>
+        <button onclick="testScrollPreservation()">Test Scroll Preservation</button>
+        <button onclick="testReload()">Test Page Reload</button>
+        <div id="result"></div>
+    </div>
+    <div class="test-section">Section 4 - Bottom of page</div>
+
+    <script>
+        // Same scroll preservation functions as in assessment.html
+        function saveScrollPosition(key = 'testScroll') {
+            const scrollY = window.scrollY || window.pageYOffset;
+            sessionStorage.setItem(key, scrollY.toString());
+        }
+        
+        function restoreScrollPosition(key = 'testScroll') {
+            const savedScroll = sessionStorage.getItem(key);
+            if (savedScroll) {
+                requestAnimationFrame(() => {
+                    window.scrollTo({
+                        top: parseInt(savedScroll, 10),
+                        behavior: 'instant'
+                    });
+                });
+                sessionStorage.removeItem(key);
+            }
+        }
+
+        function testScrollPreservation() {
+            const currentScroll = window.scrollY;
+            document.getElementById('result').innerHTML = 
+                `<p>Current scroll: ${currentScroll}px</p><p>Preserving position during operation...</p>`;
+            
+            // Simulate async operation
+            setTimeout(() => {
+                requestAnimationFrame(() => {
+                    window.scrollTo({
+                        top: currentScroll,
+                        behavior: 'instant'
+                    });
+                });
+                document.getElementById('result').innerHTML += 
+                    `<p style="color: green;">✓ Position preserved!</p>`;
+            }, 1000);
+        }
+
+        function testReload() {
+            saveScrollPosition();
+            window.location.reload();
+        }
+
+        // Restore position on load
+        window.addEventListener('load', () => {
+            setTimeout(() => restoreScrollPosition(), 100);
+        });
+    </script>
+</body>
+</html>

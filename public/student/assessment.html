@@ -6,13 +6,23 @@
     <title>Take Assessment</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.3/font/bootstrap-icons.css">
-    <style>
+            <style>
         .quiz-container {
             background-color: white;
             border-radius: 10px;
             box-shadow: 0 4px 15px rgba(0,0,0,0.05);
             padding: 30px;
             margin-bottom: 30px;
+        }
+        
+        /* Smooth scroll behavior for better UX */
+        html {
+            scroll-behavior: smooth;
+        }
+        
+        /* Preserve scroll position during interactions */
+        .scroll-preserve {
+            scroll-behavior: auto;
         }
         .matching-item, .list-group-item {
             display: flex;
@@ -695,6 +705,76 @@
             }
         }
         
+        // =================================
+        // SCROLL POSITION PRESERVATION SYSTEM
+        // =================================
+        // This system prevents the common mobile UX issue where the page jumps 
+        // to the top during assessment interactions. Critical for students using 
+        // mobile devices to complete long assessments.
+        // 
+        // Features:
+        // 1. Save/restore scroll position during page reloads
+        // 2. Maintain position during form submissions
+        // 3. Preserve position during async operations
+        // 4. Smooth scrolling for user-initiated actions
+        // =================================
+        
+        // Scroll position preservation utilities
+        function saveScrollPosition(key = 'assessmentScroll') {
+            const scrollY = window.scrollY || window.pageYOffset;
+            sessionStorage.setItem(key, scrollY.toString());
+        }
+        
+        function restoreScrollPosition(key = 'assessmentScroll') {
+            const savedScroll = sessionStorage.getItem(key);
+            if (savedScroll) {
+                // Use requestAnimationFrame to ensure DOM is ready
+                requestAnimationFrame(() => {
+                    window.scrollTo({
+                        top: parseInt(savedScroll, 10),
+                        behavior: 'instant' // Instant for restoration, smooth for user interactions
+                    });
+                });
+                // Clear the saved position after restoring
+                sessionStorage.removeItem(key);
+            }
+        }
+        
+        function scrollToElement(element, offset = 0) {
+            if (element) {
+                const elementPosition = element.getBoundingClientRect().top + window.pageYOffset;
+                const targetPosition = elementPosition - offset;
+                window.scrollTo({
+                    top: targetPosition,
+                    behavior: 'smooth'
+                });
+            }
+        }
+        
+        // Enhanced scroll preservation for form submissions
+        function preserveScrollDuringOperation(operation) {
+            const currentScroll = window.scrollY || window.pageYOffset;
+            return Promise.resolve(operation()).then(result => {
+                // Restore scroll after operation completes
+                requestAnimationFrame(() => {
+                    window.scrollTo({
+                        top: currentScroll,
+                        behavior: 'instant'
+                    });
+                });
+                return result;
+            }).catch(error => {
+                // Restore scroll even if operation fails
+                requestAnimationFrame(() => {
+                    window.scrollTo({
+                        top: currentScroll,
+                        behavior: 'instant'
+                    });
+                });
+                throw error;
+            });
+        }
+
         // Simple debug utility
         function showDebugInfo() {
             const urlParams = new URLSearchParams(window.location.search);
@@ -750,7 +830,11 @@
             window.location.href = '/login';
         }
         
-        document.addEventListener('DOMContentLoaded', loadAssessment);
+        document.addEventListener('DOMContentLoaded', function() {
+            loadAssessment();
+            // Restore scroll position after page load
+            setTimeout(() => restoreScrollPosition(), 100);
+        });
         
         // Function to load the assessment data
         async function loadAssessment() {
@@ -1274,8 +1358,19 @@
                             });
                             const data = await res.json();
                             if (data.success) {
-                                feedback.innerHTML = `<div class='alert alert-success'>Your sequence was submitted!</div>`;
+                                // Show success message and preserve scroll position
+                                const currentScroll = window.scrollY || window.pageYOffset;
+                                feedback.innerHTML = `<div class='alert alert-success'><i class="bi bi-check-circle-fill me-2"></i>Your sequence was submitted! Redirecting in 5 seconds...</div>`;
                                 submitBtn.disabled = true;
+                                
+                                // Maintain scroll position
+                                requestAnimationFrame(() => {
+                                    window.scrollTo({
+                                        top: currentScroll,
+                                        behavior: 'instant'
+                                    });
+                                });
+                                
                                 setTimeout(function() {
                                     window.location.href = '/student/resources';
                                 }, 5000); // 5 seconds delay
@@ -2700,7 +2795,7 @@
                 <div class="container mt-5">
                     <h2>Drag and Drop Test</h2>
                     <div id="questionContainer"></div>
-                    <button class="btn btn-secondary mt-3" onclick="window.location.reload()">Reset Test</button>
+                    <button class="btn btn-secondary mt-3" onclick="saveScrollPosition(); window.location.reload()">Reset Test</button>
                 </div>
             `;
             
@@ -2752,7 +2847,7 @@
                 <div class="container mt-5">
                     <h2>Image Matching Test</h2>
                     <div id="questionContainer"></div>
-                    <button class="btn btn-secondary mt-3" onclick="window.location.reload()">Reset Test</button>
+                    <button class="btn btn-secondary mt-3" onclick="saveScrollPosition(); window.location.reload()">Reset Test</button>
                 </div>
             `;
             
@@ -3053,6 +3148,10 @@
             container.appendChild(form);
             form.onsubmit = async function(e) {
                 e.preventDefault();
+                
+                // Save current scroll position
+                const currentScroll = window.scrollY || window.pageYOffset;
+                
                 const formData = new FormData();
                 if (question.subtype === 'long-answer') {
                     const file = form.writingImage.files[0];
@@ -3068,23 +3167,55 @@
                     // For any other or missing subtype, allow file upload (optional)
                     if (form.writingImage.files[0]) formData.append('file', form.writingImage.files[0]);
                 }
-                // Submit to backend
-                const res = await fetch(`/api/assessments/${assessment.id}/submit-writing`, {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
-                    body: formData
-                });
-                const result = await res.json();
-                if (result.success) {
-                    alert('Submission successful!');
-                    // Once submitted, fetch submission data to update the attempts counter
-                    await fetchSubmissionData();
-                    setTimeout(function() {
-                        window.location.href = '/student/resources';
-                    }, 5000); // 5 seconds delay
-                    return;
-                } else {
-                    alert('Submission failed: ' + (result.error || 'Unknown error'));
+                
+                try {
+                    // Submit to backend
+                    const res = await fetch(`/api/assessments/${assessment.id}/submit-writing`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+                        body: formData
+                    });
+                    const result = await res.json();
+                    
+                    if (result.success) {
+                        // Show success message without scroll jump
+                        const successDiv = document.createElement('div');
+                        successDiv.className = 'alert alert-success mt-3';
+                        successDiv.innerHTML = '<i class="bi bi-check-circle-fill me-2"></i>Submission successful! Redirecting in 5 seconds...';
+                        form.appendChild(successDiv);
+                        
+                        // Maintain scroll position during updates
+                        requestAnimationFrame(() => {
+                            window.scrollTo({
+                                top: currentScroll,
+                                behavior: 'instant'
+                            });
+                        });
+                        
+                        // Once submitted, fetch submission data to update the attempts counter
+                        await fetchSubmissionData();
+                        
+                        setTimeout(function() {
+                            window.location.href = '/student/resources';
+                        }, 5000); // 5 seconds delay
+                        return;
+                    } else {
+                        throw new Error(result.error || 'Unknown error');
+                    }
+                } catch (error) {
+                    // Show error message and restore scroll position
+                    const errorDiv = document.createElement('div');
+                    errorDiv.className = 'alert alert-danger mt-3';
+                    errorDiv.innerHTML = '<i class="bi bi-exclamation-triangle-fill me-2"></i>Submission failed: ' + error.message;
+                    form.appendChild(errorDiv);
+                    
+                    // Restore scroll position
+                    requestAnimationFrame(() => {
+                        window.scrollTo({
+                            top: currentScroll,
+                            behavior: 'instant'
+                        });
+                    });
                 }
             };
         }
@@ -3298,6 +3429,16 @@
                                 <i class="bi bi-arrow-left"></i> Back to Assessments
                             </a>
                         `;
+                        
+                        // Preserve scroll position during redirect
+                        const currentScroll = window.scrollY || window.pageYOffset;
+                        requestAnimationFrame(() => {
+                            window.scrollTo({
+                                top: currentScroll,
+                                behavior: 'instant'
+                            });
+                        });
+                        
                         setTimeout(function() {
                             window.location.href = '/student/resources';
                         }, 5000); // 5 seconds delay
@@ -3533,6 +3674,16 @@
                     if (attemptCount) {
                         attemptCount.textContent = (parseInt(attemptCount.textContent) + 1).toString();
                     }
+                    
+                    // Preserve scroll position during redirect
+                    const currentScroll = window.scrollY || window.pageYOffset;
+                    requestAnimationFrame(() => {
+                        window.scrollTo({
+                            top: currentScroll,
+                            behavior: 'instant'
+                        });
+                    });
+                    
                     setTimeout(function() {
                         window.location.href = '/student/resources';
                     }, 5000); // 5 seconds delay
@@ -3768,7 +3919,7 @@
                             <a href="/student/resources" class="btn btn-primary">
                                 <i class="bi bi-arrow-left"></i> Back to Resources
                             </a>
-                            <button onclick="window.location.reload()" class="btn btn-outline-secondary">
+                            <button onclick="saveScrollPosition(); window.location.reload()" class="btn btn-outline-secondary">
                                 <i class="bi bi-arrow-clockwise"></i> Review Your Work
                             </button>
                         </div>
@@ -4350,7 +4501,17 @@
                     pleaseWaitModal.style.display = 'none';
                     document.body.style.overflow = '';
                     if (response.ok && data.success) {
-                        statusDiv.innerHTML = '<div class="alert alert-success">Audio file submitted successfully!</div>';
+                        statusDiv.innerHTML = '<div class="alert alert-success"><i class="bi bi-check-circle-fill me-2"></i>Audio file submitted successfully! Redirecting in 5 seconds...</div>';
+                        
+                        // Preserve scroll position during redirect preparation
+                        const currentScroll = window.scrollY || window.pageYOffset;
+                        requestAnimationFrame(() => {
+                            window.scrollTo({
+                                top: currentScroll,
+                                behavior: 'instant'
+                            });
+                        });
+                        
                         setTimeout(function() {
                             window.location.href = '/student/resources';
                         }, 5000);
