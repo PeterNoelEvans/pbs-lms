@@ -144,6 +144,7 @@
                                     <option value="writing">Writing</option>
                                     <option value="writing-long">Writing (Long)</option>
                                     <option value="speaking">Speaking</option>
+                                    <option value="text-input">Text Input (Auto-graded)</option>
                                     <option value="listening">Listening Comprehension</option>
                                 </select>
                             </div>
@@ -644,6 +645,13 @@
                         </button>`;
                     break;
 
+                case 'text-input':
+                    buttonsContainer.innerHTML = `
+                        <button type="button" class="btn btn-outline-primary" onclick="addQuestion('text-input')">
+                            <i class="bi bi-input-cursor-text"></i> Add Text Input Question
+                        </button>`;
+                    break;
+
                 case 'change-sequence':
                     buttonsContainer.innerHTML = `
                         <button type="button" class="btn btn-outline-primary" onclick="addQuestion('change-sequence')">
@@ -666,7 +674,7 @@
             // Always set questionsSection display at the end
             const questionsSection = document.getElementById('questionsSection');
             if (questionsSection) {
-                const showQuestions = ['multiple-choice', 'drag-and-drop', 'matching', 'true-false', 'mixed', 'change-sequence', 'line-match', 'phoneme-build'].includes(type);
+                const showQuestions = ['multiple-choice', 'drag-and-drop', 'matching', 'true-false', 'mixed', 'text-input', 'change-sequence', 'line-match', 'phoneme-build'].includes(type);
                 questionsSection.style.display = showQuestions ? 'block' : 'none';
             }
             // Always show Create Assessment button for true-false
@@ -1021,6 +1029,31 @@
                         </div>`;
                     break;
 
+                case 'text-input':
+                    questionHtml += `
+                        <div class="card mb-3 question-card" data-type="text-input">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <h5 class="mb-0">Text Input Question</h5>
+                                <button type="button" class="btn-close" aria-label="Close" onclick="removeQuestion(this)"></button>
+                            </div>
+                            <div class="card-body">
+                                <div class="mb-3">
+                                    <label class="form-label">Question</label>
+                                    <textarea class="form-control text-input-question" rows="3" placeholder="Enter your question here (e.g., What is the capital of France?)" required>${questionData?.question || ''}</textarea>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Correct Answers</label>
+                                    <textarea class="form-control text-input-answers" rows="2" placeholder="Enter correct answers, one per line (e.g., Paris, paris, PARIS)" required>${questionData?.answers ? questionData.answers.join('\n') : ''}</textarea>
+                                    <small class="form-text text-muted">Enter multiple acceptable answers, one per line. Grading is case-insensitive and whitespace is trimmed.</small>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input text-input-case-sensitive" type="checkbox" id="caseSensitive_${questionId}" ${questionData?.caseSensitive ? 'checked' : ''}>
+                                    <label class="form-check-label" for="caseSensitive_${questionId}">Case Sensitive Grading</label>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    break;
 
                 case 'change-sequence':
                     // Only insert the inner fields, not a nested card
@@ -2998,6 +3031,24 @@ Ooh, exciting!|That sounds fun.</pre>
             const question = { type };
             // Handle different question types
             switch(type) {
+                case 'text-input':
+                    const textInputQuestion = cardBody.querySelector('.text-input-question').value;
+                    const answersText = cardBody.querySelector('.text-input-answers').value;
+                    const caseSensitive = cardBody.querySelector('.text-input-case-sensitive').checked;
+                    
+                    // Parse answers - one per line, trim whitespace
+                    const answers = answersText.split('\n')
+                        .map(answer => answer.trim())
+                        .filter(answer => answer.length > 0);
+                    
+                    if (answers.length === 0) {
+                        throw new Error('At least one correct answer is required');
+                    }
+                    
+                    question.question = textInputQuestion;
+                    question.answers = answers;
+                    question.caseSensitive = caseSensitive;
+                    break;
 
                 case 'change-sequence':
                     // Read items from textarea (one per line)

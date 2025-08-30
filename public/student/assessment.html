@@ -1280,6 +1280,23 @@
                         renderWritingAssessment(writingContainer, question, assessment);
                         break;
                         
+                    case 'text-input':
+                        container.innerHTML = `
+                            <div class="card mb-4">
+                                <div class="card-header bg-success text-white">
+                                    <h3 class="mb-0" id="assessmentTitle">${assessment.title || 'Text Input Questions'}</h3>
+                                </div>
+                                <div class="card-body">
+                                    <p class="mb-3" id="assessmentDescription">${formatWithLineBreaks(assessment.description || '')}</p>
+                                    ${attemptsHtml}
+                                    <div class="text-input-questions-container"></div>
+                                </div>
+                            </div>
+                        `;
+                        const textInputContainer = container.querySelector('.text-input-questions-container');
+                        renderTextInputAssessment(textInputContainer, assessment);
+                        break;
+                        
                     case 'change-sequence':
                         // Title
                         const title = document.createElement('h3');
@@ -3084,6 +3101,114 @@
                 });
         }
 
+        function renderTextInputAssessment(container, assessment) {
+            const questions = assessment.questions || [];
+            if (questions.length === 0) {
+                container.innerHTML = '<div class="alert alert-warning">No questions found for this assessment.</div>';
+                return;
+            }
+
+            const form = document.createElement('form');
+            form.className = 'text-input-form';
+            
+            let questionsHtml = '';
+            questions.forEach((question, index) => {
+                questionsHtml += `
+                    <div class="card mb-3 question-card" data-question-index="${index}">
+                        <div class="card-body">
+                            <h5 class="card-title">Question ${index + 1}</h5>
+                            <p class="question-text">${formatWithLineBreaks(question.question || '')}</p>
+                            <div class="mb-3">
+                                <label for="answer_${index}" class="form-label">Your Answer:</label>
+                                <input type="text" class="form-control text-input-answer" id="answer_${index}" name="answer_${index}" required 
+                                       placeholder="Type your answer here...">
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            
+            form.innerHTML = questionsHtml + `
+                <div class="text-center mt-4">
+                    <button type="submit" class="btn btn-primary btn-lg">
+                        <i class="bi bi-check-circle"></i> Submit Answers
+                    </button>
+                </div>
+            `;
+            
+            container.appendChild(form);
+            
+            // Handle form submission
+            form.onsubmit = async function(e) {
+                e.preventDefault();
+                
+                // Save current scroll position
+                const currentScroll = window.scrollY || window.pageYOffset;
+                
+                // Collect answers
+                const answers = {};
+                questions.forEach((question, index) => {
+                    const answerInput = form.querySelector(`#answer_${index}`);
+                    answers[index] = answerInput.value.trim();
+                });
+                
+                // Submit the assessment
+                try {
+                    const response = await fetch(`/api/assessments/${assessmentId}/submit`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            answers: answers,
+                            timeSpent: Math.floor((Date.now() - startTime) / 1000)
+                        })
+                    });
+                    
+                    if (response.ok) {
+                        const result = await response.json();
+                        
+                        // Show success message with score
+                        const successDiv = document.createElement('div');
+                        successDiv.className = 'alert alert-success mt-3';
+                        successDiv.innerHTML = `
+                            <h4><i class="bi bi-check-circle-fill"></i> Assessment Submitted Successfully!</h4>
+                            ${result.score !== null ? `<p><strong>Your Score: ${result.score}%</strong></p>` : ''}
+                            <p>Redirecting to assessments page in <span id="countdown">5</span> seconds...</p>
+                        `;
+                        
+                        // Insert success message and hide form
+                        container.insertBefore(successDiv, form);
+                        form.style.display = 'none';
+                        
+                        // Restore scroll position
+                        requestAnimationFrame(() => {
+                            window.scrollTo(0, currentScroll);
+                        });
+                        
+                        // Countdown and redirect
+                        let countdown = 5;
+                        const countdownElement = successDiv.querySelector('#countdown');
+                        const countdownInterval = setInterval(() => {
+                            countdown--;
+                            countdownElement.textContent = countdown;
+                            if (countdown <= 0) {
+                                clearInterval(countdownInterval);
+                                window.location.href = '/student/assessments.html';
+                            }
+                        }, 1000);
+                        
+                    } else {
+                        const error = await response.json();
+                        alert('Error submitting assessment: ' + (error.message || 'Unknown error'));
+                    }
+                } catch (error) {
+                    console.error('Error submitting assessment:', error);
+                    alert('Failed to submit assessment. Please try again.');
+                }
+            };
+        }
+
         function renderWritingQuestion(question, questionDiv, index) {
             // Render a short answer input for writing questions
             const promptDiv = document.createElement('div');
@@ -3931,6 +4056,10 @@
                 console.error('Error submitting assessment:', error);
                 alert(`Error submitting assessment: ${error.message}`);
             } finally {
+                // Always clean up ALL beforeunload listeners and loader
+                submitting = false;
+                window.removeEventListener('beforeunload', beforeUnload);
+                window.onbeforeunload = null; // Nuclear option - remove all beforeunload handlers
                 hideLoader();
             }
         }
@@ -4202,13 +4331,15 @@
                 showLoader();
                 // Check if all questions are answered
                 let allAnswered = true;
+                let unansweredQuestions = [];
                 let score = 0;
                 let totalQuestions = assessment.questions.length;
                 
-                // Calculate score based on correct answers
+                // Calculate score and track unanswered questions
                 assessment.questions.forEach((question, index) => {
                     if (!userAnswers[index] || userAnswers[index].selectedOption === undefined) {
                         allAnswered = false;
+                        unansweredQuestions.push(index + 1); // Store 1-based question numbers
                     } else {
                         // Check if the answer is correct
                         const selectedOption = userAnswers[index].selectedOption;
@@ -4233,7 +4364,43 @@
                     }
                 });
                 
-                // Proceed even if not all answered (no confirmation)
+                // Don't allow submission if not all questions are answered
+                if (!allAnswered) {
+                    hideLoader();
+                    submitting = false;
+                    window.removeEventListener('beforeunload', beforeUnload);
+                    
+                    // Show clear error message
+                    const errorContainer = document.getElementById('submitBtn').parentElement;
+                    let existingError = errorContainer.querySelector('.incomplete-warning');
+                    if (existingError) {
+                        existingError.remove();
+                    }
+                    
+                    const errorDiv = document.createElement('div');
+                    errorDiv.className = 'alert alert-warning mt-3 incomplete-warning';
+                    errorDiv.innerHTML = `
+                        <h6><i class="bi bi-exclamation-triangle-fill"></i> Not all questions were answered</h6>
+                        <p class="mb-2">Please answer all questions before submitting:</p>
+                        <p class="mb-0"><strong>Missing answers for question${unansweredQuestions.length > 1 ? 's' : ''}:</strong> ${unansweredQuestions.join(', ')}</p>
+                    `;
+                    
+                    errorContainer.appendChild(errorDiv);
+                    
+                    // Scroll to the first unanswered question
+                    const firstUnanswered = unansweredQuestions[0];
+                    const questionElement = document.querySelector(`[data-question-index="${firstUnanswered - 1}"]`);
+                    if (questionElement) {
+                        questionElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        // Highlight the unanswered question temporarily
+                        questionElement.style.border = '2px solid #ffc107';
+                        setTimeout(() => {
+                            questionElement.style.border = '';
+                        }, 3000);
+                    }
+                    
+                    return;
+                }
                 
                 // Calculate percentage score
                 const percentageScore = Math.round((score / totalQuestions) * 100);
@@ -4258,6 +4425,10 @@
                 const result = await response.json();
                 
                 if (result.success) {
+                    // Immediately remove ALL beforeunload listeners to prevent "Leave site?" dialog
+                    window.onbeforeunload = null;
+                    submitting = false;
+                    
                     // Show success message
                     document.getElementById('assessmentContainer').innerHTML = `
                         <div class="alert alert-success">

@@ -355,7 +355,11 @@
                     if (resource.assessments && Array.isArray(resource.assessments) && resource.assessments.length > 0) {
                         assessmentButtonsHtml = resource.assessments.map(a => {
                             const sa = studentAssessments.find(sa => sa.id === a.id);
-                            let btnText = (sa && (sa.status === 'Completed' || sa.completed)) ? 'View Assessment' : 'Take Assessment';
+                            const isCompleted = sa && (sa.status === 'Completed' || sa.completed);
+                            
+
+                            
+                            let btnText = isCompleted ? 'View Assessment' : 'Take Assessment';
                             let btnClass = 'btn-outline-primary';
                             let scoreLabel = '';
                             // Detect manual grading types
@@ -434,11 +438,21 @@
             // Analyze all assessments linked to this resource
             for (const assessment of resource.assessments) {
                 if (assessment.dueDate) {
+                    // Check if this assessment is already completed by the student
+                    const studentAssessment = studentAssessments.find(sa => sa.id === assessment.id);
+                    const isCompleted = studentAssessment && (studentAssessment.completed || studentAssessment.status === 'Completed');
+                    
+                    // Skip completed assessments when calculating overdue status
+                    if (isCompleted) {
+                        continue;
+                    }
+                    
                     const dueDate = new Date(assessment.dueDate);
                     dueDates.push({
                         date: dueDate,
                         title: assessment.title,
-                        isOverdue: dueDate < now
+                        isOverdue: dueDate < now,
+                        isCompleted: isCompleted
                     });
                     
                     if (!earliestDueDate || dueDate < earliestDueDate) {
@@ -467,11 +481,13 @@
             let badge = '';
             let alertHtml = '';
             
-            if (hasOverdue) {
-                badge = '<span class="badge bg-danger"><i class="bi bi-exclamation-triangle-fill"></i> OVERDUE</span>';
-                const overdueCount = dueDates.filter(d => d.isOverdue).length;
+            // Check if we actually have incomplete overdue assessments
+            const incompleteOverdueCount = dueDates.filter(d => d.isOverdue && !d.isCompleted).length;
+            
+            if (incompleteOverdueCount > 0) {
+                badge = '<span class="badge bg-danger"><i class="bi bi-lock-fill"></i> EXPIRED</span>';
                 alertHtml = `<div class="alert alert-danger alert-sm p-2 mb-2">
-                    <small><i class="bi bi-clock-history"></i> ${overdueCount} assessment${overdueCount > 1 ? 's' : ''} overdue!</small>
+                    <small><i class="bi bi-lock-fill"></i> ${incompleteOverdueCount} assessment${incompleteOverdueCount > 1 ? 's' : ''} expired and no longer accepting submissions</small>
                 </div>`;
             } else if (urgentCount > 0) {
                 badge = '<span class="badge bg-warning text-dark"><i class="bi bi-clock"></i> DUE SOON</span>';

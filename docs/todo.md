@@ -11,7 +11,8 @@
   - **Solution**: Implemented comprehensive scroll preservation system with session storage and requestAnimationFrame
 
 ### Priority 2: Missing Due Date Features
-- [x] **Add due date/expiry date to Resource page cards** ✅ **COMPLETED**
+- [x] **Add due date/expiry date to Resource page cards** ✅ **COMPLETED** 
+  - **Issue Found & Fixed**: Backend was missing dueDate/quarter in `/api/subjects/{id}/resources` endpoint
   - **Scope**: Teacher & Student portals
   - **Risk**: 🟡 MEDIUM - Students can't prioritize urgent assignments
   - **DoD**: Show due dates, Q_ indicators, color coding for urgency
@@ -113,7 +114,7 @@
   - **DoD**: Q2 selector at top of page automatically sets quarter field in assessment creation
   - **Issue**: Q2 selector at page top doesn't sync with assessment quarter field (line 230), requires manual change each time
   - **Root Cause**: quarterFilter dropdown (line ~87) doesn't trigger update to quarter field (line 230)
-  - **Solution**: Added event listener to sync quarterFilter changes with assessment form quarter field, visual feedback, and helpful tooltips
+  - **Solution**: Added event listener to sync quarterFilter changes with assessment form quarter field, visual feedback, and helpful tooltipsI aling 
 
 - [x] **Remove confusing assignment assessment type** ✅ **COMPLETED**
   - **Scope**: Assessment creation and documentation cleanup
@@ -128,6 +129,12 @@
   - **Risk**: 🟡 MEDIUM - Difficult to adjust due dates after creation
   - **DoD**: Web interface for bulk due date updates, individual assessment date editing
   - **Options**: Web-based editor vs Prisma Studio access - recommend web interface for better UX
+
+### Assessment Type Notes
+- **Writing vs Writing-Long**: Both work identically for students (text + file upload). User will naturally migrate to using only `writing` type for new assessments, allowing `writing-long` to phase out over time. No immediate action needed.
+
+### Recent Fixes
+- **Multiple Choice "Leave site?" Dialog**: Fixed by properly removing `beforeunload` event listener after successful submission. The browser confirmation was preventing smooth navigation back to resources page.
 
 - [ ] Create assessment templates
 - [ ] Add advanced feedback mechanism

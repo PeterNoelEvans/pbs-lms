@@ -2758,7 +2758,9 @@ app.get('/api/topics/:topicId/resources', auth, async (req, res) => {
                     assessments: resourceWithAssessments.assessments.map(a => ({
                         id: a.id,
                         title: a.title,
-                        type: a.type
+                        type: a.type,
+                        dueDate: a.dueDate,
+                        quarter: a.quarter
                     }))
                 };
             }));
@@ -3901,33 +3903,40 @@ app.post('/api/assessments/:assessmentId/submit', auth, async (req, res) => {
                     }
                 }
                 calculatedScore = Math.round((correct / total) * 100);
-            } else if (assessment.type === 'assignment' && Array.isArray(assessment.questions)) {
-                // Fill-in-the-blank text exercise
-                console.log('Grading assignment (fill-in-the-blank):', answers);
+            } else if (assessment.type === 'text-input' && Array.isArray(assessment.questions)) {
+                // Text input assessment - auto-graded
+                let correct = 0;
+                const total = assessment.questions.length;
                 
-                const q = assessment.questions[0];
-                if (q && Array.isArray(q.answers) && answers && answers.studentAnswers) {
-                    const correctAnswers = q.answers;
-                    const studentAnswers = answers.studentAnswers;
-                    let correct = 0;
-                    const total = correctAnswers.length;
+                for (let i = 0; i < total; i++) {
+                    const question = assessment.questions[i];
+                    const studentAnswer = answers && answers[i] ? answers[i].trim() : '';
                     
-                    // Compare each student answer with the corresponding correct answer
-                    for (let i = 0; i < total; i++) {
-                        const correctAnswer = correctAnswers[i];
-                        const studentAnswer = studentAnswers[i] || '';
+                    if (question && Array.isArray(question.answers) && studentAnswer) {
+                        // Check if student answer matches any of the acceptable answers
+                        const isCorrect = question.answers.some(correctAnswer => {
+                            if (question.caseSensitive) {
+                                return studentAnswer === correctAnswer.trim();
+                            } else {
+                                return studentAnswer.toLowerCase() === correctAnswer.trim().toLowerCase();
+                            }
+                        });
                         
-                        // Apply case sensitivity based on question settings
-                        if (q.caseSensitive) {
-                            if (studentAnswer === correctAnswer) correct++;
-                        } else {
-                            if (studentAnswer.toLowerCase() === correctAnswer.toLowerCase()) correct++;
-                        }
+                        if (isCorrect) correct++;
                     }
-                    
-                    calculatedScore = Math.round((correct / total) * 100);
-                    console.log('Assignment grading result:', { total, correct, score: calculatedScore });
                 }
+                
+                if (total > 0) {
+                    calculatedScore = Math.round((correct / total) * 100);
+                }
+                
+                logger.info(`Text-input grading result: ${correct}/${total} = ${calculatedScore}%`, {
+                    assessmentId,
+                    studentId,
+                    correct,
+                    total,
+                    score: calculatedScore
+                });
             } else if (assessment.type === 'drag-and-drop' && Array.isArray(assessment.questions)) {
                 // Support all subtypes: sequence, fill-in-blank, image-fill-blank (and legacy image-fill-in-blank), long-paragraph-fill-in-blank
                 const q = assessment.questions[0];

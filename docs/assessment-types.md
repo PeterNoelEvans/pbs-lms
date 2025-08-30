@@ -41,7 +41,13 @@ The following are the supported assessment types:
    - Manually graded
    - Supports audio/video recording
 
-8. **Listening Comprehension** (`listening`)
+8. **Text Input** (`text-input`)
+   - Students type answers directly into text fields
+   - Auto-graded with flexible answer matching
+   - Supports multiple correct answers per question
+   - Case-sensitive or case-insensitive grading
+
+9. **Listening Comprehension** (`listening`)
    - Audio-based questions
    - Can be auto or manually graded
    - Supports audio file uploads
@@ -90,7 +96,7 @@ The `drag-and-drop` type has several subtypes that MUST be properly handled:
    - Changes to type structure require updates to both
 
 2. **Grading Requirements**
-   - Auto-graded types: `multiple-choice`, `true-false`, `matching`, `drag-and-drop`, `listening`
+   - Auto-graded types: `multiple-choice`, `true-false`, `matching`, `drag-and-drop`, `text-input`, `listening`
    - Manually graded types: `writing`, `writing-long`, `speaking`
 
 3. **Question Counting**
