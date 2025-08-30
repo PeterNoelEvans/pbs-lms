@@ -144,7 +144,6 @@
                                     <option value="writing">Writing</option>
                                     <option value="writing-long">Writing (Long)</option>
                                     <option value="speaking">Speaking</option>
-                                    <option value="assignment">Fill-in-the-Blank Text</option>
                                     <option value="listening">Listening Comprehension</option>
                                 </select>
                             </div>
@@ -644,12 +643,7 @@
                             <i class="bi bi-upload"></i> Bulk Import Questions
                         </button>`;
                     break;
-                case 'assignment':
-                    buttonsContainer.innerHTML = `
-                        <button type="button" class="btn btn-outline-primary" onclick="addQuestion('assignment')">
-                            <i class="bi bi-input-cursor-text"></i> Add Fill-in-the-Blank Text
-                        </button>`;
-                    break;
+
                 case 'change-sequence':
                     buttonsContainer.innerHTML = `
                         <button type="button" class="btn btn-outline-primary" onclick="addQuestion('change-sequence')">
@@ -672,7 +666,7 @@
             // Always set questionsSection display at the end
             const questionsSection = document.getElementById('questionsSection');
             if (questionsSection) {
-                const showQuestions = ['multiple-choice', 'drag-and-drop', 'matching', 'true-false', 'mixed', 'assignment', 'change-sequence', 'line-match', 'phoneme-build'].includes(type);
+                const showQuestions = ['multiple-choice', 'drag-and-drop', 'matching', 'true-false', 'mixed', 'change-sequence', 'line-match', 'phoneme-build'].includes(type);
                 questionsSection.style.display = showQuestions ? 'block' : 'none';
             }
             // Always show Create Assessment button for true-false
@@ -1027,38 +1021,7 @@
                         </div>`;
                     break;
 
-                case 'assignment':
-                    questionHtml += `
-                        <div class="card mb-3 question-card" data-type="assignment">
-                            <div class="card-header d-flex justify-content-between align-items-center">
-                                <h5 class="mb-0">Fill-in-the-Blank Text</h5>
-                                <button type="button" class="btn-close" aria-label="Close" onclick="removeQuestion(this)"></button>
-                            </div>
-                            <div class="card-body">
-                                <div class="mb-3">
-                                    <label class="form-label">Text with Blanks</label>
-                                    <p class="text-muted small">Use [BLANK:answer] where you want blanks to appear. Example: My name is [BLANK:John].</p>
-                                    <textarea class="form-control text-with-blanks" rows="10" required>${questionData?.text || ''}</textarea>
-                                </div>
-                                <div class="mb-3">
-                                    <label class="form-label">Instructions</label>
-                                    <textarea class="form-control assignment-instructions" rows="2">${questionData?.instructions || 'Fill in the blanks with the correct words.'}</textarea>
-                                </div>
-                                <div class="mb-3">
-                                    <label class="form-label">Audio File (optional)</label>
-                                    <input type="file" class="form-control assignment-audio" accept="audio/*">
-                                    <div class="audio-preview mt-2" style="display: none;"></div>
-                                    <input type="hidden" class="audio-file-path">
-                                    <small class="form-text text-muted">Students can listen to this audio while completing the fill-in-the-blank exercise.</small>
-                                </div>
-                                <div class="mb-3 form-check">
-                                    <input type="checkbox" class="form-check-input case-sensitive" id="caseSensitive_${questionId}" ${questionData?.caseSensitive ? 'checked' : ''}>
-                                    <label class="form-check-label" for="caseSensitive_${questionId}">Case Sensitive Answers</label>
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                    break;
+
                 case 'change-sequence':
                     // Only insert the inner fields, not a nested card
                     questionHtml += `
@@ -1125,7 +1088,7 @@
                         `;
                         
                         // Upload the audio file to server and store path
-                        uploadAssignmentAudio(file, audioFilePathInput);
+
                     }
                 });
             });
@@ -1500,7 +1463,7 @@
                                 <button class="btn btn-sm btn-danger" onclick="deleteAssessment('${assessment.id}')">
                                     <i class="bi bi-trash"></i> Delete
                                 </button>
-                                ${['speaking', 'assignment', 'writing', 'writing-long'].includes((assessment.type || '').toLowerCase()) ? `<a href="/teacher/grade-assessment.html?assessmentId=${assessment.id}" class="btn btn-success btn-sm ms-2"><i class="bi bi-clipboard-check"></i> Grade</a>` : ''}
+                                ${['speaking', 'writing', 'writing-long'].includes((assessment.type || '').toLowerCase()) ? `<a href="/teacher/grade-assessment.html?assessmentId=${assessment.id}" class="btn btn-success btn-sm ms-2"><i class="bi bi-clipboard-check"></i> Grade</a>` : ''}
                             </div>
                         </div>
                     `;
@@ -3035,31 +2998,7 @@ Ooh, exciting!|That sounds fun.</pre>
             const question = { type };
             // Handle different question types
             switch(type) {
-                case 'assignment':
-                    const textWithBlanks = cardBody.querySelector('.text-with-blanks').value;
-                    const instructions = cardBody.querySelector('.assignment-instructions').value;
-                    const caseSensitive = cardBody.querySelector('.case-sensitive').checked;
-                    
-                    // Extract the blanks and answers from the format [BLANK:answer]
-                    const blanksRegex = /\[BLANK:(.*?)\]/g;
-                    const matches = [...textWithBlanks.matchAll(blanksRegex)];
-                    
-                    const answers = matches.map(match => match[1]);
-                    
-                    // Replace [BLANK:answer] with [BLANK] for display
-                    const displayText = textWithBlanks.replace(blanksRegex, '[BLANK]');
-                    
-                    question.text = displayText;
-                    question.rawText = textWithBlanks; // Store the original text with answers
-                    question.instructions = instructions;
-                    question.caseSensitive = caseSensitive;
-                    
-                    // Handle audio file if present
-                    const audioFilePathInput = cardBody.querySelector('.audio-file-path');
-                    if (audioFilePathInput && audioFilePathInput.value) {
-                        question.audioPath = audioFilePathInput.value;
-                    }
-                    break;
+
                 case 'change-sequence':
                     // Read items from textarea (one per line)
                     const itemsElem = cardBody.querySelector('.sequence-items');
@@ -3655,36 +3594,7 @@ Ooh, exciting!|That sounds fun.</pre>
             }
         }
 
-        // Upload audio file specifically for assignment questions
-        async function uploadAssignmentAudio(file, audioFilePathInput) {
-            const formData = new FormData();
-            formData.append('file', file);
-            
-            try {
-                const response = await fetch('/api/assessments/upload-audio', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: formData
-                });
-                
-                if (!response.ok) {
-                    throw new Error('Failed to upload audio');
-                }
-                
-                const result = await response.json();
-                
-                // Store the file path in the hidden input
-                if (audioFilePathInput) {
-                    audioFilePathInput.value = result.filePath;
-                    console.log('Audio file path saved:', result.filePath);
-                }
-            } catch (error) {
-                console.error('Error uploading assignment audio:', error);
-                alert('Failed to upload audio file: ' + error.message);
-            }
-        }
+
 
         // Show/hide buttons based on mode
         function showEditMode() {

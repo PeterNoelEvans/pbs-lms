@@ -115,13 +115,13 @@
   - **Root Cause**: quarterFilter dropdown (line ~87) doesn't trigger update to quarter field (line 230)
   - **Solution**: Added event listener to sync quarterFilter changes with assessment form quarter field, visual feedback, and helpful tooltips
 
-- [ ] **Fix fill-in-the-blank assessment type**
-  - **Scope**: Student assessment portal (`public/student/assessment.html`)
-  - **Risk**: 🔴 HIGH - Assessment type completely non-functional
-  - **DoD**: Fill-in-the-blank assessments render properly, students can type responses
-  - **Issue**: Assessment type "assignment" (Fill-in-the-Blank Text) has no case handler in switch statement
-  - **Root Cause**: Missing case 'assignment' in renderAssessment() switch statement (line 1007)
-  - **Solution**: Add case 'assignment' handler with text input fields for fill-in-the-blank functionality
+- [x] **Remove confusing assignment assessment type** ✅ **COMPLETED**
+  - **Scope**: Assessment creation and documentation cleanup
+  - **Risk**: 🔴 HIGH - Confusing redundant assessment type causing user issues
+  - **DoD**: Assignment type completely removed from all interfaces and documentation
+  - **Issue**: "assignment" type was redundant with existing drag-and-drop fill-in-blank functionality
+  - **Root Cause**: Unclear naming and duplicated functionality between assignment and drag-and-drop subtypes
+  - **Solution**: Completely removed assignment type from teacher interface, grading logic, and documentation. For fill-in-blank needs, use drag-and-drop with subtype 'fill-in-blank'
 
 - [ ] **Create easy due date management interface**
   - **Scope**: Teacher assessment management
