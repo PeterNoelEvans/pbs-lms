@@ -566,6 +566,146 @@
             background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%23dc3545' viewBox='0 0 12 12'%3e%3ccircle cx='6' cy='6' r='4.5'/%3e%3cpath stroke-linejoin='round' d='M5.8 3.6h.4L6 6.5z'/%3e%3ccircle cx='6' cy='8.2' r='.6' fill='%23dc3545' stroke='none'/%3e%3c/svg%3e");
             background-repeat: no-repeat;
         }
+        
+        /* Table Completion Styles */
+        .table-completion-table {
+            margin-bottom: 20px;
+        }
+        
+        .table-completion-table th {
+            background-color: #343a40;
+            color: white;
+            font-weight: 600;
+            text-align: center;
+            vertical-align: middle;
+        }
+        
+        .table-cell-input input {
+            border: 2px solid #dee2e6;
+            border-radius: 4px;
+            padding: 8px 12px;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        
+        .table-cell-input input:focus {
+            border-color: #0d6efd;
+            box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+        }
+        
+        .table-cell-drop {
+            min-height: 50px;
+            border: 2px dashed #ced4da;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: #f8f9fa;
+            transition: all 0.2s;
+        }
+        
+        .table-cell-drop:hover {
+            border-color: #0d6efd;
+            background-color: #e7f3ff;
+        }
+        
+        .table-cell-drop .drop-zone {
+            color: #6c757d;
+            font-style: italic;
+        }
+        
+        .table-cell-select select {
+            border: 2px solid #dee2e6;
+            border-radius: 4px;
+            padding: 8px 12px;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        
+        .table-cell-select select:focus {
+            border-color: #0d6efd;
+            box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+        }
+        
+        .table-cell-filled {
+            background-color: #f8f9fa;
+            font-weight: 500;
+            text-align: center;
+            vertical-align: middle;
+        }
+        
+        .word-bank {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 20px;
+        }
+        
+        .word-bank h6 {
+            margin-bottom: 10px;
+            color: #495057;
+            font-weight: 600;
+        }
+        
+        .word-bank-items {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        
+        .word-bank-item {
+            display: inline-block;
+            padding: 8px 12px;
+            background-color: #e7f3ff;
+            border: 1px solid #0d6efd;
+            border-radius: 20px;
+            cursor: grab;
+            user-select: none;
+            transition: all 0.2s;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        .word-bank-item:hover {
+            background-color: #d0e7ff;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .word-bank-item:active {
+            cursor: grabbing;
+            transform: scale(0.95);
+        }
+        
+        .dropped-word {
+            display: inline-block;
+            padding: 5px 10px;
+            background-color: #e7f3ff;
+            border: 1px solid #0d6efd;
+            border-radius: 4px;
+            font-weight: 500;
+            font-size: 14px;
+        }
+        
+        .table-completion-header {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 20px;
+        }
+        
+        .table-title {
+            color: #495057;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+        
+        .table-instructions {
+            color: #6c757d;
+            margin-bottom: 0;
+            font-style: italic;
+        }
     </style>
 </head>
 <body class="bg-light">
@@ -749,6 +889,13 @@
                     behavior: 'smooth'
                 });
             }
+        }
+
+        function navigateToAssessments() {
+            // Save current scroll position before navigating back to assessments
+            const currentScroll = window.scrollY || window.pageYOffset;
+            sessionStorage.setItem('assessmentsScroll', currentScroll.toString());
+            window.location.href = '/student/assessments';
         }
         
         // Enhanced scroll preservation for form submissions
@@ -1103,6 +1250,7 @@
                                     <div class="card-body">
                                         <p class="mb-3" id="assessmentDescription">${formatWithLineBreaks(assessment.description || 'Complete the drag and drop exercise below.')}</p>
                                         ${attemptsHtml}
+                                        <div id="audioPlayerDragDrop"></div>
                                         <div id="dragDropContainerWrapper" class="mt-4">
                                             <div id="dragDropContainer" class="mt-4">
                                                 <div class="text-center">
@@ -1114,6 +1262,40 @@
                                     </div>
                                 </div>
                             `;
+                            
+                            // Add audio player if audio file is present
+                            const audioPlayerDragDrop = document.getElementById('audioPlayerDragDrop');
+                            const hasAudioDragDrop = assessment.mediaFiles && assessment.mediaFiles.some(file =>
+                                (file.url || file.filePath) && (
+                                    (file.url && (file.url.endsWith('.mp3') || file.url.endsWith('.wav') || file.url.endsWith('.ogg')))
+                                    || (file.filePath && (file.filePath.endsWith('.mp3') || file.filePath.endsWith('.wav') || file.filePath.endsWith('.ogg')))
+                                    || (file.type && file.type.startsWith('audio/'))
+                                )
+                            );
+                            
+                            if (hasAudioDragDrop) {
+                                const audio = document.createElement('audio');
+                                audio.controls = true;
+                                audio.className = 'w-100 mb-3';
+                                const audioFiles = assessment.mediaFiles.filter(file =>
+                                    (file.url || file.filePath) && (
+                                        (file.url && (file.url.endsWith('.mp3') || file.url.endsWith('.wav') || file.url.endsWith('.ogg')))
+                                        || (file.filePath && (file.filePath.endsWith('.mp3') || file.filePath.endsWith('.wav') || file.filePath.endsWith('.ogg')))
+                                        || (file.type && file.type.startsWith('audio/'))
+                                    )
+                                );
+                                audioFiles.forEach(file => {
+                                    const source = document.createElement('source');
+                                    source.src = file.url || file.filePath;
+                                    const filePath = file.url || file.filePath;
+                                    if (filePath.endsWith('.mp3')) source.type = 'audio/mpeg';
+                                    else if (filePath.endsWith('.wav')) source.type = 'audio/wav';
+                                    else if (filePath.endsWith('.ogg')) source.type = 'audio/ogg';
+                                    else if (file.type && file.type.startsWith('audio/')) source.type = file.type;
+                                    audio.appendChild(source);
+                                });
+                                audioPlayerDragDrop.appendChild(audio);
+                            }
                             
                             // Get the container we just created
                             const ddContainer = document.getElementById('dragDropContainer');
@@ -1175,9 +1357,11 @@
                         
                     case 'speaking':
                         // Handle speaking assessments specifically
-                        // Add reference audio if available
+                        // Add reference audio and image if available
                         let referenceAudioHtml = '';
+                        let referenceImageHtml = '';
                         if (assessment.mediaFiles && assessment.mediaFiles.length > 0) {
+                            // Look for audio files
                             const audioFile = assessment.mediaFiles.find(f =>
                                 (f.url || f.filePath) &&
                                 ((f.url && (f.url.endsWith('.mp3') || f.url.endsWith('.wav') || f.url.endsWith('.ogg')))
@@ -1195,6 +1379,24 @@
                                     </div>
                                 `;
                             }
+                            
+                            // Look for image files
+                            const imageFile = assessment.mediaFiles.find(f =>
+                                (f.url || f.filePath) &&
+                                ((f.url && (f.url.endsWith('.jpg') || f.url.endsWith('.jpeg') || f.url.endsWith('.png') || f.url.endsWith('.gif') || f.url.endsWith('.webp')))
+                                 || (f.filePath && (f.filePath.endsWith('.jpg') || f.filePath.endsWith('.jpeg') || f.filePath.endsWith('.png') || f.filePath.endsWith('.gif') || f.filePath.endsWith('.webp')))
+                                 || (f.type && f.type.startsWith('image/')))
+                            );
+                            if (imageFile) {
+                                referenceImageHtml = `
+                                    <div class="mb-3">
+                                        <label class="form-label"><strong>Look at this image:</strong></label>
+                                        <div class="text-center">
+                                            <img src="${imageFile.url || imageFile.filePath}" class="img-fluid" style="max-height: 400px; max-width: 100%;" alt="Reference image">
+                                        </div>
+                                    </div>
+                                `;
+                            }
                         }
                         container.innerHTML = `
                             <div class="card mb-4">
@@ -1203,6 +1405,7 @@
                                 </div>
                                 <div class="card-body">
                                     ${referenceAudioHtml}
+                                    ${referenceImageHtml}
                                     <p class="mb-3" id="assessmentDescription">${formatWithLineBreaks(assessment.description || 'Record your response to the speaking prompt.')}</p>
                                     ${assessment.criteria ? `
                                         <div class="alert alert-info mb-3">
@@ -1302,14 +1505,24 @@
                         const title = document.createElement('h3');
                         title.textContent = assessment.title || 'Change-Sequence Activity';
                         container.appendChild(title);
-                        // Audio (if present)
+                        // Audio and Image (if present)
                         if (assessment.mediaFiles && assessment.mediaFiles.length > 0) {
+                            // Look for audio files
                             const audioFile = assessment.mediaFiles.find(f => f.type && f.type.startsWith('audio/'));
                             if (audioFile) {
                                 const audioDiv = document.createElement('div');
                                 audioDiv.className = 'mb-3';
                                 audioDiv.innerHTML = `<audio controls src="${audioFile.filePath}"></audio>`;
                                 container.appendChild(audioDiv);
+                            }
+                            
+                            // Look for image files
+                            const imageFile = assessment.mediaFiles.find(f => f.type && f.type.startsWith('image/'));
+                            if (imageFile) {
+                                const imageDiv = document.createElement('div');
+                                imageDiv.className = 'mb-3 text-center';
+                                imageDiv.innerHTML = `<img src="${imageFile.filePath}" class="img-fluid" style="max-height: 400px; max-width: 100%;" alt="Reference image">`;
+                                container.appendChild(imageDiv);
                             }
                         }
                         // Instructions
@@ -1398,6 +1611,23 @@
                         };
                         return;
                         
+                    case 'table-completion':
+                        container.innerHTML = `
+                            <div class="card mb-4">
+                                <div class="card-header bg-info text-white">
+                                    <h3 class="mb-0" id="assessmentTitle">${assessment.title || 'Table Completion'}</h3>
+                                </div>
+                                <div class="card-body">
+                                    <p class="mb-3" id="assessmentDescription">${formatWithLineBreaks(assessment.description || '')}</p>
+                                    ${attemptsHtml}
+                                    <div class="table-completion-container"></div>
+                                </div>
+                            </div>
+                        `;
+                        const tableContainer = container.querySelector('.table-completion-container');
+                        renderTableCompletionAssessment(tableContainer, assessment);
+                        break;
+                        
                     default:
                         container.innerHTML = `
                             <div class="card mb-4">
@@ -1446,6 +1676,7 @@
             container.innerHTML = `
                 <div class="card mb-3">
                     <div class="card-body">
+                        <div id="audioPlayerLineMatch"></div>
                         <div class="row">
                             <div class="col-md-5" id="lineLeft"></div>
                             <div class="col-md-2 text-center"><small class="text-muted">Tap left, then right to connect</small></div>
@@ -1460,6 +1691,40 @@
 
             const leftDiv = document.getElementById('lineLeft');
             const rightDiv = document.getElementById('lineRight');
+            
+            // Add audio player if audio file is present
+            const audioPlayerLineMatch = document.getElementById('audioPlayerLineMatch');
+            const hasAudioLineMatch = assessment.mediaFiles && assessment.mediaFiles.some(file =>
+                (file.url || file.filePath) && (
+                    (file.url && (file.url.endsWith('.mp3') || file.url.endsWith('.wav') || file.url.endsWith('.ogg')))
+                    || (file.filePath && (file.filePath.endsWith('.mp3') || file.filePath.endsWith('.wav') || file.filePath.endsWith('.ogg')))
+                    || (file.type && file.type.startsWith('audio/'))
+                )
+            );
+            
+            if (hasAudioLineMatch) {
+                const audio = document.createElement('audio');
+                audio.controls = true;
+                audio.className = 'w-100 mb-3';
+                const audioFiles = assessment.mediaFiles.filter(file =>
+                    (file.url || file.filePath) && (
+                        (file.url && (file.url.endsWith('.mp3') || file.url.endsWith('.wav') || file.url.endsWith('.ogg')))
+                        || (file.filePath && (file.filePath.endsWith('.mp3') || file.filePath.endsWith('.wav') || file.filePath.endsWith('.ogg')))
+                        || (file.type && file.type.startsWith('audio/'))
+                    )
+                );
+                audioFiles.forEach(file => {
+                    const source = document.createElement('source');
+                    source.src = file.url || file.filePath;
+                    const filePath = file.url || file.filePath;
+                    if (filePath.endsWith('.mp3')) source.type = 'audio/mpeg';
+                    else if (filePath.endsWith('.wav')) source.type = 'audio/wav';
+                    else if (filePath.endsWith('.ogg')) source.type = 'audio/ogg';
+                    else if (file.type && file.type.startsWith('audio/')) source.type = file.type;
+                    audio.appendChild(source);
+                });
+                audioPlayerLineMatch.appendChild(audio);
+            }
             
             // Render left items (supporting both text and images)
             leftDiv.innerHTML = left.map((item, i) => {
@@ -1557,6 +1822,7 @@
 
             container.innerHTML = `
                 <div class="card mb-3"><div class="card-body">
+                    <div id="audioPlayerPhoneme"></div>
                     <div class="fs-4 mb-3" id="pbWord">${initial}</div>
                     <div id="pbTiles" class="d-flex flex-wrap gap-2 mb-3"></div>
                     <div class="d-flex gap-2">
@@ -1564,6 +1830,40 @@
                         <button id="pbSubmit" class="btn btn-success">Submit</button>
                     </div>
                 </div></div>`;
+            
+            // Add audio player if audio file is present
+            const audioPlayerPhoneme = document.getElementById('audioPlayerPhoneme');
+            const hasAudioPhoneme = assessment.mediaFiles && assessment.mediaFiles.some(file =>
+                (file.url || file.filePath) && (
+                    (file.url && (file.url.endsWith('.mp3') || file.url.endsWith('.wav') || file.url.endsWith('.ogg')))
+                    || (file.filePath && (file.filePath.endsWith('.mp3') || file.filePath.endsWith('.wav') || file.filePath.endsWith('.ogg')))
+                    || (file.type && file.type.startsWith('audio/'))
+                )
+            );
+            
+            if (hasAudioPhoneme) {
+                const audio = document.createElement('audio');
+                audio.controls = true;
+                audio.className = 'w-100 mb-3';
+                const audioFiles = assessment.mediaFiles.filter(file =>
+                    (file.url || file.filePath) && (
+                        (file.url && (file.url.endsWith('.mp3') || file.url.endsWith('.wav') || file.url.endsWith('.ogg')))
+                        || (file.filePath && (file.filePath.endsWith('.mp3') || file.filePath.endsWith('.wav') || file.filePath.endsWith('.ogg')))
+                        || (file.type && file.type.startsWith('audio/'))
+                    )
+                );
+                audioFiles.forEach(file => {
+                    const source = document.createElement('source');
+                    source.src = file.url || file.filePath;
+                    const filePath = file.url || file.filePath;
+                    if (filePath.endsWith('.mp3')) source.type = 'audio/mpeg';
+                    else if (filePath.endsWith('.wav')) source.type = 'audio/wav';
+                    else if (filePath.endsWith('.ogg')) source.type = 'audio/ogg';
+                    else if (file.type && file.type.startsWith('audio/')) source.type = file.type;
+                    audio.appendChild(source);
+                });
+                audioPlayerPhoneme.appendChild(audio);
+            }
 
             const tileWrap = document.getElementById('pbTiles');
             tileWrap.innerHTML = tiles.map(t=>`<button class="btn btn-outline-primary btn-sm pb-tile" data-val="${escapeHtml(t)}">${escapeHtml(t)}</button>`).join('');
@@ -3194,6 +3494,9 @@
                             countdownElement.textContent = countdown;
                             if (countdown <= 0) {
                                 clearInterval(countdownInterval);
+                                // Save current scroll position before redirecting
+                                const currentScroll = window.scrollY || window.pageYOffset;
+                                sessionStorage.setItem('assessmentsScroll', currentScroll.toString());
                                 window.location.href = '/student/assessments.html';
                             }
                         }, 1000);
@@ -3231,6 +3534,207 @@
             });
             inputGroup.appendChild(input);
             questionDiv.appendChild(inputGroup);
+        }
+
+        function renderTableCompletionAssessment(container, assessment) {
+            const questions = assessment.questions || [];
+            if (questions.length === 0) {
+                container.innerHTML = '<div class="alert alert-warning">No table completion questions found for this assessment.</div>';
+                return;
+            }
+
+            const form = document.createElement('form');
+            form.className = 'table-completion-form';
+            
+            questions.forEach((question, questionIndex) => {
+                const questionDiv = document.createElement('div');
+                questionDiv.className = 'table-completion-question mb-4';
+                
+                // Parse table data
+                const headers = question.table?.headers || [];
+                const rows = question.table?.rows || [];
+                const correctAnswers = question.table?.correctAnswers || {};
+                const wordBank = question.table?.wordBank || [];
+                const subtype = question.subtype || 'text-input';
+                
+                // Create table HTML
+                let tableHtml = `
+                    <div class="table-completion-header mb-3">
+                        <h5 class="table-title">${question.title || 'Complete the Table'}</h5>
+                        <p class="table-instructions">${question.instructions || 'Fill in the missing information in the table below.'}</p>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-completion-table">
+                            <thead class="table-dark">
+                                <tr>
+                `;
+                
+                // Add headers
+                headers.forEach(header => {
+                    tableHtml += `<th>${header}</th>`;
+                });
+                tableHtml += '</tr></thead><tbody>';
+                
+                // Add rows with input fields for blanks
+                rows.forEach((row, rowIndex) => {
+                    tableHtml += '<tr>';
+                    row.forEach((cell, colIndex) => {
+                        const cellKey = `${rowIndex},${colIndex}`;
+                        const isBlank = cell === '[BLANK]' || cell === 'BLANK';
+                        
+                        if (isBlank) {
+                            // Create input field based on subtype
+                            if (subtype === 'text-input') {
+                                tableHtml += `
+                                    <td class="table-cell-input">
+                                        <input type="text" 
+                                               class="form-control table-input" 
+                                               data-row="${rowIndex}" 
+                                               data-col="${colIndex}"
+                                               placeholder="Enter answer">
+                                    </td>
+                                `;
+                            } else if (subtype === 'drag-drop') {
+                                tableHtml += `
+                                    <td class="table-cell-drop" 
+                                        data-row="${rowIndex}" 
+                                        data-col="${colIndex}"
+                                        ondrop="dropTableItem(event)" 
+                                        ondragover="allowDrop(event)">
+                                        <div class="drop-zone">Drop here</div>
+                                    </td>
+                                `;
+                            } else if (subtype === 'word-bank') {
+                                tableHtml += `
+                                    <td class="table-cell-select">
+                                        <select class="form-select table-select" 
+                                                data-row="${rowIndex}" 
+                                                data-col="${colIndex}">
+                                            <option value="">Choose...</option>
+                                            ${wordBank.map(word => `<option value="${word}">${word}</option>`).join('')}
+                                        </select>
+                                    </td>
+                                `;
+                            } else if (subtype === 'mixed') {
+                                // For mixed, default to text input but could be enhanced
+                                tableHtml += `
+                                    <td class="table-cell-input">
+                                        <input type="text" 
+                                               class="form-control table-input" 
+                                               data-row="${rowIndex}" 
+                                               data-col="${colIndex}"
+                                               placeholder="Enter answer">
+                                    </td>
+                                `;
+                            }
+                        } else {
+                            // Pre-filled cell
+                            tableHtml += `<td class="table-cell-filled">${cell}</td>`;
+                        }
+                    });
+                    tableHtml += '</tr>';
+                });
+                
+                tableHtml += '</tbody></table></div>';
+                
+                // Add word bank for drag-drop subtype
+                if (subtype === 'drag-drop' && wordBank.length > 0) {
+                    tableHtml += `
+                        <div class="word-bank mt-3">
+                            <h6>Word Bank:</h6>
+                            <div class="word-bank-items">
+                                ${wordBank.map(word => `
+                                    <span class="word-bank-item" 
+                                          draggable="true" 
+                                          ondragstart="dragTableItem(event, '${word}')">
+                                        ${word}
+                                    </span>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                questionDiv.innerHTML = tableHtml;
+                form.appendChild(questionDiv);
+            });
+            
+            container.appendChild(form);
+            
+            // Add event listeners for text inputs
+            form.addEventListener('input', function(e) {
+                if (e.target.classList.contains('table-input')) {
+                    const row = parseInt(e.target.dataset.row);
+                    const col = parseInt(e.target.dataset.col);
+                    const answer = e.target.value;
+                    
+                    if (!userAnswers[0]) userAnswers[0] = {};
+                    if (!userAnswers[0].tableAnswers) userAnswers[0].tableAnswers = {};
+                    userAnswers[0].tableAnswers[`${row},${col}`] = answer;
+                }
+            });
+            
+            // Add event listeners for select dropdowns
+            form.addEventListener('change', function(e) {
+                if (e.target.classList.contains('table-select')) {
+                    const row = parseInt(e.target.dataset.row);
+                    const col = parseInt(e.target.dataset.col);
+                    const answer = e.target.value;
+                    
+                    if (!userAnswers[0]) userAnswers[0] = {};
+                    if (!userAnswers[0].tableAnswers) userAnswers[0].tableAnswers = {};
+                    userAnswers[0].tableAnswers[`${row},${col}`] = answer;
+                }
+            });
+        }
+
+        // Table Completion Drag and Drop Helper Functions
+        function dragTableItem(event, word) {
+            event.dataTransfer.setData("text/plain", word);
+            event.target.style.opacity = "0.5";
+        }
+
+        function allowDrop(event) {
+            event.preventDefault();
+        }
+
+        function dropTableItem(event) {
+            event.preventDefault();
+            const word = event.dataTransfer.getData("text/plain");
+            const dropZone = event.target.closest('.table-cell-drop');
+            
+            if (dropZone) {
+                // Clear existing content
+                dropZone.innerHTML = '';
+                
+                // Add the word
+                const wordSpan = document.createElement('span');
+                wordSpan.className = 'dropped-word';
+                wordSpan.textContent = word;
+                wordSpan.style.cssText = `
+                    display: inline-block;
+                    padding: 5px 10px;
+                    background-color: #e7f3ff;
+                    border: 1px solid #0d6efd;
+                    border-radius: 4px;
+                    font-weight: 500;
+                `;
+                dropZone.appendChild(wordSpan);
+                
+                // Save the answer
+                const row = parseInt(dropZone.dataset.row);
+                const col = parseInt(dropZone.dataset.col);
+                
+                if (!userAnswers[0]) userAnswers[0] = {};
+                if (!userAnswers[0].tableAnswers) userAnswers[0].tableAnswers = {};
+                userAnswers[0].tableAnswers[`${row},${col}`] = word;
+                
+                // Hide the original word from word bank
+                const wordBankItem = document.querySelector(`[ondragstart*="${word}"]`);
+                if (wordBankItem) {
+                    wordBankItem.style.display = 'none';
+                }
+            }
         }
 
         function renderWritingAssessment(container, question, assessment) {
@@ -3353,9 +3857,9 @@
                     <i class="bi bi-exclamation-triangle-fill me-2"></i>
                     ${message}
                 </div>
-                <a href="/student/assessments" class="btn btn-primary">
+                <button onclick="navigateToAssessments()" class="btn btn-primary">
                     <i class="bi bi-arrow-left me-2"></i>Back to Assessments
-                </a>
+                </button>
             `;
             hideLoader();
         }
@@ -3381,9 +3885,9 @@
                         </div>
                     </div>
                 </div>
-                <a href="/student/assessments" class="btn btn-primary mt-3">
+                <button onclick="navigateToAssessments()" class="btn btn-primary mt-3">
                     <i class="bi bi-arrow-left me-2"></i>Back to Assessments / กลับไปยังการประเมิน
-                </a>
+                </button>
             `;
             hideLoader();
         }
@@ -3413,9 +3917,9 @@
                         `).join('')}
                     </ul>
                 </div>
-                <a href="/student/assessments" class="btn btn-primary mt-3">
+                <button onclick="navigateToAssessments()" class="btn btn-primary mt-3">
                     <i class="bi bi-arrow-left me-2"></i>Back to Assessments
-                </a>
+                </button>
             `;
             hideLoader();
         }
@@ -3550,9 +4054,9 @@
                                 <hr>
                                 <p class="mb-0">You will receive feedback from your teacher soon.</p>
                             </div>
-                            <a href="/student/assessments" class="btn btn-primary">
+                            <button onclick="navigateToAssessments()" class="btn btn-primary">
                                 <i class="bi bi-arrow-left"></i> Back to Assessments
-                            </a>
+                            </button>
                         `;
                         
                         // Preserve scroll position during redirect
@@ -4624,9 +5128,9 @@
                             <hr>
                             <p class="mb-0">You can now return to your assessments page.</p>
                         </div>
-                        <a href="/student/assessments" class="btn btn-primary btn-lg mt-3">
+                        <button onclick="navigateToAssessments()" class="btn btn-primary btn-lg mt-3">
                             <i class="bi bi-arrow-left"></i> Back to Assessments
-                        </a>
+                        </button>
                     `;
                 } else {
                     const error = await response.json();

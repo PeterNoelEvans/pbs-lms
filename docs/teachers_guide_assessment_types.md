@@ -177,6 +177,67 @@ This guide provides practical, step-by-step instructions for creating each type 
 
 ---
 
+---
+
+## 10. Table Completion (`table-completion`)
+
+**Purpose:** Students complete tables by filling in cells with text input, drag-and-drop, or dropdown selection. Perfect for vocabulary exercises, grammar practice, and data organization tasks.
+
+### Subtypes:
+
+#### a. Text Input (`text-input`)
+- **Purpose:** Students type answers directly into table cells.
+- **How to create:**
+  - Enter a table title (e.g., "Verb Conjugation Table").
+  - Add instructions (e.g., "Fill in the missing verb forms").
+  - Enter table headers (comma-separated, e.g., "Infinitive, Present, Past, Past Participle").
+  - Add table rows using [BLANK] for empty cells (e.g., "go, [BLANK], went, gone").
+  - Specify correct answers with row,column coordinates (e.g., Row: 0, Column: 1, Answer: "goes").
+  - (Optional) Add extra distractor words to make it more challenging.
+  - (Optional) Enable case-sensitive grading.
+  - (Optional) Enable partial credit for partially correct answers.
+- **Tips:**
+  - Use clear, consistent formatting for table data.
+  - Test your coordinate system (rows and columns start at 0).
+
+#### b. Drag and Drop (`drag-drop`)
+- **Purpose:** Students drag items from a word bank into table cells.
+- **How to create:**
+  - Follow the same table setup as text input.
+  - Enter a word bank (comma-separated, e.g., "goes, eat, wrote, run, swim").
+  - Specify correct answers with row,column coordinates.
+  - (Optional) Add extra distractor words.
+- **Tips:**
+  - Include more words in the word bank than needed to increase difficulty.
+  - Make sure word bank items are clearly distinguishable.
+
+#### c. Word Bank (`word-bank`)
+- **Purpose:** Students select from dropdown menus in each cell.
+- **How to create:**
+  - Follow the same setup as drag and drop.
+  - Students will see dropdown menus in blank cells.
+- **Tips:**
+  - Good for students who prefer selection over typing.
+  - Include "Choose..." as the default option.
+
+#### d. Mixed (`mixed`)
+- **Purpose:** Combination of text input and drag-drop in the same table.
+- **How to create:**
+  - Follow the same setup as other subtypes.
+  - Currently defaults to text input, but can be enhanced for mixed input types.
+- **Tips:**
+  - Useful for complex tables with different types of answers.
+
+**Media:** No special media uploads required.
+
+**Tips:**
+- Test your table layout before publishing.
+- Use [BLANK] consistently for empty cells.
+- Consider the difficulty level when adding distractor words.
+- Preview the assessment to ensure the table displays correctly.
+
+---
+
 # General Tips
 - Always preview your assessment before assigning to students.
 - Use the appropriate media upload field for each type (see above).

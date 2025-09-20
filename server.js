@@ -3189,6 +3189,12 @@ app.post('/api/sections/:sectionId/assessments', auth, upload.any(), async (req,
                                     console.log(`[DEBUG MC] Question ${index} has no options/choices, adding empty array`);
                                     question.options = [];
                                 }
+                                
+                                // Normalize correctAnswer to correctOption for consistency
+                                if (question.correctAnswer !== undefined && question.correctOption === undefined) {
+                                    console.log(`[DEBUG MC] Converting correctAnswer (${question.correctAnswer}) to correctOption`);
+                                    question.correctOption = question.correctAnswer;
+                                }
                             }
                         }
                         return question;
@@ -3430,6 +3436,13 @@ app.put('/api/assessments/:assessmentId', auth, upload.any(), async (req, res) =
                                 correctOption: question.correctOption || 0
                             };
                         }
+                        
+                        // Normalize correctAnswer to correctOption for consistency
+                        if (question.type === 'multiple-choice' && question.correctAnswer !== undefined && question.correctOption === undefined) {
+                            console.log(`Converting correctAnswer (${question.correctAnswer}) to correctOption for update`);
+                            question.correctOption = question.correctAnswer;
+                        }
+                        
                         return question;
                     });
                 }
@@ -3522,10 +3535,19 @@ app.get('/api/teacher/assessments', auth, async (req, res) => {
             new Map(assessments.map(item => [item.id, item])).values()
         );
 
-        // Add ungradedCount and unattached flag for each assessment
+        // Add ungradedCount, unattached flag, and flatten subject info for each assessment
         let assessmentsWithUngraded = uniqueAssessments.map(a => {
             const unattached = !a.resources || a.resources.length === 0;
-            return { ...a, unattached };
+            // Flatten subject information for easier filtering
+            const subjectId = a.section?.part?.unit?.subject?.id || null;
+            const subjectName = a.section?.part?.unit?.subject?.name || null;
+            
+            return { 
+                ...a, 
+                unattached,
+                subjectId,      // Add flattened subjectId for filtering
+                subjectName     // Add flattened subjectName for display/search
+            };
         });
 
         // Apply attachment filtering if specified
@@ -3611,6 +3633,77 @@ app.get('/api/subjects/:subjectId/assessments', auth, async (req, res) => {
     } catch (error) {
         console.error('Error fetching subject assessments:', error);
         res.status(500).json({ error: 'Failed to fetch subject assessments', details: error.message });
+    }
+});
+
+// Update assessment due date only
+app.patch('/api/assessments/:assessmentId/due-date', auth, async (req, res) => {
+    try {
+        const { assessmentId } = req.params;
+        const { dueDate } = req.body;
+
+        // Validate user is teacher or admin
+        const user = await prisma.user.findUnique({
+            where: { id: req.user.userId }
+        });
+
+        console.log('User role check:', {
+            userId: req.user.userId,
+            userRole: user?.role,
+            userRoleUpper: user?.role?.toUpperCase(),
+            isTeacher: user?.role?.toUpperCase() === 'TEACHER',
+            isAdmin: user?.role?.toUpperCase() === 'ADMIN'
+        });
+
+        if (user.role.toUpperCase() !== 'TEACHER' && user.role.toUpperCase() !== 'ADMIN') {
+            return res.status(403).json({ error: 'Access denied. Teachers and admins only.' });
+        }
+
+        // Validate date format if provided
+        if (dueDate && isNaN(new Date(dueDate).getTime())) {
+            return res.status(400).json({ error: 'Invalid date format' });
+        }
+
+        // Update the assessment
+        const updatedAssessment = await prisma.assessment.update({
+            where: { id: assessmentId },
+            data: { 
+                dueDate: dueDate ? new Date(dueDate) : null,
+                updatedAt: new Date()
+            },
+            select: {
+                id: true,
+                title: true,
+                dueDate: true,
+                quarter: true,
+                updatedAt: true
+            }
+        });
+
+        logger.info(`Assessment due date updated: ${assessmentId} -> ${dueDate}`, {
+            assessmentId,
+            newDueDate: dueDate,
+            userId: req.user.userId,
+            userName: user.name
+        });
+
+        res.json({ 
+            success: true, 
+            assessment: updatedAssessment,
+            message: 'Due date updated successfully'
+        });
+
+    } catch (error) {
+        logger.logError(error, 'Failed to update assessment due date', {
+            assessmentId: req.params.assessmentId,
+            userId: req.user.userId
+        });
+        
+        if (error.code === 'P2025') {
+            return res.status(404).json({ error: 'Assessment not found' });
+        }
+        
+        res.status(500).json({ error: 'Failed to update due date' });
     }
 });
 
@@ -4030,6 +4123,65 @@ app.post('/api/assessments/:assessmentId/submit', auth, async (req, res) => {
                 if (total > 0) {
                     calculatedScore = Math.round((correct / total) * 100);
                 }
+            } else if (assessment.type === 'table-completion' && Array.isArray(assessment.questions)) {
+                // Grading logic for table completion
+                const q = assessment.questions[0];
+                let correct = 0;
+                let total = 0;
+                
+                if (q && q.table && q.table.correctAnswers && answers[0] && answers[0].tableAnswers) {
+                    const correctAnswers = q.table.correctAnswers;
+                    const userAnswers = answers[0].tableAnswers;
+                    const caseSensitive = q.table.caseSensitive || false;
+                    const allowPartialCredit = q.table.allowPartialCredit !== false; // Default to true
+                    
+                    // Count total correct answers
+                    total = Object.keys(correctAnswers).length;
+                    
+                    // Check each correct answer
+                    for (const [cellKey, correctAnswer] of Object.entries(correctAnswers)) {
+                        const userAnswer = userAnswers[cellKey];
+                        
+                        if (userAnswer) {
+                            // Normalize answers for comparison
+                            let normalizedUserAnswer = userAnswer.toString().trim();
+                            let normalizedCorrectAnswer = correctAnswer.toString().trim();
+                            
+                            if (!caseSensitive) {
+                                normalizedUserAnswer = normalizedUserAnswer.toLowerCase();
+                                normalizedCorrectAnswer = normalizedCorrectAnswer.toLowerCase();
+                            }
+                            
+                            // Check for exact match
+                            if (normalizedUserAnswer === normalizedCorrectAnswer) {
+                                correct++;
+                            } else if (allowPartialCredit) {
+                                // Check for partial credit (contains correct answer)
+                                if (normalizedUserAnswer.includes(normalizedCorrectAnswer) || 
+                                    normalizedCorrectAnswer.includes(normalizedUserAnswer)) {
+                                    correct += 0.5; // Half credit for partial match
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Round partial credit to whole numbers
+                    if (allowPartialCredit) {
+                        correct = Math.round(correct);
+                    }
+                }
+                
+                if (total > 0) {
+                    calculatedScore = Math.round((correct / total) * 100);
+                }
+                
+                logger.info(`Table completion grading result: ${correct}/${total} = ${calculatedScore}%`, {
+                    assessmentId,
+                    studentId,
+                    correct,
+                    total,
+                    score: calculatedScore
+                });
             }
         }
         if (calculatedScore !== null) score = calculatedScore;
@@ -4190,6 +4342,7 @@ app.get('/api/student/assessments', auth, async (req, res) => {
                                     title: assessment.title || assessment.name,
                                     description: assessment.description || '',
                                     type: assessment.type,
+                                    category: assessment.category, // Add category for skills grouping
                                     attempts,
                                     maxAttempts: assessment.maxAttempts || '-',
                                     bestScore,
@@ -4340,6 +4493,34 @@ app.get('/api/config/active-quarter', auth, async (req, res) => {
     } catch (error) {
         console.error('Error fetching active quarter:', error);
         res.status(500).json({ error: 'Failed to fetch active quarter' });
+    }
+});
+
+// Debug endpoint to check user role
+app.get('/api/debug/user-role', auth, async (req, res) => {
+    try {
+        const user = await prisma.user.findUnique({
+            where: { id: req.user.userId },
+            select: {
+                id: true,
+                name: true,
+                email: true,
+                role: true,
+                active: true
+            }
+        });
+        
+        res.json({
+            userId: req.user.userId,
+            userRole: user?.role,
+            userRoleUpper: user?.role?.toUpperCase(),
+            isTeacher: user?.role?.toUpperCase() === 'TEACHER',
+            isAdmin: user?.role?.toUpperCase() === 'ADMIN',
+            user: user
+        });
+    } catch (error) {
+        console.error('Error fetching user role:', error);
+        res.status(500).json({ error: 'Failed to fetch user role' });
     }
 });
 
@@ -6731,9 +6912,12 @@ app.get('/api/teacher/student-performance', auth, async (req, res) => {
             return res.status(403).json({ error: 'Access denied. Teachers and admins only.' });
         }
 
-        // Get all students with their performance data
+        // Get all active students with their performance data
         const students = await prisma.user.findMany({
-            where: { role: 'STUDENT' },
+            where: { 
+                role: 'STUDENT',
+                active: true  // Only include active students
+            },
             include: {
                 studentCourses: {
                     include: {

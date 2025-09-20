@@ -155,7 +155,24 @@
                 <p class="lead">${safeDescription}</p>
             `;
 
-            if (safeType === 'document') {
+            // Check if we have both image and audio files (regardless of type)
+            const hasImage = safeFilePath && (safeFilePath.match(/\.(jpg|jpeg|png|gif|webp)$/i) || safeType === 'image' || safeType === 'image-with-audio');
+            const hasAudio = safeAudioPath || (safeFilePath && safeFilePath.match(/\.(mp3|wav|ogg)$/i)) || safeType === 'audio' || safeType === 'image-with-audio';
+            
+            // Display both image and audio if both are present
+            if (hasImage && hasAudio) {
+                contentHtml += `
+                    <div class="mt-3 text-center">
+                        <img src="${safeFilePath}" class="img-fluid" style="max-height: 500px;">
+                    </div>
+                    <div class="mt-3">
+                        <audio controls class="w-100">
+                            <source src="${safeAudioPath || safeFilePath}" type="audio/mpeg">
+                            Your browser does not support the audio element.
+                        </audio>
+                    </div>
+                `;
+            } else if (safeType === 'document') {
                 contentHtml += `
                     <div class="embed-responsive mt-3">
                         <iframe src="${safeFilePath || safeUrl}" class="w-100" style="height: 600px; border: 1px solid #ddd;"></iframe>
@@ -164,7 +181,7 @@
                         <a href="${safeFilePath || safeUrl}" target="_blank" class="btn btn-primary">Open in New Tab</a>
                     </div>
                 `;
-            } else if (safeType === 'image') {
+            } else if (hasImage) {
                 contentHtml += `
                     <div class="mt-3 text-center">
                         <img src="${safeFilePath || safeUrl}" class="img-fluid" style="max-height: 600px;">
@@ -182,23 +199,11 @@
                         </video>
                     </div>
                 `;
-            } else if (safeType === 'audio') {
+            } else if (hasAudio) {
                 contentHtml += `
                     <div class="mt-3">
                         <audio controls class="w-100">
-                            <source src="${safeFilePath || safeUrl}" type="audio/mpeg">
-                            Your browser does not support the audio element.
-                        </audio>
-                    </div>
-                `;
-            } else if (safeType === 'image-with-audio') {
-                contentHtml += `
-                    <div class="mt-3 text-center">
-                        <img src="${safeFilePath}" class="img-fluid" style="max-height: 500px;">
-                    </div>
-                    <div class="mt-3">
-                        <audio controls class="w-100">
-                            <source src="${safeAudioPath}" type="audio/mpeg">
+                            <source src="${safeAudioPath || safeFilePath || safeUrl}" type="audio/mpeg">
                             Your browser does not support the audio element.
                         </audio>
                     </div>

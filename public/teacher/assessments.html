@@ -145,6 +145,7 @@
                                     <option value="writing-long">Writing (Long)</option>
                                     <option value="speaking">Speaking</option>
                                     <option value="text-input">Text Input (Auto-graded)</option>
+                                    <option value="table-completion">Table Completion</option>
                                     <option value="listening">Listening Comprehension</option>
                                 </select>
                             </div>
@@ -172,18 +173,18 @@
                                 <textarea class="form-control" id="criteria" rows="3" placeholder="Enter grading criteria or rubric for this assessment"></textarea>
                             </div>
                             
-                            <!-- Audio upload section for listening exercises -->
+                            <!-- Audio upload section for all assessment types -->
                             <div class="mb-4" id="audioUploadContainer">
                                 <div class="card">
                                     <div class="card-header bg-info bg-opacity-25">
                                         <h5 class="mb-0">
-                                            <i class="bi bi-volume-up me-2"></i>Audio for Listening Exercise
+                                            <i class="bi bi-volume-up me-2"></i>Audio File (Optional)
                                         </h5>
                                     </div>
                                     <div class="card-body">
                                         <p class="text-muted mb-3">
-                                            For listening exercises, upload an audio file that students will listen to before answering questions.
-                                            This is especially important for assessments with type "Multiple Choice" or "Listening".
+                                            Upload an audio file that students can listen to while completing this assessment.
+                                            This is useful for any assessment type where audio instructions or content would be helpful.
                                         </p>
                                         <div class="mb-3">
                                             <label for="assessmentAudio" class="form-label">Upload Audio File</label>
@@ -658,6 +659,12 @@
                             <i class="bi bi-arrow-down-up"></i> Add Change-Sequence
                         </button>`;
                     break;
+                case 'table-completion':
+                    buttonsContainer.innerHTML = `
+                        <button type="button" class="btn btn-outline-primary" onclick="addQuestion('table-completion')">
+                            <i class="bi bi-table"></i> Add Table Completion
+                        </button>`;
+                    break;
                 default:
                     buttonsContainer.innerHTML = '';
             }
@@ -674,7 +681,7 @@
             // Always set questionsSection display at the end
             const questionsSection = document.getElementById('questionsSection');
             if (questionsSection) {
-                const showQuestions = ['multiple-choice', 'drag-and-drop', 'matching', 'true-false', 'mixed', 'text-input', 'change-sequence', 'line-match', 'phoneme-build'].includes(type);
+                const showQuestions = ['multiple-choice', 'drag-and-drop', 'matching', 'true-false', 'mixed', 'text-input', 'change-sequence', 'line-match', 'phoneme-build', 'table-completion'].includes(type);
                 questionsSection.style.display = showQuestions ? 'block' : 'none';
             }
             // Always show Create Assessment button for true-false
@@ -696,6 +703,59 @@
                 } catch (e) {
                     console.log('[updateQuestionOptions] Could not log event listeners:', e);
                 }
+            }
+        }
+
+        function populateQuestionData(card, type, questionData) {
+            console.log('Populating question data for type:', type, 'data:', questionData);
+            
+            switch(type) {
+                case 'multiple-choice':
+                    // Set question text
+                    const textArea = card.querySelector('textarea');
+                    if (textArea && questionData.text) {
+                        textArea.value = questionData.text;
+                    }
+                    
+                    // Set options and correct answer
+                    const options = questionData.options || questionData.choices || [];
+                    const correctIndex = questionData.correctOption !== undefined ? questionData.correctOption : 
+                                       questionData.correctAnswer !== undefined ? questionData.correctAnswer : 0;
+                    
+                    console.log('MC options:', options, 'correctIndex:', correctIndex);
+                    
+                    // Add enough choice inputs
+                    const choicesContainer = card.querySelector('.choices-container');
+                    if (choicesContainer && options.length > 0) {
+                        const addChoiceBtn = choicesContainer.querySelector('.btn-outline-primary');
+                        let optionInputs = choicesContainer.querySelectorAll('input[type="text"]');
+                        
+                        // Add more choices if needed
+                        let safety = 0;
+                        while (optionInputs.length < options.length && safety < 10) {
+                            if (addChoiceBtn) addChoiceBtn.click();
+                            optionInputs = choicesContainer.querySelectorAll('input[type="text"]');
+                            safety++;
+                        }
+                        
+                        // Populate option values
+                        options.forEach((option, index) => {
+                            if (optionInputs[index]) {
+                                optionInputs[index].value = option;
+                            }
+                        });
+                        
+                        // Set correct answer
+                        const radioInputs = choicesContainer.querySelectorAll('input[type="radio"]');
+                        if (radioInputs[correctIndex]) {
+                            radioInputs[correctIndex].checked = true;
+                        }
+                    }
+                    break;
+                    
+                // Add other question types as needed
+                default:
+                    console.log('No population logic for question type:', type);
             }
         }
 
@@ -1089,6 +1149,87 @@
                         </div>
                     `;
                     break;
+
+                case 'table-completion':
+                    questionHtml += `
+                        <div class="mb-3">
+                            <label class="form-label">Table Title</label>
+                            <input type="text" class="form-control table-title" placeholder="e.g., Verb Conjugation Table" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Instructions</label>
+                            <textarea class="form-control table-instructions" rows="2" placeholder="e.g., Fill in the missing verb forms" required></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Table Headers (comma-separated)</label>
+                            <input type="text" class="form-control table-headers" placeholder="e.g., Infinitive, Present, Past, Past Participle" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Table Rows</label>
+                            <div class="table-rows-container">
+                                <div class="table-row mb-2">
+                                    <div class="row">
+                                        <div class="col-md-10">
+                                            <input type="text" class="form-control table-row-input" placeholder="Enter row data, use [BLANK] for empty cells (e.g., go, [BLANK], went, gone)">
+                                        </div>
+                                        <div class="col-md-2">
+                                            <button type="button" class="btn btn-outline-danger" onclick="removeTableRow(this)">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-outline-primary btn-sm" onclick="addTableRow()">
+                                <i class="bi bi-plus"></i> Add Row
+                            </button>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Correct Answers</label>
+                            <div class="correct-answers-container">
+                                <div class="correct-answer mb-2">
+                                    <div class="row">
+                                        <div class="col-md-3">
+                                            <input type="text" class="form-control" placeholder="Row (0,1,2...)" required>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <input type="text" class="form-control" placeholder="Column (0,1,2...)" required>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <input type="text" class="form-control" placeholder="Correct answer" required>
+                                        </div>
+                                        <div class="col-md-2">
+                                            <button type="button" class="btn btn-outline-danger" onclick="removeCorrectAnswer(this)">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-outline-primary btn-sm" onclick="addCorrectAnswer()">
+                                <i class="bi bi-plus"></i> Add Answer
+                            </button>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Word Bank (for drag-drop and word-bank subtypes)</label>
+                            <input type="text" class="form-control table-word-bank" placeholder="e.g., goes, eat, wrote, run, swim">
+                            <small class="form-text text-muted">Comma-separated list of words for students to choose from</small>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Extra Distractor Words (optional)</label>
+                            <input type="text" class="form-control table-extra-words" placeholder="e.g., wrong1, wrong2, wrong3">
+                            <small class="form-text text-muted">Additional words to make the exercise more challenging</small>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input table-case-sensitive" type="checkbox" id="tableCaseSensitive_${questionId}">
+                            <label class="form-check-label" for="tableCaseSensitive_${questionId}">Case Sensitive Grading</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input table-partial-credit" type="checkbox" id="tablePartialCredit_${questionId}" checked>
+                            <label class="form-check-label" for="tablePartialCredit_${questionId}">Allow Partial Credit</label>
+                        </div>
+                    `;
+                    break;
             }
 
             questionHtml += `
@@ -1100,6 +1241,11 @@
             
             // Get the newly created card
             const card = document.getElementById(questionId);
+            
+            // Populate with existing data if provided
+            if (questionData) {
+                populateQuestionData(card, type, questionData);
+            }
             
             // Add event listeners for audio file inputs
             const audioInputs = card.querySelectorAll('input[type="file"][accept="audio/*"]');
@@ -2731,7 +2877,7 @@ Ooh, exciting!|That sounds fun.</pre>
             }
             // Show/hide subtype container based on type
             if (subtypeContainer) {
-                subtypeContainer.style.display = ['drag-and-drop'].includes(type) ? 'block' : 'none';
+                subtypeContainer.style.display = ['drag-and-drop', 'table-completion'].includes(type) ? 'block' : 'none';
             }
             // Update subtype options based on type
             if (type === 'drag-and-drop' && subtypeSelect) {
@@ -2741,6 +2887,14 @@ Ooh, exciting!|That sounds fun.</pre>
                     <option value="image-fill-blank">Image Fill-in-the-blank</option>
                     <option value="long-paragraph-fill-in-blank">Long Paragraph Fill-in-the-blank</option>
                     <option value="matching">Matching</option>
+                `;
+            } else if (type === 'table-completion' && subtypeSelect) {
+                subtypeSelect.innerHTML = `
+                    <option value="">Select Subtype</option>
+                    <option value="text-input">Text Input</option>
+                    <option value="drag-drop">Drag and Drop</option>
+                    <option value="word-bank">Word Bank (Dropdown)</option>
+                    <option value="mixed">Mixed Input Types</option>
                 `;
             }
             // Always call updateQuestionOptions at the end
@@ -3306,7 +3460,8 @@ Ooh, exciting!|That sounds fun.</pre>
                     text: questionText,
                     options: options,
                     explanations: explanations,
-                    correctOption: correctOption
+                    correctOption: correctOption,
+                    correctAnswer: correctOption  // Add both for compatibility
                 };
                 
                 questions.push(question);
@@ -4019,6 +4174,63 @@ Ooh, exciting!|That sounds fun.</pre>
                 clearAllBtn.addEventListener('click', clearAllMedia);
             }
         });
+
+        // Table Completion Helper Functions
+        function addTableRow() {
+            const container = document.querySelector('.table-rows-container');
+            if (!container) return;
+            
+            const rowHtml = `
+                <div class="table-row mb-2">
+                    <div class="row">
+                        <div class="col-md-10">
+                            <input type="text" class="form-control table-row-input" placeholder="Enter row data, use [BLANK] for empty cells (e.g., go, [BLANK], went, gone)">
+                        </div>
+                        <div class="col-md-2">
+                            <button type="button" class="btn btn-outline-danger" onclick="removeTableRow(this)">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            container.insertAdjacentHTML('beforeend', rowHtml);
+        }
+
+        function removeTableRow(button) {
+            button.closest('.table-row').remove();
+        }
+
+        function addCorrectAnswer() {
+            const container = document.querySelector('.correct-answers-container');
+            if (!container) return;
+            
+            const answerHtml = `
+                <div class="correct-answer mb-2">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <input type="text" class="form-control" placeholder="Row (0,1,2...)" required>
+                        </div>
+                        <div class="col-md-3">
+                            <input type="text" class="form-control" placeholder="Column (0,1,2...)" required>
+                        </div>
+                        <div class="col-md-4">
+                            <input type="text" class="form-control" placeholder="Correct answer" required>
+                        </div>
+                        <div class="col-md-2">
+                            <button type="button" class="btn btn-outline-danger" onclick="removeCorrectAnswer(this)">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            container.insertAdjacentHTML('beforeend', answerHtml);
+        }
+
+        function removeCorrectAnswer(button) {
+            button.closest('.correct-answer').remove();
+        }
     </script>
     <!-- Modal for viewing assessment as teacher -->
     <div class="modal fade" id="viewAssessmentModal" tabindex="-1" aria-labelledby="viewAssessmentModalLabel" aria-hidden="true">

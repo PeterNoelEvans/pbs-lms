@@ -2729,6 +2729,57 @@ app.post('/api/assessments/:assessmentId/submit', auth, async (req, res) => {
                 if (total > 0) {
                     calculatedScore = Math.round((correct / total) * 100);
                 }
+            } else if (assessment.type === 'table-completion' && Array.isArray(assessment.questions)) {
+                // Grading logic for table completion
+                const q = assessment.questions[0];
+                let correct = 0;
+                let total = 0;
+                
+                if (q && q.table && q.table.correctAnswers && answers[0] && answers[0].tableAnswers) {
+                    const correctAnswers = q.table.correctAnswers;
+                    const userAnswers = answers[0].tableAnswers;
+                    const caseSensitive = q.table.caseSensitive || false;
+                    const allowPartialCredit = q.table.allowPartialCredit !== false; // Default to true
+                    
+                    // Count total correct answers
+                    total = Object.keys(correctAnswers).length;
+                    
+                    // Check each correct answer
+                    for (const [cellKey, correctAnswer] of Object.entries(correctAnswers)) {
+                        const userAnswer = userAnswers[cellKey];
+                        
+                        if (userAnswer) {
+                            // Normalize answers for comparison
+                            let normalizedUserAnswer = userAnswer.toString().trim();
+                            let normalizedCorrectAnswer = correctAnswer.toString().trim();
+                            
+                            if (!caseSensitive) {
+                                normalizedUserAnswer = normalizedUserAnswer.toLowerCase();
+                                normalizedCorrectAnswer = normalizedCorrectAnswer.toLowerCase();
+                            }
+                            
+                            // Check for exact match
+                            if (normalizedUserAnswer === normalizedCorrectAnswer) {
+                                correct++;
+                            } else if (allowPartialCredit) {
+                                // Check for partial credit (contains correct answer)
+                                if (normalizedUserAnswer.includes(normalizedCorrectAnswer) || 
+                                    normalizedCorrectAnswer.includes(normalizedUserAnswer)) {
+                                    correct += 0.5; // Half credit for partial match
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Round partial credit to whole numbers
+                    if (allowPartialCredit) {
+                        correct = Math.round(correct);
+                    }
+                }
+                
+                if (total > 0) {
+                    calculatedScore = Math.round((correct / total) * 100);
+                }
             }
         }
         if (calculatedScore !== null) score = calculatedScore;

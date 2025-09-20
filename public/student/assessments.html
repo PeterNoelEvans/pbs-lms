@@ -152,55 +152,39 @@
             <div class="col-md-4">
                 <div class="card">
                     <div class="card-header">
-                        <h5 class="mb-0">Assessment Stats</h5>
+
+                        <h5 class="mb-0">Skills Assessment Overview</h5>
                     </div>
                     <div class="card-body">
                         <div class="d-flex justify-content-between mb-3">
-                            <span>Total Assessments:</span>
+                            <span><strong>Total Assessments:</strong></span>
                             <span id="totalAssessments">0</span>
                         </div>
-                        <div class="d-flex justify-content-between mb-3">
-                            <span>Multiple Choice:</span>
-                            <span id="count-multiplechoice">0</span>
+                        <hr>
+                        <h6 class="text-muted mb-3"><i class="bi bi-mortarboard"></i> By Learning Skill</h6>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span><i class="bi bi-book-half text-primary"></i> Reading:</span>
+                            <span id="count-reading">0</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span><i class="bi bi-volume-up text-info"></i> Listening:</span>
+                            <span id="count-listening-skill">0</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span><i class="bi bi-mic text-warning"></i> Speaking:</span>
+                            <span id="count-speaking-skill">0</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span><i class="bi bi-pencil text-success"></i> Writing:</span>
+                            <span id="count-writing-skill">0</span>
                         </div>
                         <div class="d-flex justify-content-between mb-3">
-                            <span>Listening Comprehension:</span>
-                            <span id="count-listening">0</span>
+                            <span><i class="bi bi-puzzle text-secondary"></i> Grammar/Vocabulary:</span>
+                            <span id="count-grammar">0</span>
                         </div>
-                        <div class="d-flex justify-content-between mb-3">
-                            <span>Speaking Assessment:</span>
-                            <span id="count-speaking">0</span>
-                        </div>
-                        <div class="d-flex justify-content-between mb-3">
-                            <span>Mixed Assessment:</span>
-                            <span id="count-mixed">0</span>
-                        </div>
-                        <div class="d-flex justify-content-between mb-3">
-                            <span>Matching:</span>
-                            <span id="count-matching">0</span>
-                        </div>
-                        <div class="d-flex justify-content-between mb-3">
-                            <span>Drag-and-Drop:</span>
-                            <span id="count-dragdrop">0</span>
-                        </div>
-                        <div class="d-flex justify-content-between mb-3">
-                            <span>True/False:</span>
-                            <span id="count-truefalse">0</span>
-                        </div>
-                        <div class="d-flex justify-content-between mb-3">
-                            <span>Writing:</span>
-                            <span id="count-writing">0</span>
-                        </div>
-                        <div class="d-flex justify-content-between mb-3">
-                            <span>Writing (Long):</span>
-                            <span id="count-writinglong">0</span>
-                        </div>
-                        <div class="d-flex justify-content-between mb-3">
-                            <span>Change-Sequence:</span>
-                            <span id="count-changesequence">0</span>
-                        </div>
+                        <hr>
                         <div class="d-flex justify-content-between">
-                            <span>Completed:</span>
+                            <span><strong>Completed:</strong></span>
                             <span id="completedAssessments">0</span>
                         </div>
                         <div class="d-flex justify-content-between mb-3">
@@ -223,228 +207,68 @@
             window.location.href = '/login';
         }
 
-        document.addEventListener('DOMContentLoaded', function() {
-            // Initialize language and load assessments
-            updateLanguage();
-        });
+        // Scroll position preservation utilities
+        function saveScrollPosition(key = 'assessmentsScroll') {
+            const scrollY = window.scrollY || window.pageYOffset;
+            sessionStorage.setItem(key, scrollY.toString());
+        }
 
-        async function loadAssessments() {
-            try {
-                const response = await fetch('/api/student/assessments', {
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
-                });
-                
-                const data = await response.json();
-                console.log('Assessments loaded:', data);
-                
-                const container = document.getElementById('assessmentsContainer');
-                const assessments = Array.isArray(data) ? data : (data.assessments || []);
-                
-                // Ensure each assessment has required properties to prevent errors
-                assessments.forEach(assessment => {
-                    // Ensure type property
-                    if (!assessment.type) {
-                        assessment.type = 'multiple-choice'; // Default to multiple-choice
-                    }
-
-                    // Ensure section name exists
-                    if (!assessment.subjectName) assessment.subjectName = 'Unknown Subject';
-                    if (!assessment.unitName) assessment.unitName = 'Unknown Unit';
-                    if (!assessment.partName) assessment.partName = 'Unknown Part';
-                    if (!assessment.sectionName) assessment.sectionName = 'Unknown Section';
-                });
-                
-                // Update stats
-                document.getElementById('totalAssessments').textContent = assessments.length;
-                // Count each type
-                const typeMap = {
-                    'quiz': 'multiplechoice',
-                    'multiple-choice': 'multiplechoice',
-                    'listening': 'listening',
-                    'speaking': 'speaking',
-                    'mixed': 'mixed',
-                    'matching': 'matching',
-                    'drag-and-drop': 'dragdrop',
-                    'true-false': 'truefalse',
-                    'writing': 'writing',
-                    'writing-long': 'writinglong',
-                    'change-sequence': 'changesequence'
-                };
-                const typeCounts = {
-                    multiplechoice: 0,
-                    listening: 0,
-                    speaking: 0,
-                    mixed: 0,
-                    matching: 0,
-                    dragdrop: 0,
-                    truefalse: 0,
-                    writing: 0,
-                    writinglong: 0,
-                    changesequence: 0
-                };
-                assessments.forEach(a => {
-                    const key = typeMap[a.type && a.type.toLowerCase()] || null;
-                    if (key && typeCounts.hasOwnProperty(key)) typeCounts[key]++;
-                });
-                document.getElementById('count-multiplechoice').textContent = typeCounts.multiplechoice;
-                document.getElementById('count-listening').textContent = typeCounts.listening;
-                document.getElementById('count-speaking').textContent = typeCounts.speaking;
-                document.getElementById('count-mixed').textContent = typeCounts.mixed;
-                document.getElementById('count-matching').textContent = typeCounts.matching;
-                document.getElementById('count-dragdrop').textContent = typeCounts.dragdrop;
-                document.getElementById('count-truefalse').textContent = typeCounts.truefalse;
-                document.getElementById('count-writing').textContent = typeCounts.writing;
-                document.getElementById('count-writinglong').textContent = typeCounts.writinglong;
-                document.getElementById('count-changesequence').textContent = typeCounts.changesequence;
-                document.getElementById('completedAssessments').textContent = assessments.filter(a => a.status === 'Completed').length;
-
-                // Add average score for completed assessments
-                const completedWithScores = assessments.filter(a => a.status === 'Completed' && typeof a.bestScore === 'number');
-                let avgScore = '-';
-                if (completedWithScores.length > 0) {
-                    const totalScore = completedWithScores.reduce((sum, a) => sum + a.bestScore, 0);
-                    avgScore = Math.round(totalScore / completedWithScores.length) + '%';
+        function restoreScrollPosition(key = 'assessmentsScroll') {
+            const savedScroll = sessionStorage.getItem(key);
+            if (savedScroll) {
+                const scrollY = parseInt(savedScroll, 10);
+                if (scrollY > 0) {
+                    window.scrollTo({
+                        top: scrollY,
+                        behavior: 'smooth'
+                    });
                 }
-                document.getElementById('averageScore').textContent = avgScore;
-                
-                if (assessments.length === 0) {
-                    container.innerHTML = `
-                        <div class="alert alert-info">
-                            <i class="bi bi-info-circle me-2"></i>
-                            No assessments found for your enrolled subjects. Check back later or contact your teacher.
-                        </div>
-                    `;
-                    return;
-                }
-
-                container.innerHTML = '';
-                
-                // Group by subject, then by unit, then by part
-                const assessmentsBySubject = {};
-                
-                assessments.forEach(assessment => {
-                    if (!assessmentsBySubject[assessment.subjectName]) {
-                        assessmentsBySubject[assessment.subjectName] = {};
-                    }
-                    
-                    if (!assessmentsBySubject[assessment.subjectName][assessment.unitName]) {
-                        assessmentsBySubject[assessment.subjectName][assessment.unitName] = {};
-                    }
-                    
-                    if (!assessmentsBySubject[assessment.subjectName][assessment.unitName][assessment.partName]) {
-                        assessmentsBySubject[assessment.subjectName][assessment.unitName][assessment.partName] = [];
-                    }
-                    
-                    assessmentsBySubject[assessment.subjectName][assessment.unitName][assessment.partName].push(assessment);
-                });
-                
-                // Create HTML for grouped assessments
-                let unitIdCounter = 0;
-                for (const [subjectName, units] of Object.entries(assessmentsBySubject)) {
-                    const subjectDiv = document.createElement('div');
-                    subjectDiv.className = 'mb-4';
-                    subjectDiv.innerHTML = `<h3 class="mb-3">${subjectName}</h3>`;
-                    for (const [unitName, parts] of Object.entries(units)) {
-                        unitIdCounter++;
-                        const unitId = `unitCollapse${unitIdCounter}`;
-                        const unitDiv = document.createElement('div');
-                        unitDiv.className = 'mb-3';
-                        unitDiv.innerHTML = `
-                            <h4 class="mb-2">
-                                <a class="text-decoration-none" data-bs-toggle="collapse" href="#${unitId}" role="button" aria-expanded="false" aria-controls="${unitId}">
-                                    <i class="bi bi-caret-right-fill"></i> ${unitName}
-                                </a>
-                            </h4>
-                            <div class="collapse" id="${unitId}"></div>
-                        `;
-                        const unitCollapseDiv = unitDiv.querySelector('.collapse');
-                        let partIdCounter = 0;
-                        for (const [partName, partAssessments] of Object.entries(parts)) {
-                            partIdCounter++;
-                            const partId = `${unitId}-part${partIdCounter}`;
-                            const partDiv = document.createElement('div');
-                            partDiv.className = 'mb-3 ms-3';
-                            partDiv.innerHTML = `
-                                <h5 class="mb-2">
-                                    <a class="text-decoration-none" data-bs-toggle="collapse" href="#${partId}" role="button" aria-expanded="false" aria-controls="${partId}">
-                                        <i class="bi bi-caret-right-fill"></i> ${partName}
-                                    </a>
-                                </h5>
-                                <div class="collapse" id="${partId}"></div>
-                            `;
-                            const partCollapseDiv = partDiv.querySelector('.collapse');
-                            const gridDiv = document.createElement('div');
-                            gridDiv.className = 'assessments-grid';
-                            partAssessments.forEach(assessment => {
-                                const lang = translations[currentLanguage];
-                                let statusBadge = '';
-                                let buttonText = '';
-                                let buttonDisabled = false;
-                                
-                                if (assessment.status === 'Completed') {
-                                    statusBadge = `<span class="badge bg-success ms-2">${lang.completed}</span>`;
-                                    buttonText = (assessment.type === 'multiple-choice' || assessment.type === 'quiz') ? lang.takeQuizAgain : lang.viewAssignment;
-                                } else if (assessment.status === 'In Progress') {
-                                    statusBadge = `<span class="badge bg-info ms-2">${lang.inProgress}</span>`;
-                                    buttonText = (assessment.type === 'multiple-choice' || assessment.type === 'quiz') ? lang.continueQuiz : lang.continueAssignment;
-                                } else if (assessment.isOverdue) {
-                                    statusBadge = `<span class="badge bg-danger ms-2">${lang.overdueClosed}</span>`;
-                                    buttonText = lang.assessmentClosed;
-                                    buttonDisabled = true;
-                                } else {
-                                    statusBadge = `<span class="badge bg-warning ms-2">${lang.pending}</span>`;
-                                    buttonText = (assessment.type === 'multiple-choice' || assessment.type === 'quiz') ? lang.takeQuiz : lang.viewAssignment;
-                                }
-                                const card = document.createElement('div');
-                                card.className = 'assessment-card';
-                                card.innerHTML = `
-                                    <div class="card-header d-flex justify-content-between align-items-center">
-                                        <div>
-                                            <h5 class="mb-0">${assessment.title}</h5>
-                                            <span class="badge-row">
-                                            <span class="badge ${(assessment.type === 'multiple-choice' || assessment.type === 'quiz') ? 'badge-quiz text-white' : 'badge-assignment text-white'}">
-                                                ${(assessment.type === 'multiple-choice' || assessment.type === 'quiz') ? lang.multipleChoice : lang.assignment}
-                                            </span>
-                                            ${statusBadge}
-                                            </span>
-                                        </div>
-                                    </div>
-                                    <div class="card-body">
-                                        <p>${assessment.description || lang.noDescription}</p>
-                                        <div class="path-info">
-                                            <span>${assessment.subjectName} > ${assessment.unitName} > ${assessment.partName} > ${assessment.sectionName}</span>
-                                        </div>
-                                        <button class="btn ${buttonDisabled ? 'btn-secondary' : 'btn-primary'} view-assignment-btn" 
-                                                onclick="${buttonDisabled ? 'return false;' : `takeAssessment('${assessment.id}')`}" 
-                                                ${buttonDisabled ? 'disabled' : ''}>
-                                            ${buttonText}
-                                        </button>
-                                    </div>
-                                `;
-                                gridDiv.appendChild(card);
-                            });
-                            partCollapseDiv.appendChild(gridDiv);
-                            unitCollapseDiv.appendChild(partDiv);
-                        }
-                        subjectDiv.appendChild(unitDiv);
-                    }
-                    container.appendChild(subjectDiv);
-                }
-                
-            } catch (error) {
-                console.error('Error loading assessments:', error);
-                const lang = translations[currentLanguage];
-                document.getElementById('assessmentsContainer').innerHTML = `
-                    <div class="alert alert-danger">
-                        ${lang.failedToLoad}
-                    </div>
-                `;
             }
         }
 
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM loaded, initializing...');
+            // Initialize language and load assessments
+            updateLanguage();
+            
+            // Restore scroll position after page load
+            setTimeout(() => {
+                restoreScrollPosition();
+            }, 100);
+        });
+
+        async function loadAssessments() {
+            // Show notice that assessments are now accessible via Resources
+            const container = document.getElementById('assessmentsContainer');
+            const lang = translations[currentLanguage];
+            
+            container.innerHTML = `
+                <div class="alert alert-info d-flex align-items-center" role="alert">
+                    <i class="bi bi-info-circle-fill me-3" style="font-size: 1.5rem;"></i>
+                    <div>
+                        <h4 class="alert-heading mb-2">${lang.assessmentsMoved}</h4>
+                        <p class="mb-3">${lang.assessmentsMovedMessage}</p>
+                        <a href="/student/resources" class="btn btn-primary">
+                            <i class="bi bi-book me-2"></i>${lang.goToResources}
+                        </a>
+                    </div>
+                </div>
+            `;
+            
+            // Update stats to show zeros since assessments are not used
+            document.getElementById('totalAssessments').textContent = '0';
+            document.getElementById('count-reading').textContent = '0';
+            document.getElementById('count-listening-skill').textContent = '0';
+            document.getElementById('count-speaking-skill').textContent = '0';
+            document.getElementById('count-writing-skill').textContent = '0';
+            document.getElementById('count-grammar').textContent = '0';
+            document.getElementById('completedAssessments').textContent = '0';
+            document.getElementById('averageScore').textContent = '-';
+        }
+
         function takeAssessment(assessmentId) {
+            // Save current scroll position before navigating
+            saveScrollPosition();
             window.location.href = `/student/assessment.html?id=${assessmentId}`;
         }
 
@@ -476,7 +300,10 @@
                 mixedAssessment: 'Mixed Assessment:',
                 matching: 'Matching:',
                 dragAndDrop: 'Drag-and-Drop:',
-                trueFalse: 'True/False:'
+                trueFalse: 'True/False:',
+                assessmentsMoved: 'Assessments Moved to Resources',
+                assessmentsMovedMessage: 'Assessments are now accessible through the Resources section. Please visit Resources to access your learning materials and assignments.',
+                goToResources: 'Go to Resources'
             },
             th: {
                 pageTitle: 'การประเมินของฉัน',
@@ -503,7 +330,10 @@
                 mixedAssessment: 'การประเมินแบบผสม:',
                 matching: 'การจับคู่:',
                 dragAndDrop: 'ลากและวาง:',
-                trueFalse: 'ถูก/ผิด:'
+                trueFalse: 'ถูก/ผิด:',
+                assessmentsMoved: 'การประเมินย้ายไปที่ทรัพยากร',
+                assessmentsMovedMessage: 'การประเมินสามารถเข้าถึงได้ผ่านส่วนทรัพยากร กรุณาไปที่ทรัพยากรเพื่อเข้าถึงสื่อการเรียนและงานมอบหมาย',
+                goToResources: 'ไปที่ทรัพยากร'
             }
         };
 
@@ -519,16 +349,6 @@
             document.getElementById('pageTitle').textContent = lang.pageTitle;
             document.getElementById('pageDescription').textContent = lang.pageDescription;
             document.getElementById('langToggleText').textContent = lang.langToggleText;
-            
-            // Update stats labels
-            document.getElementById('totalAssessments').previousElementSibling.textContent = lang.totalAssessments;
-            document.getElementById('count-multiplechoice').previousElementSibling.textContent = lang.multipleChoiceCount;
-            document.getElementById('count-listening').previousElementSibling.textContent = lang.listeningComprehension;
-            document.getElementById('count-speaking').previousElementSibling.textContent = lang.speakingAssessment;
-            document.getElementById('count-mixed').previousElementSibling.textContent = lang.mixedAssessment;
-            document.getElementById('count-matching').previousElementSibling.textContent = lang.matching;
-            document.getElementById('count-dragdrop').previousElementSibling.textContent = lang.dragAndDrop;
-            document.getElementById('count-truefalse').previousElementSibling.textContent = lang.trueFalse;
             
             // Reload assessments to update language
             loadAssessments();

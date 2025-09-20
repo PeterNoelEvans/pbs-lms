@@ -52,6 +52,56 @@ The following are the supported assessment types:
    - Can be auto or manually graded
    - Supports audio file uploads
 
+10. **Table Completion** (`table-completion`)
+   - Students complete tables by filling in cells
+   - Auto-graded with flexible answer matching
+   - Supports multiple input methods
+   - Has multiple subtypes (see below)
+
+## Table Completion Subtypes
+
+The `table-completion` type has several subtypes that MUST be properly handled:
+
+1. **Text Input** (`text-input`)
+   - Students type answers directly into table cells
+   - Auto-graded with flexible answer matching
+   - Requires:
+     - Table headers (comma-separated)
+     - Table rows with [BLANK] markers for empty cells
+     - Correct answers with row,column coordinates
+     - Optional case-sensitive grading
+     - Optional partial credit
+
+2. **Drag and Drop** (`drag-drop`)
+   - Students drag items from word bank into table cells
+   - Auto-graded
+   - Requires:
+     - Table headers (comma-separated)
+     - Table rows with [BLANK] markers for empty cells
+     - Word bank (comma-separated)
+     - Correct answers with row,column coordinates
+     - Optional extra distractor words
+
+3. **Word Bank** (`word-bank`)
+   - Students select from dropdown menus in each cell
+   - Auto-graded
+   - Requires:
+     - Table headers (comma-separated)
+     - Table rows with [BLANK] markers for empty cells
+     - Word bank (comma-separated)
+     - Correct answers with row,column coordinates
+     - Optional extra distractor words
+
+4. **Mixed** (`mixed`)
+   - Combination of text input and drag-drop in the same table
+   - Auto-graded
+   - Requires:
+     - Table headers (comma-separated)
+     - Table rows with [BLANK] markers for empty cells
+     - Word bank (comma-separated)
+     - Correct answers with row,column coordinates
+     - Optional extra distractor words
+
 ## Drag and Drop Subtypes
 
 The `drag-and-drop` type has several subtypes that MUST be properly handled:

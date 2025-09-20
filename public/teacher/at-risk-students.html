@@ -205,9 +205,15 @@
                                 <option value="50-75">50-75%</option>
                             </select>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-2">
+                            <label for="classFilter" class="form-label">Class</label>
+                            <select class="form-select" id="classFilter">
+                                <option value="">All Classes</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
                             <label for="searchInput" class="form-label">Search Students</label>
-                            <input type="text" class="form-control" id="searchInput" placeholder="Name or email...">
+                            <input type="text" class="form-control" id="searchInput" placeholder="Name, email, or class...">
                         </div>
                     </div>
                 </div>
@@ -257,6 +263,7 @@
 
                 studentData = await response.json();
                 filteredData = [...studentData];
+                populateClassFilter();
                 updateMetrics();
                 renderAtRiskStudents();
                 applyFilters();
@@ -265,6 +272,23 @@
                 document.getElementById('atRiskStudentsList').innerHTML = 
                     '<div class="text-center text-danger">Error loading data. Please try again.</div>';
             }
+        }
+
+        // Populate class filter dropdown
+        function populateClassFilter() {
+            const classFilter = document.getElementById('classFilter');
+            const classes = [...new Set(studentData.map(s => s.class).filter(Boolean))].sort();
+            
+            // Clear existing options except "All Classes"
+            classFilter.innerHTML = '<option value="">All Classes</option>';
+            
+            // Add class options
+            classes.forEach(className => {
+                const option = document.createElement('option');
+                option.value = className;
+                option.textContent = className;
+                classFilter.appendChild(option);
+            });
         }
 
         // Update risk metrics
@@ -375,6 +399,8 @@
                                 <h6 class="mb-1">${student.name}</h6>
                                 <small class="text-muted">${student.email}</small>
                                 <br>
+                                <small class="text-muted"><i class="bi bi-people"></i> Class: <strong>${student.class || 'Not Assigned'}</strong></small>
+                                <br>
                                 <span class="badge bg-${riskLevel === 'high' ? 'danger' : riskLevel === 'medium' ? 'warning' : 'info'}">
                                     ${riskLevel.toUpperCase()} RISK
                                 </span>
@@ -436,12 +462,14 @@
             const riskLevelFilter = document.getElementById('riskLevelFilter').value;
             const inactivityFilter = document.getElementById('inactivityFilter').value;
             const completionFilter = document.getElementById('completionFilter').value;
+            const classFilter = document.getElementById('classFilter').value;
 
             filteredData = studentData.filter(student => {
-                // Search filter
+                // Search filter (now includes class search)
                 const matchesSearch = !searchTerm || 
                     student.name.toLowerCase().includes(searchTerm) ||
-                    student.email.toLowerCase().includes(searchTerm);
+                    student.email.toLowerCase().includes(searchTerm) ||
+                    (student.class && student.class.toLowerCase().includes(searchTerm));
 
                 // Risk level filter
                 const matchesRiskLevel = !riskLevelFilter || 
@@ -455,7 +483,10 @@
                 const matchesCompletion = !completionFilter || 
                     getCompletionRange(student.completionRate) === completionFilter;
 
-                return matchesSearch && matchesRiskLevel && matchesInactivity && matchesCompletion;
+                // Class filter
+                const matchesClass = !classFilter || student.class === classFilter;
+
+                return matchesSearch && matchesRiskLevel && matchesInactivity && matchesCompletion && matchesClass;
             });
 
             renderAtRiskStudents();
@@ -537,6 +568,7 @@
         document.getElementById('riskLevelFilter').addEventListener('change', applyFilters);
         document.getElementById('inactivityFilter').addEventListener('change', applyFilters);
         document.getElementById('completionFilter').addEventListener('change', applyFilters);
+        document.getElementById('classFilter').addEventListener('change', applyFilters);
 
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
