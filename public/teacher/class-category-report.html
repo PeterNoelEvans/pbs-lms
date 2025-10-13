@@ -1,0 +1,1079 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Class Category Report - Teacher Portal</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css">
+    <style>
+        body { background: #f8f9fa; }
+        .filter-card { border-left: 4px solid #007bff; }
+        .report-table { font-size: 0.85rem; }
+        .report-table th { background: #e9ecef; position: sticky; top: 0; z-index: 10; }
+        .category-cell {
+            padding: 8px;
+            min-width: 120px;
+            border-right: 1px solid #dee2e6;
+        }
+        .table td {
+            max-width: 120px;
+            overflow: hidden;
+        }
+        .table td img {
+            max-width: 20px !important;
+            max-height: 20px !important;
+            width: 20px !important;
+            height: 20px !important;
+        }
+        .student-row { border-bottom: 2px solid #dee2e6; }
+        .metric-row { font-size: 0.75rem; color: #6c757d; }
+        .grade-value { font-weight: bold; color: #0d6efd; }
+        .comment-section { margin-top: 20px; }
+        .comment-card { margin-bottom: 10px; border-left: 3px solid #6c757d; }
+        .loading-spinner { display: none; }
+        .export-buttons { gap: 10px; }
+        .summary-card { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/teacher/dashboard.html">
+                <i class="bi bi-house-fill"></i> Teacher Portal
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="/teacher/reports-hub.html">
+                    <i class="bi bi-bar-chart-line"></i> Reports Hub
+                </a>
+                <a class="nav-link" href="/teacher/progress.html">
+                    <i class="bi bi-arrow-left"></i> Back to Progress
+                </a>
+                <a class="nav-link" href="#" onclick="logout()">
+                    <i class="bi bi-box-arrow-right"></i> Logout
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid mt-4">
+        <div class="row">
+            <div class="col-12">
+                <h2 class="mb-4"><i class="bi bi-clipboard-data"></i> Class Category Report</h2>
+                
+                <!-- Filters Card -->
+                <div class="card filter-card mb-4">
+                    <div class="card-body">
+                        <h5 class="card-title mb-3">Report Filters</h5>
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <label class="form-label">Core Subject:</label>
+                                <select class="form-select" id="coreSubjectSelect">
+                                    <option value="">Select Core Subject...</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Course/Subject: *</label>
+                                <select class="form-select" id="subjectSelect" required>
+                                    <option value="">Select Course...</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Class: *</label>
+                                <select class="form-select" id="classSelect" required>
+                                    <option value="">Select Class...</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Quarter:</label>
+                                <select class="form-select" id="quarterSelect">
+                                    <option value="">All Quarters</option>
+                                    <option value="Q1">Q1</option>
+                                    <option value="Q2">Q2</option>
+                                    <option value="Q3">Q3</option>
+                                    <option value="Q4">Q4</option>
+                                </select>
+                            </div>
+                            <div class="col-md-1 d-flex align-items-end">
+                                <button class="btn btn-primary w-100" onclick="generateReport()">
+                                    <i class="bi bi-search"></i> Generate
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Loading Indicator -->
+                <div class="text-center my-5 loading-spinner" id="loadingSpinner">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2">Generating report...</p>
+                </div>
+
+                <!-- Report Content -->
+                <div id="reportContent" style="display: none;">
+                    <!-- Summary Card -->
+                    <div class="card summary-card mb-4">
+                        <div class="card-body">
+                            <div class="row text-center">
+                                <div class="col-md-3">
+                                    <h3 id="summaryStudents">0</h3>
+                                    <p class="mb-0">Students</p>
+                                </div>
+                                <div class="col-md-3">
+                                    <h3 id="summaryCategories">0</h3>
+                                    <p class="mb-0">Categories</p>
+                                </div>
+                                <div class="col-md-3">
+                                    <h3 id="summaryQuarters">-</h3>
+                                    <p class="mb-0">Quarters</p>
+                                </div>
+                                <div class="col-md-3">
+                                    <h3 id="summaryAssessments">0</h3>
+                                    <p class="mb-0">Total Assessments</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Quarter Breakdown Cards -->
+                    <div class="row mb-4" id="quarterBreakdownCards">
+                        <!-- Quarter cards will be inserted here -->
+                    </div>
+
+                    <!-- Quarter Comparison Narrative -->
+                    <div class="card mb-4" id="comparisonNarrative" style="display: none;">
+                        <div class="card-header bg-info text-white">
+                            <h5 class="mb-0"><i class="bi bi-bar-chart"></i> Quarter Comparison & Analysis</h5>
+                        </div>
+                        <div class="card-body" id="narrativeContent">
+                            <!-- Narrative will be inserted here -->
+                        </div>
+                    </div>
+
+                    <!-- Export Buttons -->
+                    <div class="d-flex justify-content-end export-buttons mb-3">
+                        <button class="btn btn-success" onclick="exportToCSV()">
+                            <i class="bi bi-file-earmark-spreadsheet"></i> Export CSV
+                        </button>
+                        <button class="btn btn-info" onclick="exportToMarkdown()">
+                            <i class="bi bi-markdown"></i> Export Markdown
+                        </button>
+                    </div>
+
+                    <!-- Report Table -->
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-bordered report-table" id="reportTable">
+                                    <thead>
+                                        <tr id="tableHeader">
+                                            <th>Student Name</th>
+                                            <th>Student ID</th>
+                                            <!-- Dynamic category columns will be inserted here -->
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tableBody">
+                                        <!-- Report data will be inserted here -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Individual Student Reports Section -->
+                    <div class="card mt-4">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="bi bi-person-lines-fill"></i> Individual Student Reports</h5>
+                        </div>
+                        <div class="card-body" id="individualReportsContent">
+                            <!-- Individual reports will be inserted here -->
+                        </div>
+                    </div>
+
+                    <!-- Comments Section -->
+                    <div class="comment-section" id="commentSection">
+                        <h4 class="mb-3">Student Comments by Category</h4>
+                        <div id="commentCards">
+                            <!-- Comment cards will be inserted here -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Error Message -->
+                <div class="alert alert-danger" id="errorMessage" style="display: none;">
+                    <i class="bi bi-exclamation-triangle"></i> <span id="errorText"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/logout.js"></script>
+    <script>
+        const token = localStorage.getItem('token');
+        if (!token) {
+            window.location.href = '/login';
+        }
+
+        let currentReport = null;
+
+        // Load initial data
+        document.addEventListener('DOMContentLoaded', function() {
+            loadCoreSubjects();
+            loadSubjects();
+            loadClasses();
+        });
+
+        // Load core subjects
+        async function loadCoreSubjects() {
+            try {
+                const response = await fetch('/api/core-subjects', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (!response.ok) throw new Error('Failed to load core subjects');
+                
+                const coreSubjects = await response.json();
+                const select = document.getElementById('coreSubjectSelect');
+                
+                coreSubjects.forEach(cs => {
+                    const option = document.createElement('option');
+                    option.value = cs.id;
+                    option.textContent = cs.name;
+                    select.appendChild(option);
+                });
+                
+                // Add change listener to filter subjects
+                select.addEventListener('change', function() {
+                    loadSubjects(this.value);
+                });
+            } catch (error) {
+                console.error('Error loading core subjects:', error);
+            }
+        }
+
+        // Load subjects/courses
+        async function loadSubjects(coreSubjectId = null) {
+            try {
+                const url = coreSubjectId 
+                    ? `/api/subjects?coreSubjectId=${coreSubjectId}`
+                    : '/api/subjects';
+                
+                const response = await fetch(url, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (!response.ok) throw new Error('Failed to load subjects');
+                
+                const subjects = await response.json();
+                const select = document.getElementById('subjectSelect');
+                select.innerHTML = '<option value="">Select Course...</option>';
+                
+                subjects.forEach(subject => {
+                    const option = document.createElement('option');
+                    option.value = subject.id;
+                    option.textContent = `${subject.name} (Year ${subject.yearLevel})`;
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading subjects:', error);
+            }
+        }
+
+        // Load classes
+        async function loadClasses() {
+            try {
+                const response = await fetch('/api/teacher/classes', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (!response.ok) throw new Error('Failed to load classes');
+                
+                const data = await response.json();
+                const select = document.getElementById('classSelect');
+                
+                const classes = data.classes || [];
+                classes.forEach(className => {
+                    const option = document.createElement('option');
+                    option.value = className;
+                    option.textContent = className;
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading classes:', error);
+            }
+        }
+
+        // Generate report
+        async function generateReport() {
+            const subjectId = document.getElementById('subjectSelect').value;
+            const className = document.getElementById('classSelect').value;
+            const quarter = document.getElementById('quarterSelect').value;
+            
+            if (!subjectId || !className) {
+                showError('Please select both a Course and a Class');
+                return;
+            }
+            
+            // Show loading, hide content and errors
+            document.getElementById('loadingSpinner').style.display = 'block';
+            document.getElementById('reportContent').style.display = 'none';
+            document.getElementById('errorMessage').style.display = 'none';
+            
+            try {
+                let url = `/api/teacher/class-category-report?subjectId=${encodeURIComponent(subjectId)}&class=${encodeURIComponent(className)}`;
+                if (quarter) {
+                    url += `&quarter=${encodeURIComponent(quarter)}`;
+                }
+                
+                const response = await fetch(url, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Failed to generate report');
+                }
+                
+                const report = await response.json();
+                currentReport = report;
+                
+                if (report.students.length === 0) {
+                    showError('No students found for the selected filters. Make sure students are enrolled in the selected course.');
+                    return;
+                }
+                
+                // Display report
+                displayReport(report);
+                
+                // Show content, hide loading
+                document.getElementById('loadingSpinner').style.display = 'none';
+                document.getElementById('reportContent').style.display = 'block';
+                
+            } catch (error) {
+                console.error('Error generating report:', error);
+                document.getElementById('loadingSpinner').style.display = 'none';
+                showError('Failed to generate report: ' + error.message);
+            }
+        }
+
+        // Build individual student reports (matching example format)
+        function buildIndividualReports(report) {
+            const container = document.getElementById('individualReportsContent');
+            container.innerHTML = '';
+            
+            report.students.forEach((student, studentIndex) => {
+                // Student header
+                const studentHeader = document.createElement('div');
+                studentHeader.className = 'card mb-4';
+                studentHeader.innerHTML = `
+                    <div class="card-header bg-primary text-white">
+                        <div class="d-flex align-items-center">
+                            <img src="${student.profilePicture || '/images/default-avatar.png'}" 
+                                 alt="${student.name}" 
+                                 class="rounded-circle me-3" 
+                                 style="width: 60px; height: 60px; object-fit: cover; border: 3px solid white;">
+                            <div>
+                                <h4 class="mb-1">${student.name} (${student.studentId || 'N/A'})</h4>
+                                <p class="mb-0">Class: ${student.class}</p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(studentHeader);
+                
+                // ALL QUARTER TABLES FIRST for this student
+                Object.keys(student.quarterData).sort().forEach(quarter => {
+                    const quarterData = student.quarterData[quarter];
+                    
+                    const quarterTableSection = document.createElement('div');
+                    quarterTableSection.className = 'card-body border-bottom';
+                    
+                    let tableHTML = `
+                        <h5 class="mb-3">${quarter} Student Progress by Category</h5>
+                        <div class="table-responsive">
+                            <table class="table table-bordered">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Student Name</th>
+                                        <th>Student ID</th>
+                    `;
+                    
+                    report.categories.forEach(category => {
+                        tableHTML += `<th>${category}</th>`;
+                    });
+                    
+                    tableHTML += `
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>
+                                            <img src="${student.profilePicture || '/images/default-avatar.png'}" 
+                                                 alt="${student.name}" 
+                                                 style="width: 20px; height: 20px; border-radius: 50%; object-fit: cover; border: 1px solid #dee2e6; margin-right: 3px; vertical-align: middle;">
+                                            <strong>${student.name}</strong>
+                                        </td>
+                                        <td>${student.studentId || 'N/A'}</td>
+                    `;
+                    
+                    report.categories.forEach(category => {
+                        const categoryData = quarterData.categories[category];
+                        if (categoryData) {
+                            tableHTML += `
+                                <td class="text-center">
+                                    ${categoryData.completed}/${categoryData.total} (${categoryData.progressPercent}%)<br>
+                                    Avg: ${categoryData.averageScore || 'N/A'}%<br>
+                                    <strong>Grade: ${categoryData.finalGrade || 'N/A'}%</strong>
+                                </td>
+                            `;
+                        } else {
+                            tableHTML += `<td class="text-center">-</td>`;
+                        }
+                    });
+                    
+                    tableHTML += `
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    `;
+                    
+                    quarterTableSection.innerHTML = tableHTML;
+                    container.appendChild(quarterTableSection);
+                });
+                
+                // ALL QUARTER COMMENTS SECOND for this student
+                Object.keys(student.quarterData).sort().forEach(quarter => {
+                    const quarterData = student.quarterData[quarter];
+                    
+                    const quarterCommentsSection = document.createElement('div');
+                    quarterCommentsSection.className = 'card-body border-bottom';
+                    
+                    let commentsHTML = `
+                        <h6 class="mb-2">${quarter} Comments by Category</h6>
+                        <ul class="list-unstyled">
+                    `;
+                    
+                    report.categories.forEach(category => {
+                        const categoryData = quarterData.categories[category];
+                        if (categoryData && categoryData.comment) {
+                            commentsHTML += `<li><strong>${category}:</strong> ${categoryData.comment}</li>`;
+                        }
+                    });
+                    
+                    commentsHTML += `</ul>`;
+                    
+                    quarterCommentsSection.innerHTML = commentsHTML;
+                    container.appendChild(quarterCommentsSection);
+                });
+            });
+        }
+
+        // Display quarter breakdown cards
+        function displayQuarterBreakdowns(report) {
+            const container = document.getElementById('quarterBreakdownCards');
+            container.innerHTML = '';
+            
+            report.quarters.forEach(quarter => {
+                const quarterData = report.summary.quarterComparison[quarter];
+                const categoryBreakdown = quarterData.categoryBreakdown;
+                
+                // Define consistent category order - logical language learning progression
+                const categoryOrder = ['Listening', 'Speaking', 'Reading', 'Writing', 'Vocabulary', 'Grammar', 'Test Practice'];
+                
+                let categoriesHtml = '';
+                categoryOrder.forEach(category => {
+                    if (categoryBreakdown[category]) {
+                        categoriesHtml += `<li><strong>${category}:</strong> ${categoryBreakdown[category]} assessments</li>`;
+                    }
+                });
+                
+                const card = document.createElement('div');
+                card.className = 'col-md-6 mb-3';
+                card.innerHTML = `
+                    <div class="card h-100" style="border-left: 4px solid ${quarter === 'Q1' ? '#28a745' : quarter === 'Q2' ? '#007bff' : quarter === 'Q3' ? '#ffc107' : '#dc3545'};">
+                        <div class="card-header bg-light">
+                            <h5 class="mb-0">${quarter} Summary</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row mb-3">
+                                <div class="col-6">
+                                    <p class="mb-1"><strong>Total Assessments:</strong></p>
+                                    <h4 class="text-primary">${quarterData.totalAssessments}</h4>
+                                </div>
+                                <div class="col-6">
+                                    <p class="mb-1"><strong>Class Average:</strong></p>
+                                    <h4 class="text-success">${quarterData.classAverageScore}%</h4>
+                                </div>
+                            </div>
+                            <div class="row mb-3">
+                                <div class="col-6">
+                                    <p class="mb-1"><strong>Progress:</strong></p>
+                                    <h4 class="text-info">${quarterData.classProgressPercent}%</h4>
+                                </div>
+                                <div class="col-6">
+                                    <p class="mb-1"><strong>Final Grade:</strong></p>
+                                    <h4 class="text-warning">${quarterData.classFinalGrade}%</h4>
+                                </div>
+                            </div>
+                            <hr>
+                            <h6>Category Breakdown:</h6>
+                            <ul style="font-size: 0.9rem;">
+                                ${categoriesHtml}
+                            </ul>
+                        </div>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+        
+        // Generate comparison narrative
+        function generateComparisonNarrative(report) {
+            const quarters = report.quarters;
+            if (quarters.length < 2) return;
+            
+            const narrativeDiv = document.getElementById('comparisonNarrative');
+            const contentDiv = document.getElementById('narrativeContent');
+            narrativeDiv.style.display = 'block';
+            
+            let narrative = '<div class="narrative-content">';
+            
+            // Compare consecutive quarters
+            for (let i = 0; i < quarters.length - 1; i++) {
+                const q1 = quarters[i];
+                const q2 = quarters[i + 1];
+                const q1Data = report.summary.quarterComparison[q1];
+                const q2Data = report.summary.quarterComparison[q2];
+                
+                narrative += `<h5>${q1} vs ${q2} Performance Analysis</h5>`;
+                
+                // Overall comparison
+                const progressChange = q2Data.classProgressPercent - q1Data.classProgressPercent;
+                const scoreChange = q2Data.classAverageScore - q1Data.classAverageScore;
+                const gradeChange = q2Data.classFinalGrade - q1Data.classFinalGrade;
+                
+                narrative += '<p><strong>Overall Class Performance:</strong></p>';
+                narrative += '<ul>';
+                
+                // Progress comparison
+                if (progressChange > 5) {
+                    narrative += `<li><span class="badge bg-success">✓ Improved</span> Class completion rate increased from <strong>${q1Data.classProgressPercent}%</strong> to <strong>${q2Data.classProgressPercent}%</strong> (${progressChange > 0 ? '+' : ''}${progressChange}% improvement)</li>`;
+                } else if (progressChange < -5) {
+                    narrative += `<li><span class="badge bg-danger">⚠ Declined</span> Class completion rate decreased from <strong>${q1Data.classProgressPercent}%</strong> to <strong>${q2Data.classProgressPercent}%</strong> (${progressChange}% decline)</li>`;
+                } else {
+                    narrative += `<li><span class="badge bg-secondary">→ Stable</span> Class completion rate remained relatively stable at <strong>${q1Data.classProgressPercent}%</strong> (${q1}) and <strong>${q2Data.classProgressPercent}%</strong> (${q2})</li>`;
+                }
+                
+                // Score comparison
+                if (scoreChange > 5) {
+                    narrative += `<li><span class="badge bg-success">✓ Improved</span> Average score increased from <strong>${q1Data.classAverageScore}%</strong> to <strong>${q2Data.classAverageScore}%</strong> (${scoreChange > 0 ? '+' : ''}${scoreChange}% improvement)</li>`;
+                } else if (scoreChange < -5) {
+                    narrative += `<li><span class="badge bg-danger">⚠ Declined</span> Average score decreased from <strong>${q1Data.classAverageScore}%</strong> to <strong>${q2Data.classAverageScore}%</strong> (${scoreChange}% decline)</li>`;
+                } else {
+                    narrative += `<li><span class="badge bg-secondary">→ Stable</span> Average score remained stable around <strong>${q1Data.classAverageScore}%</strong></li>`;
+                }
+                
+                // Final grade comparison
+                if (gradeChange > 5) {
+                    narrative += `<li><span class="badge bg-success">✓ Improved</span> Class final grade improved from <strong>${q1Data.classFinalGrade}%</strong> to <strong>${q2Data.classFinalGrade}%</strong> (${gradeChange > 0 ? '+' : ''}${gradeChange}% gain)</li>`;
+                } else if (gradeChange < -5) {
+                    narrative += `<li><span class="badge bg-danger">⚠ Declined</span> Class final grade decreased from <strong>${q1Data.classFinalGrade}%</strong> to <strong>${q2Data.classFinalGrade}%</strong> (${gradeChange}% loss)</li>`;
+                } else {
+                    narrative += `<li><span class="badge bg-secondary">→ Stable</span> Class final grade remained consistent around <strong>${q1Data.classFinalGrade}%</strong></li>`;
+                }
+                
+                narrative += '</ul>';
+                
+                // Workload comparison
+                narrative += '<p><strong>Workload Analysis:</strong></p>';
+                const assessmentChange = q2Data.totalAssessments - q1Data.totalAssessments;
+                narrative += `<p>${q2} had <strong>${q2Data.totalAssessments}</strong> assessments compared to <strong>${q1Data.totalAssessments}</strong> in ${q1}. `;
+                
+                if (assessmentChange > 10) {
+                    narrative += `This represents a significant increase of <strong>${assessmentChange}</strong> more assessments (+${Math.round((assessmentChange/q1Data.totalAssessments)*100)}%). `;
+                    if (progressChange > 0 && scoreChange > 0) {
+                        narrative += '<span class="text-success">Despite the increased workload, students maintained or improved their performance, which is commendable.</span>';
+                    } else if (progressChange < 0 || scoreChange < 0) {
+                        narrative += '<span class="text-warning">The increased workload may have contributed to the decline in performance. Consider pacing adjustments.</span>';
+                    }
+                } else if (assessmentChange < -10) {
+                    narrative += `This represents a decrease of <strong>${Math.abs(assessmentChange)}</strong> assessments (${Math.round((assessmentChange/q1Data.totalAssessments)*100)}%).`;
+                } else {
+                    narrative += `The workload remained relatively similar between quarters.`;
+                }
+                narrative += '</p>';
+                
+                // Category-specific insights
+                narrative += '<p><strong>Category-Specific Changes:</strong></p>';
+                narrative += '<ul>';
+                
+                const q1Categories = q1Data.categoryBreakdown;
+                const q2Categories = q2Data.categoryBreakdown;
+                const allCats = new Set([...Object.keys(q1Categories), ...Object.keys(q2Categories)]);
+                
+                allCats.forEach(category => {
+                    const q1Count = q1Categories[category] || 0;
+                    const q2Count = q2Categories[category] || 0;
+                    const catChange = q2Count - q1Count;
+                    
+                    if (catChange !== 0) {
+                        const changePercent = q1Count > 0 ? Math.round((catChange / q1Count) * 100) : 100;
+                        if (catChange > 0) {
+                            narrative += `<li><strong>${category}:</strong> Increased from ${q1Count} to ${q2Count} assessments (+${catChange}, ${changePercent > 0 ? '+' : ''}${changePercent}%)</li>`;
+                        } else {
+                            narrative += `<li><strong>${category}:</strong> Decreased from ${q1Count} to ${q2Count} assessments (${catChange}, ${changePercent}%)</li>`;
+                        }
+                    }
+                });
+                
+                narrative += '</ul>';
+                
+                // Recommendations
+                narrative += '<div class="alert alert-info mt-3">';
+                narrative += '<h6><i class="bi bi-lightbulb"></i> Recommendations:</h6>';
+                
+                if (progressChange < -5) {
+                    narrative += '<p>• Focus on improving completion rates through deadline reminders and student check-ins.</p>';
+                }
+                if (scoreChange < -5) {
+                    narrative += '<p>• Consider reviewing teaching strategies and providing additional support materials.</p>';
+                    narrative += '<p>• Schedule intervention sessions for students struggling with core concepts.</p>';
+                }
+                if (progressChange > 5 && scoreChange > 5) {
+                    narrative += '<p>• Excellent progress! Continue with current teaching methods and maintain engagement strategies.</p>';
+                }
+                if (assessmentChange > 15) {
+                    narrative += '<p>• Monitor student stress levels due to increased workload. Consider pacing adjustments if needed.</p>';
+                }
+                
+                narrative += '</div>';
+                
+                if (i < quarters.length - 2) {
+                    narrative += '<hr>';
+                }
+            }
+            
+            narrative += '</div>';
+            contentDiv.innerHTML = narrative;
+        }
+        
+        // Display report in table
+        function displayReport(report) {
+            // Update summary
+            document.getElementById('summaryStudents').textContent = report.summary.totalStudents;
+            document.getElementById('summaryAssessments').textContent = report.summary.totalAssessments;
+            document.getElementById('summaryCategories').textContent = report.categories.length;
+            document.getElementById('summaryQuarters').textContent = report.quarters.join(', ');
+            
+            // Display quarter breakdown cards
+            displayQuarterBreakdowns(report);
+            
+            // Generate and display comparison narrative
+            if (report.quarters.length > 1) {
+                generateComparisonNarrative(report);
+            }
+            
+            
+            // Build table header with dynamic categories
+            const headerRow = document.getElementById('tableHeader');
+            headerRow.innerHTML = '<th>Student Name</th><th>Student ID</th>';
+            
+            report.categories.forEach(category => {
+                const th = document.createElement('th');
+                th.className = 'category-cell text-center';
+                th.textContent = category;
+                headerRow.appendChild(th);
+            });
+            
+            // Build table body
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+            
+            // Build individual student reports
+            buildIndividualReports(report);
+            
+            const commentCards = document.getElementById('commentCards');
+            commentCards.innerHTML = '';
+            
+            report.students.forEach(student => {
+                // Get all quarters for this student
+                const quarters = Object.keys(student.quarterData).sort();
+                
+                quarters.forEach(quarter => {
+                    const quarterData = student.quarterData[quarter];
+                    
+                    // Student name row
+                    const nameRow = document.createElement('tr');
+                    nameRow.className = 'student-row';
+                    const studentPhoto = student.profilePicture || '/images/default-avatar.png';
+                    nameRow.innerHTML = `
+                        <td rowspan="4">
+                            <div class="d-flex align-items-center">
+                                <img src="${studentPhoto}" alt="${student.name}" 
+                                     class="rounded-circle me-2" 
+                                     style="width: 40px; height: 40px; object-fit: cover; border: 2px solid #dee2e6;">
+                                <div>
+                                    <strong>${student.name}</strong><br><small>Quarter: ${quarter}</small>
+                                </div>
+                            </div>
+                        </td>
+                        <td rowspan="4">${student.studentId || 'N/A'}</td>
+                    `;
+                    
+                    // Completed/Total row
+                    const completedRow = document.createElement('tr');
+                    completedRow.className = 'metric-row';
+                    
+                    // Progress % row
+                    const progressRow = document.createElement('tr');
+                    progressRow.className = 'metric-row';
+                    
+                    // Final Grade row
+                    const gradeRow = document.createElement('tr');
+                    gradeRow.className = 'student-row';
+                    
+                    // Build comment card for this student
+                    let hasComments = false;
+                    let commentHTML = `
+                        <div class="card comment-card">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center mb-2">
+                                    <img src="${studentPhoto}" alt="${student.name}" 
+                                         class="rounded-circle me-2" 
+                                         style="width: 32px; height: 32px; object-fit: cover; border: 2px solid #dee2e6;">
+                                    <h6 class="card-title mb-0">${student.name} (${student.studentId || 'N/A'}) - ${quarter}</h6>
+                                </div>
+                                <ul>
+                    `;
+                    
+                    report.categories.forEach(category => {
+                        const categoryData = quarterData.categories[category];
+                        
+                        if (categoryData) {
+                            // Completed/Total
+                            const completedCell = document.createElement('td');
+                            completedCell.className = 'category-cell text-center';
+                            completedCell.textContent = `${categoryData.completed}/${categoryData.total}`;
+                            completedRow.appendChild(completedCell);
+                            
+                            // Progress %
+                            const progressCell = document.createElement('td');
+                            progressCell.className = 'category-cell text-center';
+                            progressCell.innerHTML = `<span class="badge bg-info">${categoryData.progressPercent}%</span>`;
+                            progressRow.appendChild(progressCell);
+                            
+                            // Final Grade (Progress % × Avg Score)
+                            const gradeCell = document.createElement('td');
+                            gradeCell.className = 'category-cell text-center';
+                            if (categoryData.averageScore !== null) {
+                                gradeCell.innerHTML = `
+                                    <div class="grade-value">${categoryData.finalGrade}%</div>
+                                    <small>(Avg: ${categoryData.averageScore}%)</small>
+                                `;
+                            } else {
+                                gradeCell.innerHTML = '<span class="text-muted">No scores</span>';
+                            }
+                            gradeRow.appendChild(gradeCell);
+                            
+                            // Add to comments
+                            if (categoryData.comment) {
+                                hasComments = true;
+                                commentHTML += `<li><strong>${category}:</strong> ${categoryData.comment}</li>`;
+                            }
+                        } else {
+                            // No data for this category
+                            const emptyCell1 = document.createElement('td');
+                            emptyCell1.className = 'category-cell text-center text-muted';
+                            emptyCell1.textContent = '-';
+                            completedRow.appendChild(emptyCell1);
+                            
+                            const emptyCell2 = document.createElement('td');
+                            emptyCell2.className = 'category-cell text-center text-muted';
+                            emptyCell2.textContent = '-';
+                            progressRow.appendChild(emptyCell2);
+                            
+                            const emptyCell3 = document.createElement('td');
+                            emptyCell3.className = 'category-cell text-center text-muted';
+                            emptyCell3.textContent = '-';
+                            gradeRow.appendChild(emptyCell3);
+                        }
+                    });
+                    
+                    commentHTML += '</ul></div></div>';
+                    
+                    if (hasComments) {
+                        commentCards.innerHTML += commentHTML;
+                    }
+                    
+                    tbody.appendChild(nameRow);
+                    tbody.appendChild(completedRow);
+                    tbody.appendChild(progressRow);
+                    tbody.appendChild(gradeRow);
+                });
+            });
+        }
+
+        // Export to CSV
+        function exportToCSV() {
+            if (!currentReport) {
+                alert('No report data to export');
+                return;
+            }
+            
+            const headers = ['Student ID', 'Student Name', 'Quarter', 'Category', 'Completed', 'Total', 'Progress %', 'Avg Score %', 'Final Grade %', 'Comment'];
+            const rows = [headers.join(',')];
+            
+            currentReport.students.forEach(student => {
+                Object.keys(student.quarterData).forEach(quarter => {
+                    const quarterData = student.quarterData[quarter];
+                    
+                    currentReport.categories.forEach(category => {
+                        const categoryData = quarterData.categories[category];
+                        
+                        if (categoryData) {
+                            const row = [
+                                student.studentId || 'N/A',
+                                `"${student.name}"`,
+                                quarter,
+                                category,
+                                categoryData.completed,
+                                categoryData.total,
+                                categoryData.progressPercent,
+                                categoryData.averageScore !== null ? categoryData.averageScore : 'N/A',
+                                categoryData.finalGrade !== null ? categoryData.finalGrade : 'N/A',
+                                `"${categoryData.comment}"`
+                            ];
+                            rows.push(row.join(','));
+                        }
+                    });
+                });
+            });
+            
+            const csv = rows.join('\n');
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `class-category-report-${currentReport.class}-${currentReport.quarter}-${new Date().toISOString().split('T')[0]}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        
+        // Export to Markdown
+        function exportToMarkdown() {
+            if (!currentReport) {
+                alert('No report data to export');
+                return;
+            }
+            
+            let md = `# Class Category Report\n\n`;
+            md += `**Class**: ${currentReport.class}\n`;
+            md += `**Course**: ${currentReport.subject.name}\n`;
+            md += `**Core Subject**: ${currentReport.subject.coreSubject}\n`;
+            md += `**Quarter Filter**: ${currentReport.quarter}\n`;
+            md += `**Generated**: ${new Date().toLocaleDateString()}\n\n`;
+            
+            md += `## Summary\n\n`;
+            md += `- Total Students: ${currentReport.summary.totalStudents}\n`;
+            md += `- Total Assessments (Combined): ${currentReport.summary.totalAssessments}\n`;
+            md += `- Categories: ${currentReport.categories.join(', ')}\n`;
+            md += `- Quarters Covered: ${currentReport.quarters.join(', ')}\n\n`;
+            
+            // Per-quarter summaries
+            currentReport.quarters.forEach(quarter => {
+                const qData = currentReport.summary.quarterComparison[quarter];
+                md += `### ${quarter} Summary\n\n`;
+                md += `- Total Assessments: ${qData.totalAssessments}\n\n`;
+                md += `- Class Average Score: ${qData.classAverageScore}%\n\n`;
+                md += `- Class Progress: ${qData.classProgressPercent}%\n\n`;
+                md += `- Class Final Grade: ${qData.classFinalGrade}%\n\n`;
+                md += `**Category Breakdown:**\n\n`;
+                // Use same consistent category order as HTML display - logical language learning progression
+                const categoryOrder = ['Listening', 'Speaking', 'Reading', 'Writing', 'Vocabulary', 'Grammar', 'Test Practice'];
+                categoryOrder.forEach(category => {
+                    if (qData.categoryBreakdown[category]) {
+                        md += `- ${category}: ${qData.categoryBreakdown[category]} assessments\n\n`;
+                    }
+                });
+            });
+            
+            // Quarter comparison narrative (if multiple quarters)
+            if (currentReport.quarters.length > 1) {
+                md += `## Quarter Comparison & Analysis\n\n`;
+                
+                for (let i = 0; i < currentReport.quarters.length - 1; i++) {
+                    const q1 = currentReport.quarters[i];
+                    const q2 = currentReport.quarters[i + 1];
+                    const q1Data = currentReport.summary.quarterComparison[q1];
+                    const q2Data = currentReport.summary.quarterComparison[q2];
+                    
+                    md += `### ${q1} vs ${q2}\n\n`;
+                    
+                    const progressChange = q2Data.classProgressPercent - q1Data.classProgressPercent;
+                    const scoreChange = q2Data.classAverageScore - q1Data.classAverageScore;
+                    const gradeChange = q2Data.classFinalGrade - q1Data.classFinalGrade;
+                    const assessmentChange = q2Data.totalAssessments - q1Data.totalAssessments;
+                    
+                    md += `**Overall Performance:**\n`;
+                    md += `- Completion: ${q1Data.classProgressPercent}% → ${q2Data.classProgressPercent}% (${progressChange > 0 ? '+' : ''}${progressChange}%)\n\n`;
+                    md += `- Average Score: ${q1Data.classAverageScore}% → ${q2Data.classAverageScore}% (${scoreChange > 0 ? '+' : ''}${scoreChange}%)\n\n`;
+                    md += `- Final Grade: ${q1Data.classFinalGrade}% → ${q2Data.classFinalGrade}% (${gradeChange > 0 ? '+' : ''}${gradeChange}%)\n\n`;
+                    md += `- Assessments: ${q1Data.totalAssessments} → ${q2Data.totalAssessments} (${assessmentChange > 0 ? '+' : ''}${assessmentChange})\n\n`;
+                    
+                    md += `**Analysis:**\n\n`;
+                    if (progressChange > 5 && scoreChange > 5) {
+                        md += `✓ Significant improvement observed in both completion and performance.\n\n`;
+                    } else if (progressChange < -5 || scoreChange < -5) {
+                        md += `⚠ Performance decline observed. Consider reviewing teaching strategies and student support.\n\n`;
+                    } else {
+                        md += `→ Performance remained relatively stable between quarters.\n\n`;
+                    }
+                    
+                    if (assessmentChange > 10) {
+                        md += `⚠ Significant workload increase (+${assessmentChange} assessments). Monitor student stress levels.\n\n`;
+                    }
+                }
+            }
+            
+            // Table for each quarter
+            currentReport.quarters.forEach(quarter => {
+                md += `## ${quarter} Student Progress by Category\n\n`;
+                
+                // Build table header
+                md += `| Student Name | Student ID |`;
+                currentReport.categories.forEach(cat => {
+                    md += ` ${cat} |`;
+                });
+                md += `\n`;
+                
+                md += `|--------------|------------|`;
+                currentReport.categories.forEach(() => {
+                    md += `----------|`;
+                });
+                md += `\n`;
+                
+                // Build table rows
+                currentReport.students.forEach(student => {
+                    if (student.quarterData[quarter]) {
+                        const quarterData = student.quarterData[quarter];
+                        // Use absolute URL for profile pictures in Markdown
+                        const baseUrl = window.location.origin;
+                        const studentPhoto = student.profilePicture ? 
+                            `${baseUrl}${student.profilePicture}` : 
+                            `${baseUrl}/images/default-avatar.png`;
+                        
+                        md += `| ![${student.name}](${studentPhoto}) **${student.name}** | ${student.studentId || 'N/A'} |`;
+                        
+                        currentReport.categories.forEach(category => {
+                            const categoryData = quarterData.categories[category];
+                            if (categoryData) {
+                                md += ` ${categoryData.completed}/${categoryData.total} (${categoryData.progressPercent}%) <br>Avg: ${categoryData.averageScore || 'N/A'}% <br>**Grade: ${categoryData.finalGrade || 'N/A'}%** |`;
+                            } else {
+                                md += ` - |`;
+                            }
+                        });
+                        
+                        md += `\n`;
+                    }
+                });
+                
+                md += `\n`;
+            });
+            
+            // Individual Student Reports Section (matching example format)
+            md += `# Individual Student Reports\n\n`;
+            
+            currentReport.students.forEach((student, studentIndex) => {
+                const baseUrl = window.location.origin;
+                const studentPhoto = student.profilePicture ? 
+                    `${baseUrl}${student.profilePicture}` : 
+                    `${baseUrl}/images/default-avatar.png`;
+                
+                // Student header
+                md += `## ${student.name} (${student.studentId || 'N/A'}) - Class ${student.class}\n\n`;
+                md += `![${student.name}](${studentPhoto})\n\n`;
+                
+                // ALL QUARTER TABLES FIRST for this student
+                Object.keys(student.quarterData).sort().forEach(quarter => {
+                    const quarterData = student.quarterData[quarter];
+                    
+                    md += `### ${quarter} Student Progress by Category\n\n`;
+                    
+                    // Table header
+                    md += `| Student Name | Student ID |`;
+                    currentReport.categories.forEach(category => {
+                        md += ` ${category} |`;
+                    });
+                    md += `\n|`;
+                    
+                    // Header separator
+                    md += ` --- | --- |`;
+                    currentReport.categories.forEach(category => {
+                        md += ` --- |`;
+                    });
+                    md += `\n`;
+                    
+                    // Student data row
+                    md += `| ${student.name} | ${student.studentId || 'N/A'} |`;
+                    
+                    currentReport.categories.forEach(category => {
+                        const categoryData = quarterData.categories[category];
+                        if (categoryData) {
+                            md += ` ${categoryData.completed}/${categoryData.total} (${categoryData.progressPercent}%) <br>Avg: ${categoryData.averageScore || 'N/A'}% <br>**Grade: ${categoryData.finalGrade || 'N/A'}%** |`;
+                        } else {
+                            md += ` - |`;
+                        }
+                    });
+                    
+                    md += `\n\n`;
+                });
+                
+                // ALL QUARTER COMMENTS SECOND for this student
+                Object.keys(student.quarterData).sort().forEach(quarter => {
+                    const quarterData = student.quarterData[quarter];
+                    
+                    md += `### ${quarter} Comments by Category\n\n`;
+                    currentReport.categories.forEach(category => {
+                        const categoryData = quarterData.categories[category];
+                        if (categoryData && categoryData.comment) {
+                            md += `**${category}**: ${categoryData.comment}\n\n`;
+                        }
+                    });
+                });
+                
+                // Add separator between students (except for last student)
+                if (studentIndex < currentReport.students.length - 1) {
+                    md += `---\n\n`;
+                }
+            });
+            
+            const blob = new Blob([md], { type: 'text/markdown' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `class-category-report-${currentReport.class}-${currentReport.quarter}-${new Date().toISOString().split('T')[0]}.md`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // Show error message
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            const errorText = document.getElementById('errorText');
+            errorText.textContent = message;
+            errorDiv.style.display = 'block';
+            
+            // Hide after 10 seconds
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 10000);
+        }
+    </script>
+</body>
+</html>
+

@@ -1,0 +1,1180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>English Class Student Reports - Teacher Portal</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        .report-card {
+            border-left: 4px solid #007bff;
+            margin-bottom: 1rem;
+        }
+        .skill-metric {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 0.5rem;
+        }
+        .completion-high { border-left-color: #28a745; }
+        .completion-medium { border-left-color: #ffc107; }
+        .completion-low { border-left-color: #dc3545; }
+        .engagement-active { background-color: #d4edda; }
+        .engagement-balanced { background-color: #fff3cd; }
+        .engagement-homework { background-color: #f8d7da; }
+        .printable-report {
+            display: none;
+        }
+        @media print {
+            .no-print { display: none !important; }
+            .printable-report { display: block !important; }
+            .container { max-width: 100% !important; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <nav class="col-md-3 col-lg-2 d-md-block bg-light sidebar collapse">
+                <div class="position-sticky pt-3">
+                    <ul class="nav flex-column">
+                        <li class="nav-item">
+                            <a class="nav-link" href="dashboard.html">
+                                <i class="bi bi-house"></i> Dashboard
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link active" href="english-student-reports.html">
+                                <i class="bi bi-file-text"></i> English Reports
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="assessments.html">
+                                <i class="bi bi-clipboard-check"></i> Assessments
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="quarterly-reports.html">
+                                <i class="bi bi-graph-up"></i> Quarterly Reports
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </nav>
+
+            <!-- Main content -->
+            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
+                <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                    <h1 class="h2">English Class Student Reports</h1>
+                    <div class="btn-toolbar mb-2 mb-md-0">
+                        <button class="btn btn-outline-secondary me-2" onclick="exportMarkdown()">
+                            <i class="bi bi-file-earmark-text"></i> Export Markdown
+                        </button>
+                        <button class="btn btn-outline-secondary" onclick="printReport()">
+                            <i class="bi bi-printer"></i> Print Report
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Report Generation Form -->
+                <div class="card mb-4 no-print">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">Generate Student Report</h5>
+                    </div>
+                    <div class="card-body">
+                        <form id="reportForm">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label for="subjectSelect" class="form-label">Select Subject Course</label>
+                                        <select class="form-select" id="subjectSelect" required>
+                                            <option value="">Choose a subject course...</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label for="studentSelect" class="form-label">Select Student</label>
+                                        <select class="form-select" id="studentSelect" required disabled>
+                                            <option value="">First select a subject course...</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="mb-3">
+                                        <label for="quarterSelect" class="form-label">Select Quarter</label>
+                                        <select class="form-select" id="quarterSelect" required>
+                                            <option value="Q1">Quarter 1</option>
+                                            <option value="Q2">Quarter 2</option>
+                                            <option value="Q1Q2">Q1 + Q2 Combined</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-file-earmark-text"></i> Generate Report
+                            </button>
+                            <button type="button" class="btn btn-success ms-2" onclick="generateBulkReports()">
+                                <i class="bi bi-files"></i> Generate All Reports
+                            </button>
+                            <button type="button" class="btn btn-warning ms-2" onclick="showStudentSelector()">
+                                <i class="bi bi-people"></i> Select Students for Combined Reports
+                            </button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Loading Indicator -->
+                <div id="loadingIndicator" class="text-center" style="display: none;">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2">Generating report...</p>
+                </div>
+
+                <!-- Report Display -->
+                <div id="reportDisplay" style="display: none;">
+                    <!-- Report will be populated here -->
+                </div>
+
+                <!-- Student Selection Modal -->
+                <div class="modal fade" id="studentSelectionModal" tabindex="-1" aria-labelledby="studentSelectionModalLabel" aria-hidden="true">
+                    <div class="modal-dialog modal-lg">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title" id="studentSelectionModalLabel">Select Students for Combined Reports</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="mb-3">
+                                    <label for="subjectSelectModal" class="form-label">Select Subject Course</label>
+                                    <select class="form-select" id="subjectSelectModal" required>
+                                        <option value="">Choose a subject course...</option>
+                                    </select>
+                                </div>
+                                <div id="studentListContainer" style="display: none;">
+                                    <h6>Select Students:</h6>
+                                    <div class="mb-3">
+                                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="selectAllStudents()">Select All</button>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="deselectAllStudents()">Deselect All</button>
+                                        <span class="ms-3" id="selectedCount">0 students selected</span>
+                                    </div>
+                                    <div id="studentCheckboxes" style="max-height: 400px; overflow-y: auto;">
+                                        <!-- Student checkboxes will be populated here -->
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                <button type="button" class="btn btn-primary" onclick="generateSelectedCombinedReports()" disabled id="generateSelectedBtn">
+                                    Generate Combined Reports for Selected Students
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Markdown Preview -->
+                <div id="markdownPreview" class="card" style="display: none;">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="card-title mb-0">Markdown Preview</h5>
+                        <button class="btn btn-sm btn-outline-primary" onclick="copyMarkdown(event)">
+                            <i class="bi bi-clipboard"></i> Copy Markdown
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <pre id="markdownContent" style="white-space: pre-wrap; font-family: 'Courier New', monospace; background: #f8f9fa; padding: 1rem; border-radius: 0.375rem; max-height: 500px; overflow-y: auto;"></pre>
+                    </div>
+                </div>
+
+                <!-- Error Display -->
+                <div id="errorDisplay" class="alert alert-danger" style="display: none;">
+                    <!-- Error messages will be displayed here -->
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let currentReport = null;
+
+        // Load students on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check authentication
+            const token = localStorage.getItem('token');
+            const userRole = localStorage.getItem('userRole');
+            
+            if (!token) {
+                window.location.href = '/login.html';
+                return;
+            }
+            
+            if (userRole !== 'TEACHER' && userRole !== 'ADMIN') {
+                window.location.href = '/login.html';
+                return;
+            }
+            
+            loadSubjects();
+        });
+
+        // Load available subjects
+        async function loadSubjects() {
+            try {
+                const token = localStorage.getItem('token');
+                if (!token) {
+                    window.location.href = '/login.html';
+                    return;
+                }
+
+                const response = await fetch('/api/subjects', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        window.location.href = '/login.html';
+                        return;
+                    }
+                    throw new Error('Failed to load subjects');
+                }
+                
+                const subjects = await response.json();
+                const subjectSelect = document.getElementById('subjectSelect');
+                
+                console.log('All subjects loaded:', subjects.length);
+                console.log('Sample subject data:', subjects[0]);
+                
+                // Filter for English-related subjects (using CoreSubject)
+                const englishSubjects = subjects.filter(subject => 
+                    subject.coreSubject && subject.coreSubject.name.toLowerCase().includes('english')
+                );
+
+                console.log('English subjects found:', englishSubjects.length);
+                
+                if (englishSubjects.length === 0) {
+                    // If no English subjects found, show all subjects for reference
+                    console.log('No English subjects found, showing all subjects');
+                    const warningOption = document.createElement('option');
+                    warningOption.value = '';
+                    warningOption.textContent = '⚠️ No English subjects found - showing all subjects';
+                    warningOption.disabled = true;
+                    subjectSelect.appendChild(warningOption);
+                    
+                    subjects.forEach(subject => {
+                        const option = document.createElement('option');
+                        option.value = subject.id;
+                        const coreSubjectName = subject.coreSubject ? subject.coreSubject.name : 'Unknown';
+                        option.textContent = `${subject.name} (${coreSubjectName})`;
+                        subjectSelect.appendChild(option);
+                    });
+                } else {
+                    englishSubjects.forEach(subject => {
+                        const option = document.createElement('option');
+                        option.value = subject.id;
+                        option.textContent = subject.name;
+                        subjectSelect.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading subjects:', error);
+                showError('Failed to load subjects. Please refresh the page.');
+            }
+        }
+
+        // Load students for selected subject
+        async function loadStudentsForSubject(subjectId) {
+            try {
+                const token = localStorage.getItem('token');
+                if (!token) {
+                    window.location.href = '/login.html';
+                    return;
+                }
+
+                const response = await fetch(`/api/teacher/class-students/${subjectId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        window.location.href = '/login.html';
+                        return;
+                    }
+                    throw new Error('Failed to load students for subject');
+                }
+                
+                const students = await response.json();
+                const studentSelect = document.getElementById('studentSelect');
+                
+                // Clear existing options
+                studentSelect.innerHTML = '';
+                
+                console.log('Students for subject loaded:', students.length);
+                
+                if (students.length === 0) {
+                    const noStudentsOption = document.createElement('option');
+                    noStudentsOption.value = '';
+                    noStudentsOption.textContent = 'No students enrolled in this subject';
+                    noStudentsOption.disabled = true;
+                    studentSelect.appendChild(noStudentsOption);
+                    studentSelect.disabled = true;
+                } else {
+                    students.forEach(student => {
+                        const option = document.createElement('option');
+                        option.value = student.id;
+                        option.textContent = `${student.name} (${student.studentNumber || 'No ID'})`;
+                        studentSelect.appendChild(option);
+                    });
+                    studentSelect.disabled = false;
+                }
+            } catch (error) {
+                console.error('Error loading students for subject:', error);
+                showError('Failed to load students for selected subject.');
+            }
+        }
+
+        // Handle subject selection change
+        document.getElementById('subjectSelect').addEventListener('change', function() {
+            const subjectId = this.value;
+            if (subjectId) {
+                loadStudentsForSubject(subjectId);
+            } else {
+                // Reset student dropdown
+                const studentSelect = document.getElementById('studentSelect');
+                studentSelect.innerHTML = '<option value="">First select a subject course...</option>';
+                studentSelect.disabled = true;
+            }
+        });
+
+        // Handle form submission
+        document.getElementById('reportForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const subjectId = document.getElementById('subjectSelect').value;
+            const studentId = document.getElementById('studentSelect').value;
+            const quarter = document.getElementById('quarterSelect').value;
+            
+            if (!subjectId || !studentId || !quarter) {
+                showError('Please select subject course, student, and quarter.');
+                return;
+            }
+            
+            await generateReport(studentId, quarter);
+        });
+
+        // Generate report
+        async function generateReport(studentId, quarter) {
+            showLoading(true);
+            hideError();
+            hideReport();
+
+            try {
+                const token = localStorage.getItem('token');
+                if (!token) {
+                    window.location.href = '/login.html';
+                    return;
+                }
+
+                const response = await fetch(`/api/teacher/english-student-report?studentId=${studentId}&quarter=${quarter}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        window.location.href = '/login.html';
+                        return;
+                    }
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Failed to generate report');
+                }
+                
+                const report = await response.json();
+                currentReport = report;
+                displayReport(report);
+            } catch (error) {
+                console.error('Error generating report:', error);
+                showError(error.message);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // Display the generated report
+        function displayReport(report) {
+            const reportDisplay = document.getElementById('reportDisplay');
+            
+            const reportHTML = `
+                <div class="printable-report">
+                    <div class="card report-card">
+                        <div class="card-header">
+                            <h3 class="card-title">English Class Report - ${report.student.name}</h3>
+                            <p class="card-subtitle text-muted">Student ID: ${report.student.id} | Class: ${report.student.class} | ${report.quarter}</p>
+                            ${report.classInfo ? `<p class="card-subtitle text-muted">Class: ${report.classInfo.subject} (${report.classInfo.size} students)</p>` : ''}
+                        </div>
+                        <div class="card-body">
+                            <!-- Performance Summary -->
+                            ${report.performance ? `
+                            <div class="mb-4">
+                                <h5>${report.quarter} - Performance Analysis</h5>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="alert alert-info">
+                                            <h6>Student Performance</h6>
+                                            <p class="mb-1"><strong>Average Score:</strong> ${report.performance.studentAverage}%</p>
+                                            <p class="mb-1"><strong>Class Average:</strong> ${report.performance.classAverage}%</p>
+                                            <p class="mb-1"><strong>Performance vs Class:</strong> ${report.performance.performanceVsClass}</p>
+                                            <p class="mb-0"><strong>${report.performance.strugglingDescription}:</strong> ${report.performance.strugglingCount}/${report.performance.totalAssessments} (${report.performance.strugglingPercent}%)</p>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="alert alert-secondary">
+                                            <h6>Assessment Completion</h6>
+                                            <p class="mb-1"><strong>Total Available:</strong> ${report.achievement.totalAssessments} assessments</p>
+                                            <p class="mb-1"><strong>Student Submissions:</strong> ${report.achievement.studentSubmissions} assessments</p>
+                                            <p class="mb-1"><strong>Completion Rate:</strong> ${report.achievement.completionRate}%</p>
+                                            <p class="mb-0"><small class="text-muted">${report.performance.note}</small></p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            ` : ''}
+
+                            <!-- Achievement Summary -->
+                            <div class="mb-4">
+                                <h5>${report.quarter} - Achievement</h5>
+                                <p class="lead">${report.achievement.description}</p>
+                            </div>
+
+    <!-- Skills Breakdown -->
+    <div class="mb-4">
+        <h5>Skills Analysis:</h5>
+        <div class="row">
+            ${Object.entries(report.skills).map(([skill, metrics]) => `
+                <div class="col-md-6 mb-3">
+                    <div class="skill-metric ${getCompletionClass(metrics.completionRate)}">
+                        <h6>${skill}</h6>
+                        <div class="row">
+                            <div class="col-6">
+                                <small class="text-muted">
+                                    <strong>Student:</strong> ${metrics.studentAverageScore}% (${metrics.studentAssessments} assessments)<br>
+                                    <strong>Class:</strong> ${metrics.classAverageScore}% (${metrics.classAssessments} assessments)<br>
+                                    <strong>vs Class:</strong> ${metrics.performanceVsClass}
+                                </small>
+                            </div>
+                            <div class="col-6">
+                                <small class="text-muted">
+                                    <strong>Completion:</strong> ${metrics.completed}/${metrics.total} (${metrics.completionRate}%)<br>
+                                    <strong>Struggling:</strong> ${metrics.strugglingCount} (${metrics.strugglingPercent}% below 70%)<br>
+                                    ${metrics.notAttempted > 0 ? `<strong>Not Attempted:</strong> ${metrics.notAttempted}<br>` : ''}
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+        ${report.skillsSummary ? `
+        <div class="mt-3">
+            <div class="alert alert-info">
+                <h6>Skills Summary</h6>
+                <p class="mb-0"><strong>Total Assessments Provided:</strong> ${report.skillsSummary.totalAssessmentsProvided} assessments</p>
+                <p class="mb-0"><strong>Total Assessments Completed:</strong> ${report.skillsSummary.totalAssessmentsCompleted} assessments</p>
+                <p class="mb-0"><strong>Overall Completion Rate:</strong> ${report.skillsSummary.overallCompletionRate}%</p>
+            </div>
+        </div>
+        ` : ''}
+    </div>
+
+                            <!-- Narrative -->
+                            <div class="mb-4">
+                                <h5>Narrative</h5>
+                                <p>${report.narrative}</p>
+                            </div>
+
+                            <!-- Engagement -->
+                            <div class="mb-4">
+                                <h5>Engagement</h5>
+                                <div class="engagement-metric ${getEngagementClass(report.engagement.engagementStyle)} p-3 rounded">
+                                    <p class="mb-0">${report.engagement.description}</p>
+                                </div>
+                                
+                                <!-- Login Frequency Details -->
+                                <div class="mt-3">
+                                    <h6>Login Frequency Analysis (Thursday/Friday Class Days)</h6>
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <small class="text-muted">
+                                                <strong>Total Class Day Logins:</strong> ${report.engagement.classDayLogins}<br>
+                                                <strong>Average Logins Per Day:</strong> ${report.engagement.averageLoginsPerDay}<br>
+                                                <strong>Excessive Login Days:</strong> ${report.engagement.excessiveLoginDays} days with &gt;3 logins
+                                            </small>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <small class="text-muted">
+                                                <strong>Total Class Time:</strong> ${report.engagement.totalClassDayMinutes} minutes<br>
+                                                <strong>Average Session Duration:</strong> ${report.engagement.averageSessionMinutes} minutes<br>
+                                                <strong>Session Completion Rate:</strong> ${report.engagement.completionRate}% (${report.engagement.completedSessions}/${report.engagement.classDayLogins})
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Persistence -->
+                            <div class="mb-4">
+                                <h5>Persistence</h5>
+                                <p>${report.persistence.description}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            reportDisplay.innerHTML = reportHTML;
+            showReport();
+            
+            // Generate and display markdown
+            generateMarkdown(report);
+        }
+
+        // Generate markdown version of the report
+        function generateMarkdown(data) {
+            const quarter = data.quarter;
+            const markdown = data.reports.map(report => {
+                // Check if this is a combined report
+                if (report.q1Report && report.q2Report) {
+                    return generateCombinedMarkdown(report);
+                } else {
+                    return generateSingleMarkdown(report);
+                }
+            }).join('\n\n');
+
+            const fullMarkdown = `# English Class Reports - ${quarter}
+
+${markdown}
+
+*Generated on ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}*`;
+
+            document.getElementById('markdownContent').textContent = fullMarkdown;
+            document.getElementById('markdownPreview').style.display = 'block';
+        }
+
+        function generateCombinedMarkdown(report) {
+            return `### Report for ${report.student.name} (ID: ${report.student.id})
+**Class:** ${report.classInfo.subject} (${report.classInfo.size} students)
+
+---
+
+## Quarter 1 Report
+${report.q1Report ? generateSingleMarkdownContent(report.q1Report) : 'No Q1 data available'}
+
+---
+
+## Quarter 2 Report  
+${report.q2Report ? generateSingleMarkdownContent(report.q2Report) : 'No Q2 data available'}
+
+---`;
+        }
+
+        function generateSingleMarkdown(report) {
+            return `### Report for ${report.student.name} (ID: ${report.student.id})
+${report.classInfo ? `**Class:** ${report.classInfo.subject} (${report.classInfo.size} students)` : ''}
+
+${generateSingleMarkdownContent(report)}
+
+---`;
+        }
+
+        function generateSingleMarkdownContent(report) {
+            return `**${report.quarter}** - Performance Analysis
+${report.performance ? `
+- **Student Average Score:** ${report.performance.studentAverage}%
+- **Class Average Score:** ${report.performance.classAverage}%
+- **Performance vs Class:** ${report.performance.performanceVsClass}
+- **${report.performance.strugglingDescription}:** ${report.performance.strugglingCount}/${report.performance.totalAssessments} (${report.performance.strugglingPercent}%)
+- **Assessment Completion:** ${report.achievement.studentSubmissions}/${report.achievement.totalAssessments} (${report.achievement.completionRate}%)
+- **Note:** ${report.performance.note}
+` : ''}
+
+**Skills Analysis:**
+${Object.entries(report.skills).map(([skill, metrics]) => 
+    `- **${skill}:** Student ${metrics.studentAverageScore}% (${metrics.studentAssessments} assessments) vs Class ${metrics.classAverageScore}% (${metrics.classAssessments} assessments) - ${metrics.performanceVsClass}. Completion: ${metrics.completed}/${metrics.total} (${metrics.completionRate}%). Struggling: ${metrics.strugglingCount} (${metrics.strugglingPercent}% below 70%)${metrics.notAttempted > 0 ? `. Not attempted: ${metrics.notAttempted}` : ''}`
+).join('\n')}
+${report.skillsSummary ? `
+- **Skills Summary:** Total assessments provided: ${report.skillsSummary.totalAssessmentsProvided}, Total assessments completed: ${report.skillsSummary.totalAssessmentsCompleted}, Overall completion rate: ${report.skillsSummary.overallCompletionRate}%` : ''}
+
+**Achievement:** ${report.achievement.description}
+
+**Narrative:** ${report.narrative}
+
+**Engagement:** ${report.engagement.description}
+
+**Login Frequency (Thursday/Friday Class Days):** ${report.engagement.classDayLogins} total logins (avg ${report.engagement.averageLoginsPerDay} per day). Total class time: ${report.engagement.totalClassDayMinutes} minutes (avg ${report.engagement.averageSessionMinutes} min per session). Session completion: ${report.engagement.completedSessions}/${report.engagement.classDayLogins} (${report.engagement.completionRate}%). Excessive login days: ${report.engagement.excessiveLoginDays}.
+
+**Persistence:** ${report.persistence.description}`;
+        }
+
+        // Export markdown to file
+        function exportMarkdown() {
+            if (!currentReport) {
+                alert('Please generate a report first.');
+                return;
+            }
+
+            const markdown = document.getElementById('markdownContent').textContent;
+            const blob = new Blob([markdown], { type: 'text/markdown' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `english-report-${currentReport.student.name.replace(/\s+/g, '-').toLowerCase()}-${currentReport.quarter}.md`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        // Copy markdown to clipboard
+        function copyMarkdown(event) {
+            const markdown = document.getElementById('markdownContent').textContent;
+            navigator.clipboard.writeText(markdown).then(() => {
+                // Show success feedback
+                const button = event.target.closest('button');
+                const originalText = button.innerHTML;
+                button.innerHTML = '<i class="bi bi-check"></i> Copied!';
+                button.classList.remove('btn-outline-primary');
+                button.classList.add('btn-success');
+                
+                setTimeout(() => {
+                    button.innerHTML = originalText;
+                    button.classList.remove('btn-success');
+                    button.classList.add('btn-outline-primary');
+                }, 2000);
+            }).catch(err => {
+                console.error('Failed to copy markdown:', err);
+                alert('Failed to copy to clipboard');
+            });
+        }
+
+        // Helper functions
+        function getCompletionClass(completionRate) {
+            if (completionRate >= 80) return 'completion-high';
+            if (completionRate >= 60) return 'completion-medium';
+            return 'completion-low';
+        }
+
+        function getEngagementClass(engagementStyle) {
+            if (engagementStyle === 'Active Learner') return 'engagement-active';
+            if (engagementStyle === 'Balanced') return 'engagement-balanced';
+            return 'engagement-homework';
+        }
+
+
+        function showLoading(show) {
+            document.getElementById('loadingIndicator').style.display = show ? 'block' : 'none';
+        }
+
+        function showReport() {
+            document.getElementById('reportDisplay').style.display = 'block';
+            document.getElementById('markdownPreview').style.display = 'block';
+        }
+
+        function hideReport() {
+            document.getElementById('reportDisplay').style.display = 'none';
+            document.getElementById('markdownPreview').style.display = 'none';
+        }
+
+        function showError(message) {
+            const errorDisplay = document.getElementById('errorDisplay');
+            errorDisplay.textContent = message;
+            errorDisplay.style.display = 'block';
+        }
+
+        function hideError() {
+            document.getElementById('errorDisplay').style.display = 'none';
+        }
+
+        function printReport() {
+            if (!currentReport) {
+                alert('Please generate a report first.');
+                return;
+            }
+            window.print();
+        }
+
+        // Generate bulk reports for all students in selected subject
+        async function generateBulkReports() {
+            const subjectId = document.getElementById('subjectSelect').value;
+            const quarter = document.getElementById('quarterSelect').value;
+            
+            if (!subjectId || !quarter) {
+                showError('Please select a subject course and quarter first.');
+                return;
+            }
+
+            const subjectName = document.getElementById('subjectSelect').selectedOptions[0].textContent;
+            const quarterText = quarter === 'Q1Q2' ? 'Q1 + Q2 Combined' : quarter;
+            
+            if (!confirm(`Generate reports for all students in "${subjectName}" for ${quarterText}? This may take a few minutes.`)) {
+                return;
+            }
+
+            showLoading(true);
+            hideError();
+            hideReport();
+
+            try {
+                const token = localStorage.getItem('token');
+                if (!token) {
+                    window.location.href = '/login.html';
+                    return;
+                }
+
+                let reportsResponse;
+                
+                if (quarter === 'Q1Q2') {
+                    // Use combined endpoint for Q1+Q2
+                    reportsResponse = await fetch(`/api/teacher/english-combined-reports?subjectId=${subjectId}`, {
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+                } else {
+                    // Use bulk endpoint for individual quarters
+                    reportsResponse = await fetch(`/api/teacher/english-bulk-reports?quarter=${quarter}`, {
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+                }
+                
+                if (!reportsResponse.ok) {
+                    throw new Error('Failed to generate reports');
+                }
+                
+                const reportsData = await reportsResponse.json();
+
+                displayBulkReports({
+                    quarter: quarterText,
+                    totalStudents: reportsData.totalStudents,
+                    reports: reportsData.reports
+                });
+            } catch (error) {
+                console.error('Error generating bulk reports:', error);
+                showError(error.message);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // Display bulk reports
+        function displayBulkReports(data) {
+            const reportDisplay = document.getElementById('reportDisplay');
+            
+            const reportsHTML = data.reports.map(report => {
+                // Check if this is a combined report (has q1Report and q2Report)
+                if (report.q1Report && report.q2Report) {
+                    return generateCombinedReportHTML(report);
+                } else {
+                    return generateSingleReportHTML(report);
+                }
+            }).join('');
+            
+            const summaryHTML = generateBulkSummary(data);
+            reportDisplay.innerHTML = summaryHTML + reportsHTML;
+            showReport();
+            
+            // Generate markdown for bulk reports
+            generateBulkMarkdown(data.reports, data.quarter);
+        }
+
+        // Generate HTML for combined Q1+Q2 reports
+        function generateCombinedReportHTML(report) {
+            return `
+                <div class="card report-card mb-4 printable-report">
+                    <div class="card-header">
+                        <h4 class="card-title">English Class Report - ${report.student.name}</h4>
+                        <p class="card-subtitle text-muted">Student ID: ${report.student.id} | Class: ${report.student.class} | ${report.quarter}</p>
+                    </div>
+                    <div class="card-body">
+                        <!-- Q1 Report Section -->
+                        ${report.q1Report ? `
+                        <div class="mb-5">
+                            <h4 class="text-primary border-bottom pb-2">Quarter 1 Report</h4>
+                            ${generateSingleReportContent(report.q1Report)}
+                        </div>
+                        ` : ''}
+                        
+                        <!-- Q2 Report Section -->
+                        ${report.q2Report ? `
+                        <div class="mb-5">
+                            <h4 class="text-primary border-bottom pb-2">Quarter 2 Report</h4>
+                            ${generateSingleReportContent(report.q2Report)}
+                        </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        }
+
+        // Generate HTML for single quarter reports
+        function generateSingleReportHTML(report) {
+            return `
+                <div class="card report-card mb-4 printable-report">
+                    <div class="card-header">
+                        <h4 class="card-title">English Class Report - ${report.student.name}</h4>
+                        <p class="card-subtitle text-muted">Student ID: ${report.student.id} | Class: ${report.student.class} | ${report.quarter}</p>
+                    </div>
+                    <div class="card-body">
+                        ${generateSingleReportContent(report)}
+                    </div>
+                </div>
+            `;
+        }
+
+        // Generate the content for a single report (used by both combined and single reports)
+        function generateSingleReportContent(report) {
+            return `
+                <!-- Achievement Summary -->
+                <div class="mb-4">
+                    <h5>${report.quarter} - Achievement</h5>
+                    <p class="lead">${report.achievement.description}</p>
+                </div>
+
+                <!-- Skills Breakdown -->
+                <div class="mb-4">
+                    <h5>Skills:</h5>
+                    <div class="row">
+                        ${Object.entries(report.skills).map(([skill, metrics]) => `
+                            <div class="col-md-6 mb-3">
+                                <div class="skill-metric ${getCompletionClass(metrics.completionRate)}">
+                                    <h6>${skill}: ${metrics.completionRate}% completed, avg score ${metrics.averageScore}</h6>
+                                    <small class="text-muted">
+                                        ${metrics.completed}/${metrics.total} assessments completed
+                                        ${metrics.notAttempted > 0 ? `, ${metrics.notAttempted} not attempted` : ''}
+                                    </small>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                    
+                        <!-- Test Practice -->
+                        <div class="skill-metric ${getCompletionClass(report.skills['Test Practice']?.completionRate || 0)}">
+                            <h6>Test Practice: ${report.skills['Test Practice']?.completionRate || 0}% completed, avg score ${report.skills['Test Practice']?.averageScore || 'N/A'}</h6>
+                            <small class="text-muted">
+                                ${report.skills['Test Practice']?.completed || 0}/${report.skills['Test Practice']?.total || 0} assessments completed
+                                ${(report.skills['Test Practice']?.notAttempted || 0) > 0 ? `, ${report.skills['Test Practice']?.notAttempted || 0} not attempted` : ''}
+                            </small>
+                        </div>
+                </div>
+
+                <!-- Narrative -->
+                <div class="mb-4">
+                    <h5>Narrative</h5>
+                    <p>${report.narrative}</p>
+                </div>
+
+                        <!-- Engagement -->
+                        <div class="mb-4">
+                            <h5>Engagement</h5>
+                            <div class="engagement-metric ${getEngagementClass(report.engagement.engagementStyle)} p-3 rounded">
+                                <p class="mb-0">${report.engagement.description}</p>
+                            </div>
+                        </div>
+
+                        <!-- Persistence -->
+                        <div class="mb-4">
+                            <h5>Persistence</h5>
+                            <p>${report.persistence.description}</p>
+                        </div>
+            `;
+        }
+
+        // Generate HTML for bulk reports summary
+        function generateBulkSummary(data) {
+            const summaryHTML = `
+                <div class="alert alert-info mb-4">
+                    <h5>Summary</h5>
+                    <p>Generated ${data.totalStudents} English class reports for ${data.quarter}</p>
+                </div>
+            `;
+            return summaryHTML;
+        }
+
+        // Generate markdown for bulk reports
+        function generateBulkMarkdown(reports, quarter) {
+            const markdown = reports.map(report => {
+                // Check if this is a combined report
+                if (report.q1Report && report.q2Report) {
+                    return generateCombinedMarkdown(report);
+                } else {
+                    return generateSingleMarkdown(report);
+                }
+            }).join('\n\n');
+
+            const fullMarkdown = `# English Class Reports - ${quarter}
+
+${markdown}
+
+*Generated on ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}*`;
+
+            document.getElementById('markdownContent').textContent = fullMarkdown;
+            document.getElementById('markdownPreview').style.display = 'block';
+        }
+
+        // Show student selection modal
+        function showStudentSelector() {
+            // Populate subject dropdown in modal
+            const subjectSelectModal = document.getElementById('subjectSelectModal');
+            const mainSubjectSelect = document.getElementById('subjectSelect');
+            
+            // Copy subjects from main dropdown
+            subjectSelectModal.innerHTML = '<option value="">Choose a subject course...</option>';
+            for (let option of mainSubjectSelect.options) {
+                if (option.value) {
+                    const newOption = document.createElement('option');
+                    newOption.value = option.value;
+                    newOption.textContent = option.textContent;
+                    subjectSelectModal.appendChild(newOption);
+                }
+            }
+            
+            // Show modal
+            const modal = new bootstrap.Modal(document.getElementById('studentSelectionModal'));
+            modal.show();
+        }
+
+        // Handle subject selection in modal
+        document.getElementById('subjectSelectModal').addEventListener('change', async function() {
+            const subjectId = this.value;
+            const studentListContainer = document.getElementById('studentListContainer');
+            const studentCheckboxes = document.getElementById('studentCheckboxes');
+            
+            if (!subjectId) {
+                studentListContainer.style.display = 'none';
+                return;
+            }
+            
+            try {
+                showLoading(true);
+                
+                const token = localStorage.getItem('token');
+                if (!token) {
+                    window.location.href = '/login.html';
+                    return;
+                }
+                
+                const response = await fetch(`/api/teacher/class-students/${subjectId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to load students');
+                }
+                
+                const students = await response.json();
+                
+                // Filter active students only
+                const activeStudents = students.filter(student => student.active === true);
+                
+                // Remove duplicates based on student number or name (keep the one with student number if both exist)
+                const uniqueStudents = [];
+                const seen = new Set();
+                
+                activeStudents.forEach(student => {
+                    const key = student.studentNumber || student.name;
+                    if (!seen.has(key)) {
+                        seen.add(key);
+                        uniqueStudents.push(student);
+                    } else {
+                        // If duplicate found, prefer the one with student number
+                        const existingIndex = uniqueStudents.findIndex(s => (s.studentNumber || s.name) === key);
+                        if (existingIndex !== -1 && !uniqueStudents[existingIndex].studentNumber && student.studentNumber) {
+                            uniqueStudents[existingIndex] = student; // Replace with the one that has student number
+                        }
+                    }
+                });
+                
+                // Group students by class
+                const studentsByClass = {};
+                uniqueStudents.forEach(student => {
+                    const className = student.class || 'No Class';
+                    if (!studentsByClass[className]) {
+                        studentsByClass[className] = [];
+                    }
+                    studentsByClass[className].push(student);
+                });
+                
+                // Sort classes alphabetically
+                const sortedClasses = Object.keys(studentsByClass).sort();
+                
+                // Populate student checkboxes grouped by class
+                studentCheckboxes.innerHTML = '';
+                sortedClasses.forEach(className => {
+                    // Add class header
+                    const classHeader = document.createElement('div');
+                    classHeader.className = 'mt-3 mb-2';
+                    classHeader.innerHTML = `<h6 class="text-primary border-bottom pb-1">${className}</h6>`;
+                    studentCheckboxes.appendChild(classHeader);
+                    
+                    // Sort students within class by name
+                    const classStudents = studentsByClass[className].sort((a, b) => 
+                        a.name.localeCompare(b.name)
+                    );
+                    
+                    // Add students for this class
+                    classStudents.forEach(student => {
+                        const div = document.createElement('div');
+                        div.className = 'form-check ms-3';
+                        div.innerHTML = `
+                            <input class="form-check-input" type="checkbox" value="${student.id}" id="student_${student.id}" onchange="updateSelectedCount()">
+                            <label class="form-check-label" for="student_${student.id}">
+                                ${student.name} (${student.studentNumber || 'No ID'})
+                            </label>
+                        `;
+                        studentCheckboxes.appendChild(div);
+                    });
+                });
+                
+                studentListContainer.style.display = 'block';
+                updateSelectedCount();
+                
+            } catch (error) {
+                console.error('Error loading students:', error);
+                showError('Failed to load students: ' + error.message);
+            } finally {
+                showLoading(false);
+            }
+        });
+
+        // Update selected count
+        function updateSelectedCount() {
+            const checkboxes = document.querySelectorAll('#studentCheckboxes input[type="checkbox"]');
+            const selectedCount = document.querySelectorAll('#studentCheckboxes input[type="checkbox"]:checked').length;
+            
+            document.getElementById('selectedCount').textContent = `${selectedCount} students selected`;
+            document.getElementById('generateSelectedBtn').disabled = selectedCount === 0;
+        }
+
+        // Select all students
+        function selectAllStudents() {
+            const checkboxes = document.querySelectorAll('#studentCheckboxes input[type="checkbox"]');
+            checkboxes.forEach(checkbox => checkbox.checked = true);
+            updateSelectedCount();
+        }
+
+        // Deselect all students
+        function deselectAllStudents() {
+            const checkboxes = document.querySelectorAll('#studentCheckboxes input[type="checkbox"]');
+            checkboxes.forEach(checkbox => checkbox.checked = false);
+            updateSelectedCount();
+        }
+
+        // Generate combined reports for selected students
+        async function generateSelectedCombinedReports() {
+            const selectedCheckboxes = document.querySelectorAll('#studentCheckboxes input[type="checkbox"]:checked');
+            const selectedStudentIds = Array.from(selectedCheckboxes).map(cb => cb.value);
+            
+            if (selectedStudentIds.length === 0) {
+                showError('Please select at least one student.');
+                return;
+            }
+            
+            const subjectId = document.getElementById('subjectSelectModal').value;
+            if (!subjectId) {
+                showError('Please select a subject course.');
+                return;
+            }
+            
+            if (!confirm(`Generate combined Q1+Q2 reports for ${selectedStudentIds.length} selected students? This may take a few minutes.`)) {
+                return;
+            }
+            
+            showLoading(true);
+            hideError();
+            hideReport();
+            
+            try {
+                const token = localStorage.getItem('token');
+                if (!token) {
+                    window.location.href = '/login.html';
+                    return;
+                }
+                
+                // Generate reports for each selected student
+                const reports = [];
+                const subjectName = document.getElementById('subjectSelectModal').selectedOptions[0].textContent;
+                
+                for (const studentId of selectedStudentIds) {
+                    try {
+                        // Get Q1 report
+                        const q1Response = await fetch(`/api/teacher/english-student-report?studentId=${studentId}&quarter=Q1`, {
+                            headers: {
+                                'Authorization': `Bearer ${token}`
+                            }
+                        });
+                        
+                        // Get Q2 report
+                        const q2Response = await fetch(`/api/teacher/english-student-report?studentId=${studentId}&quarter=Q2`, {
+                            headers: {
+                                'Authorization': `Bearer ${token}`
+                            }
+                        });
+                        
+                        let q1Report = null;
+                        let q2Report = null;
+                        
+                        if (q1Response.ok) {
+                            q1Report = await q1Response.json();
+                        }
+                        
+                        if (q2Response.ok) {
+                            q2Report = await q2Response.json();
+                        }
+                        
+                        if (q1Report || q2Report) {
+                            const combinedReport = {
+                                student: (q1Report || q2Report).student,
+                                classInfo: (q1Report || q2Report).classInfo,
+                                quarter: 'Q1 + Q2 Combined',
+                                q1Report: q1Report,
+                                q2Report: q2Report
+                            };
+                            reports.push(combinedReport);
+                        }
+                    } catch (error) {
+                        console.error(`Error generating report for student ${studentId}:`, error);
+                        // Continue with other students
+                    }
+                }
+                
+                // Close modal
+                const modal = bootstrap.Modal.getInstance(document.getElementById('studentSelectionModal'));
+                modal.hide();
+                
+                // Display reports
+                displayBulkReports({
+                    quarter: 'Q1 + Q2 Combined',
+                    totalStudents: reports.length,
+                    reports: reports
+                });
+                
+            } catch (error) {
+                console.error('Error generating selected reports:', error);
+                showError('Failed to generate reports: ' + error.message);
+            } finally {
+                showLoading(false);
+            }
+        }
+    </script>
+</body>
+</html>

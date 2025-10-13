@@ -1329,16 +1329,9 @@ app.get('/api/subjects/available', auth, async (req, res) => {
 
 app.get('/api/subjects', auth, async (req, res) => {
     try {
-        const subjects = await prisma.subject.findMany({
-            include: {
-                coreSubject: true,
-                teachers: {
-                    include: {
-                        teacher: true
-                    }
-                }
-            },
-            where: {
+        const { coreSubjectId } = req.query;
+        
+        const whereClause = {
                 OR: [
                     {
                         teachers: {
@@ -1351,7 +1344,23 @@ app.get('/api/subjects', auth, async (req, res) => {
                         isArchived: false
                     }
                 ]
+        };
+        
+        // Add coreSubjectId filter if provided
+        if (coreSubjectId) {
+            whereClause.coreSubjectId = coreSubjectId;
+        }
+        
+        const subjects = await prisma.subject.findMany({
+            include: {
+                coreSubject: true,
+                teachers: {
+                    include: {
+                        teacher: true
+                    }
+                }
             },
+            where: whereClause,
             orderBy: {
                 name: 'asc'
             }
@@ -1609,6 +1618,29 @@ app.get('/api/subjects/:subjectId/resources', auth, async (req, res) => {
         const { quarter } = req.query;
         const activeQuarter = quarter || await getActiveQuarter();
         
+        // Get the requesting user to check their class
+        const user = await prisma.user.findUnique({
+            where: { id: req.user.userId },
+            include: { studentCourses: true }
+        });
+
+        // Check for multi-quarter access
+        let allowedQuarters = [activeQuarter];
+        if (user && user.role === 'STUDENT') {
+            const multiQuarterAccess = await prisma.multiQuarterAccess.findUnique({
+                where: {
+                    subjectId_className: {
+                        subjectId: subjectId,
+                        className: user.class || ''
+                    }
+                }
+            });
+            
+            if (multiQuarterAccess && multiQuarterAccess.isEnabled) {
+                allowedQuarters = ['Q1', 'Q2'];
+            }
+        }
+        
         // Get the subject structure with units
         const subject = await prisma.subject.findUnique({
             where: { id: subjectId },
@@ -1699,8 +1731,8 @@ app.get('/api/subjects/:subjectId/resources', auth, async (req, res) => {
             const unitInfo = unitMap[topic.name];
             if (unitInfo) {
                 for (const resource of topic.resources) {
-                    // Only include resources that match the active quarter
-                    if (resource.quarter !== activeQuarter) {
+                    // Only include resources that match allowed quarters (respects multi-quarter access)
+                    if (!allowedQuarters.includes(resource.quarter)) {
                         continue;
                     }
                     
@@ -1710,7 +1742,7 @@ app.get('/api/subjects/:subjectId/resources', auth, async (req, res) => {
                         include: { 
                             assessments: {
                                 where: {
-                                    quarter: activeQuarter,
+                                    quarter: { in: allowedQuarters },
                                     published: true
                                 }
                             }
@@ -4197,6 +4229,77 @@ app.post('/api/assessments/:assessmentId/submit', auth, async (req, res) => {
                 totalTime: req.body.timeTaken ? Math.round(Number(req.body.timeTaken)) : undefined
             }
         });
+
+        // Create/Update Student Progress Record (Skills-Based)
+        try {
+            // Get assessment details to find subject and skill category
+            const assessmentDetails = await prisma.assessment.findUnique({
+                where: { id: assessmentId },
+                include: {
+                    section: {
+                        include: {
+                            part: {
+                                include: {
+                                    unit: {
+                                        include: {
+                                            subject: true
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            if (assessmentDetails && assessmentDetails.section?.part?.unit?.subject && assessmentDetails.category) {
+                const subjectId = assessmentDetails.section.part.unit.subject.id;
+                const skillCategory = assessmentDetails.category;
+                
+                // Normalize skill categories (clean up variations)
+                const normalizedSkill = skillCategory
+                    .replace(/Practice\.?/gi, '')
+                    .replace(/and /gi, '& ')
+                    .trim();
+                
+                // Determine status based on score
+                let status = 'in_progress';
+                if (typeof score === 'number') {
+                    if (score >= 80) status = 'completed';
+                    else if (score >= 60) status = 'in_progress';
+                    else status = 'needs_review';
+                }
+
+                // Upsert student progress by skill category
+                await prisma.studentProgress.upsert({
+                    where: {
+                        studentId_subjectId_skillCategory: {
+                            studentId,
+                            subjectId,
+                            skillCategory: normalizedSkill
+                        }
+                    },
+                    update: {
+                        status,
+                        score: typeof score === 'number' ? Math.max(score, 0) : undefined,
+                        lastUpdated: new Date()
+                    },
+                    create: {
+                        studentId,
+                        subjectId,
+                        skillCategory: normalizedSkill,
+                        status,
+                        score: typeof score === 'number' ? Math.max(score, 0) : undefined
+                    }
+                });
+                
+                console.log(`Student skill progress updated: ${studentId} - ${assessmentDetails.section.part.unit.subject.name} - ${normalizedSkill} - ${status} (${score}%)`);
+            }
+        } catch (progressError) {
+            console.error('Error updating student progress:', progressError);
+            // Don't fail the submission if progress update fails
+        }
+
         res.json({ success: true, submission, score, timeTaken: req.body.timeTaken });
     } catch (error) {
         console.error('[SUBMIT ERROR]', error);
@@ -4312,8 +4415,31 @@ app.get('/api/student/assessments', auth, async (req, res) => {
                                         }
                                     }
                                 });
-                                // Filter by active quarter and published status
-                                if (assessment.quarter !== activeQuarter || !assessment.published) continue;
+                                // Check if multi-quarter access is enabled for this student's class and subject
+                                const multiQuarterAccess = await prisma.multiQuarterAccess.findUnique({
+                                    where: {
+                                        subjectId_className: {
+                                            subjectId: subject.id,
+                                            className: user.class || ''
+                                        }
+                                    }
+                                });
+
+                                // Filter by quarter and published status
+                                let includeAssessment = false;
+                                if (multiQuarterAccess && multiQuarterAccess.isEnabled) {
+                                    // Multi-quarter access enabled: include Q1 and Q2 assessments
+                                    if ((assessment.quarter === 'Q1' || assessment.quarter === 'Q2') && assessment.published) {
+                                        includeAssessment = true;
+                                    }
+                                } else {
+                                    // Normal behavior: only current quarter
+                                    if (assessment.quarter === activeQuarter && assessment.published) {
+                                        includeAssessment = true;
+                                    }
+                                }
+                                
+                                if (!includeAssessment) continue;
                                 // Check if assessment is overdue but still include it for display
                                 const isOverdue = assessment.dueDate && new Date(assessment.dueDate) < now;
 
@@ -4343,6 +4469,7 @@ app.get('/api/student/assessments', auth, async (req, res) => {
                                     description: assessment.description || '',
                                     type: assessment.type,
                                     category: assessment.category, // Add category for skills grouping
+                                    quarter: assessment.quarter, // Add quarter for multi-quarter display
                                     attempts,
                                     maxAttempts: assessment.maxAttempts || '-',
                                     bestScore,
@@ -4358,7 +4485,9 @@ app.get('/api/student/assessments', auth, async (req, res) => {
                                     sectionName: section.name || null,
                                     submissionId: submissions.length > 0 ? submissions[0].id : null,
                                     resourceTitle: assessmentWithResources?.resources?.[0]?.title || null,
-                                    resourceDescription: assessmentWithResources?.resources?.[0]?.description || null
+                                    resourceDescription: assessmentWithResources?.resources?.[0]?.description || null,
+                                    multiQuarterEnabled: multiQuarterAccess ? multiQuarterAccess.isEnabled : false,
+                                    catchUpDeadline: multiQuarterAccess ? multiQuarterAccess.deadline : null
                                 });
                             }
                         }
@@ -4428,8 +4557,8 @@ app.get('/api/teacher/progress', auth, async (req, res) => {
                         if (section.assessments && section.assessments.length > 0) {
                             for (const assessment of section.assessments) {
                                 for (const student of students) {
-                                    if (!student.active) continue;
                                     if (classFilter && student.class !== classFilter) continue;
+                                    if (!student.active) continue; // Skip inactive students
                                     // Get all submissions for this student and assessment
                                     const submissions = await prisma.assessmentSubmission.findMany({
             where: {
@@ -4485,6 +4614,243 @@ app.get('/api/teacher/progress', auth, async (req, res) => {
     }
 });
 
+// Teacher progress by submissions endpoint (sorted by submission count)
+app.get('/api/teacher/progress-by-submissions', auth, async (req, res) => {
+    try {
+        const classFilter = req.query.class;
+        const quarterFilter = req.query.quarter;
+        
+        const teacher = await prisma.user.findUnique({
+            where: { id: req.user.userId },
+            include: {
+                subjectTeacher: {
+                    include: {
+                        subject: {
+                            include: {
+                                studentCourses: {
+                                    include: {
+                                        student: true
+                                    }
+                                },
+                                units: {
+                                    include: {
+                                        parts: {
+                                            include: {
+                                                sections: {
+                                                    include: {
+                                                        assessments: quarterFilter ? {
+                                                            where: { quarter: quarterFilter }
+                                                        } : true
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        if (!teacher || !teacher.subjectTeacher) {
+            return res.json({ students: [] });
+        }
+
+        // Get all students for this teacher's organization (same as /api/teacher/students)
+        const students = await prisma.user.findMany({
+            where: {
+                role: 'STUDENT',
+                organization: teacher.organization
+            },
+            select: { id: true, name: true, nickname: true, class: true, active: true, profilePicture: true, studentNumber: true }
+        });
+
+        // Create student map from the students we fetched
+        const studentMap = new Map();
+        
+        for (const student of students) {
+            // Apply class filter
+            if (classFilter && student.class !== classFilter) {
+                continue;
+            }
+            
+            studentMap.set(student.id, {
+                id: student.id,
+                name: student.name,
+                nickname: student.nickname,
+                class: student.class,
+                photo: student.profilePicture,
+                studentId: student.studentNumber,
+                totalSubmissions: 0,
+                completed: 0,
+                inProgress: 0,
+                notStarted: 0,
+                averageScore: null,
+                scores: []
+            });
+        }
+
+        const studentIds = students.map(s => s.id);
+        if (studentIds.length === 0) {
+            return res.json({ students: [] });
+        }
+
+        // Get student course enrollments
+        const studentCourses = await prisma.studentCourse.findMany({
+            where: { studentId: { in: studentIds } },
+            select: { studentId: true, subjectId: true }
+        });
+
+        const studentSubjectMap = studentCourses.reduce((map, sc) => {
+            if (!map[sc.studentId]) map[sc.studentId] = [];
+            map[sc.studentId].push(sc.subjectId);
+            return map;
+        }, {});
+
+        const allSubjectIds = [...new Set(studentCourses.map(sc => sc.subjectId))];
+
+        // Get assessments for enrolled subjects with quarter filter
+        const assessments = await prisma.assessment.findMany({
+            where: {
+                section: { part: { unit: { subjectId: { in: allSubjectIds } } } },
+                ...(quarterFilter ? { quarter: quarterFilter } : {})
+            },
+            include: {
+                resources: true,
+                section: {
+                    select: {
+                        part: {
+                            select: {
+                                unit: {
+                                    select: {
+                                        subjectId: true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+        });
+
+        // Only count assessments that are attached to at least one resource
+        const attachedAssessments = assessments.filter(a => a.resources && a.resources.length > 0);
+        
+        // Create subject-to-assessment mapping
+        const subjectAssessmentMap = attachedAssessments.reduce((map, a) => {
+            const subjectId = a.section?.part?.unit?.subjectId;
+            if (subjectId) {
+                if (!map[subjectId]) map[subjectId] = [];
+                map[subjectId].push(a.id);
+            }
+            return map;
+        }, {});
+
+        // Calculate total assessments for each student based on their enrolled subjects
+        const studentTotalAssessments = {};
+        for (const studentId of studentIds) {
+            const enrolledSubjectIds = studentSubjectMap[studentId] || [];
+            const enrolledAssessmentsSet = new Set();
+            enrolledSubjectIds.forEach(subjectId => {
+                const assessmentIds = subjectAssessmentMap[subjectId] || [];
+                assessmentIds.forEach(id => enrolledAssessmentsSet.add(id));
+            });
+            studentTotalAssessments[studentId] = enrolledAssessmentsSet.size;
+        }
+
+        const assessmentIds = attachedAssessments.map(a => a.id);
+
+        // Now count submissions for each student
+        for (const [studentId, student] of studentMap) {
+            // Get all submissions for this student across all assessments
+            const submissions = await prisma.assessmentSubmission.findMany({
+                where: {
+                    studentId: studentId,
+                    assessmentId: { in: assessmentIds }
+                }
+            });
+
+            // Group submissions by assessment to handle multiple attempts
+            const submissionsByAssessment = {};
+            submissions.forEach(submission => {
+                if (!submissionsByAssessment[submission.assessmentId]) {
+                    submissionsByAssessment[submission.assessmentId] = [];
+                }
+                submissionsByAssessment[submission.assessmentId].push(submission);
+            });
+
+            // Count completed, in-progress, and not started assessments
+            student.totalSubmissions = submissions.length;
+            
+            // Get the student's enrolled assessments (same logic as /api/teacher/students)
+            const enrolledSubjectIds = studentSubjectMap[studentId] || [];
+            const enrolledAssessmentsSet = new Set();
+            enrolledSubjectIds.forEach(subjectId => {
+                const assessmentIds = subjectAssessmentMap[subjectId] || [];
+                assessmentIds.forEach(id => enrolledAssessmentsSet.add(id));
+            });
+            
+            // Only count assessments that the student is enrolled in
+            for (const assessmentId of enrolledAssessmentsSet) {
+                const studentSubmissions = submissionsByAssessment[assessmentId] || [];
+                
+                if (studentSubmissions.length === 0) {
+                    student.notStarted++;
+                } else {
+                    // Check if any submission is completed (has a score)
+                    const hasCompletedSubmission = studentSubmissions.some(s => s.score !== null);
+                    if (hasCompletedSubmission) {
+                        student.completed++;
+                        // Use the best score for average calculation
+                        const bestScore = Math.max(...studentSubmissions.filter(s => s.score !== null).map(s => s.score));
+                        student.scores.push(bestScore);
+                    } else {
+                        student.inProgress++;
+                    }
+                }
+            }
+        }
+
+        // Calculate average scores and convert to array
+        const studentsWithProgress = Array.from(studentMap.values()).map(student => {
+            if (student.scores.length > 0) {
+                student.averageScore = Math.round(
+                    student.scores.reduce((sum, score) => sum + score, 0) / student.scores.length
+                );
+            }
+            delete student.scores; // Remove scores array from response
+            
+            // Add total assessments for debugging (based on student's enrolled subjects)
+            student.totalAssessments = studentTotalAssessments[student.id] || 0;
+            return student;
+        });
+
+        console.log(`[Progress by Submissions] Quarter: ${quarterFilter || 'All'}, Students processed: ${studentsWithProgress.length}`);
+        console.log(`[Progress by Submissions] Sample student totals:`, Object.entries(studentTotalAssessments).slice(0, 3));
+        if (studentsWithProgress.length > 0) {
+            console.log(`[Progress by Submissions] Sample student data:`, {
+                name: studentsWithProgress[0].name,
+                studentId: studentsWithProgress[0].studentId,
+                class: studentsWithProgress[0].class
+            });
+            console.log(`[Progress by Submissions] Raw student data from DB:`, {
+                name: students[0]?.name,
+                studentNumber: students[0]?.studentNumber
+            });
+        }
+
+        // Sort by total submissions (highest to lowest)
+        studentsWithProgress.sort((a, b) => b.totalSubmissions - a.totalSubmissions);
+
+        res.json({ students: studentsWithProgress });
+    } catch (error) {
+        console.error('Error fetching teacher progress by submissions:', error);
+        res.status(500).json({ error: 'Failed to fetch teacher progress by submissions' });
+    }
+});
+
 // Endpoint to get the active quarter
 app.get('/api/config/active-quarter', auth, async (req, res) => {
     try {
@@ -4521,6 +4887,1190 @@ app.get('/api/debug/user-role', auth, async (req, res) => {
     } catch (error) {
         console.error('Error fetching user role:', error);
         res.status(500).json({ error: 'Failed to fetch user role' });
+    }
+});
+
+// Individual student report with quarter filtering
+app.get('/api/teacher/student-report/:studentId', auth, async (req, res) => {
+    try {
+        const { studentId } = req.params;
+        const { quarter } = req.query;
+        
+        // Verify user is teacher or admin
+        const user = await prisma.user.findUnique({
+            where: { id: req.user.userId }
+        });
+        
+        if (user.role.toUpperCase() !== 'TEACHER' && user.role.toUpperCase() !== 'ADMIN') {
+            return res.status(403).json({ error: 'Access denied. Teachers and admins only.' });
+        }
+        
+        // Get student details
+        const student = await prisma.user.findUnique({
+            where: { id: studentId },
+            include: {
+                studentCourses: {
+                    include: {
+                        subject: true
+                    }
+                }
+            }
+        });
+        
+        if (!student) {
+            return res.status(404).json({ error: 'Student not found' });
+        }
+        
+        // Get student's assessment submissions with quarter filtering
+        const submissionsQuery = {
+            where: {
+                studentId: studentId
+            },
+            include: {
+                assessment: {
+                    include: {
+                        section: {
+                            include: {
+                                part: {
+                                    include: {
+                                        unit: {
+                                            include: {
+                                                subject: true
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            orderBy: { submittedAt: 'desc' }
+        };
+        
+        // Add quarter filter if specified
+        if (quarter) {
+            submissionsQuery.where.assessment = {
+                quarter: quarter
+            };
+        }
+        
+        const submissions = await prisma.assessmentSubmission.findMany(submissionsQuery);
+        
+        // Get student's progress data
+        const progressQuery = {
+            where: {
+                studentId: studentId
+            },
+            include: {
+                subject: true,
+                topic: true
+            }
+        };
+        
+        const progress = await prisma.studentProgress.findMany(progressQuery);
+        
+        // Calculate statistics
+        const totalSubmissions = submissions.length;
+        const completedSubmissions = submissions.filter(s => s.score !== null).length;
+        const averageScore = completedSubmissions > 0 
+            ? (submissions.reduce((sum, s) => sum + (s.score || 0), 0) / completedSubmissions).toFixed(2)
+            : 0;
+        
+        // Group by quarter
+        const submissionsByQuarter = {};
+        submissions.forEach(submission => {
+            const quarter = submission.assessment.quarter || 'Unknown';
+            if (!submissionsByQuarter[quarter]) {
+                submissionsByQuarter[quarter] = [];
+            }
+            submissionsByQuarter[quarter].push(submission);
+        });
+        
+        // Group by subject
+        const submissionsBySubject = {};
+        submissions.forEach(submission => {
+            const subjectName = submission.assessment.section?.part?.unit?.subject?.name || 'Unknown';
+            if (!submissionsBySubject[subjectName]) {
+                submissionsBySubject[subjectName] = [];
+            }
+            submissionsBySubject[subjectName].push(submission);
+        });
+        
+        // Calculate quarter-specific statistics
+        const quarterStats = {};
+        Object.keys(submissionsByQuarter).forEach(quarter => {
+            const quarterSubmissions = submissionsByQuarter[quarter];
+            const completed = quarterSubmissions.filter(s => s.score !== null).length;
+            const avgScore = completed > 0 
+                ? (quarterSubmissions.reduce((sum, s) => sum + (s.score || 0), 0) / completed).toFixed(2)
+                : 0;
+            
+            quarterStats[quarter] = {
+                totalSubmissions: quarterSubmissions.length,
+                completedSubmissions: completed,
+                averageScore: avgScore,
+                completionRate: quarterSubmissions.length > 0 ? ((completed / quarterSubmissions.length) * 100).toFixed(1) : 0
+            };
+        });
+        
+        // Calculate subject-specific statistics
+        const subjectStats = {};
+        Object.keys(submissionsBySubject).forEach(subjectName => {
+            const subjectSubmissions = submissionsBySubject[subjectName];
+            const completed = subjectSubmissions.filter(s => s.score !== null).length;
+            const avgScore = completed > 0 
+                ? (subjectSubmissions.reduce((sum, s) => sum + (s.score || 0), 0) / completed).toFixed(2)
+                : 0;
+            
+            subjectStats[subjectName] = {
+                totalSubmissions: subjectSubmissions.length,
+                completedSubmissions: completed,
+                averageScore: avgScore,
+                completionRate: subjectSubmissions.length > 0 ? ((completed / subjectSubmissions.length) * 100).toFixed(1) : 0
+            };
+        });
+        
+        const report = {
+            student: {
+                id: student.id,
+                name: student.name,
+                email: student.email,
+                class: student.class,
+                yearLevel: student.yearLevel,
+                enrolledSubjects: student.studentCourses.map(sc => sc.subject.name)
+            },
+            filter: {
+                quarter: quarter || 'All Quarters'
+            },
+            summary: {
+                totalSubmissions,
+                completedSubmissions,
+                averageScore,
+                completionRate: totalSubmissions > 0 ? ((completedSubmissions / totalSubmissions) * 100).toFixed(1) : 0
+            },
+            quarterStats,
+            subjectStats,
+            submissions: submissions.map(submission => ({
+                id: submission.id,
+                assessmentId: submission.assessment.id,
+                assessmentTitle: submission.assessment.title,
+                assessmentType: submission.assessment.type,
+                quarter: submission.assessment.quarter,
+                subject: submission.assessment.section?.part?.unit?.subject?.name || 'Unknown',
+                score: submission.score,
+                attempts: submission.attempts,
+                status: submission.status,
+                submittedAt: submission.submittedAt,
+                totalTime: submission.totalTime
+            })),
+            progress: progress.map(p => ({
+                id: p.id,
+                subject: p.subject.name,
+                topic: p.topic.name,
+                status: p.status,
+                score: p.score,
+                lastUpdated: p.lastUpdated
+            }))
+        };
+        
+        res.json(report);
+        
+    } catch (error) {
+        console.error('Error generating student report:', error);
+        res.status(500).json({ error: 'Failed to generate student report' });
+    }
+});
+
+// Helper function: Normalize category to first word
+function normalizeCategory(category) {
+    if (!category) return 'Other';
+    
+    const firstWord = category.trim().split(/\s+/)[0];
+    const capitalized = firstWord.charAt(0).toUpperCase() + firstWord.slice(1).toLowerCase();
+    
+    // Map TEST to Test Practice
+    if (capitalized.toLowerCase() === 'test') return 'Test Practice';
+    
+    // Return the capitalized first word (all categories are dynamic)
+    return capitalized;
+}
+
+// Helper function: Generate comment based on completion and score
+function generateCategoryComment(completed, total, progressPercent, averageScore) {
+    const remaining = total - completed;
+    
+    if (progressPercent === 100) {
+        if (averageScore < 50) {
+            return "Excellent completion! Please review your materials carefully, re-read the textbook pages, ask your teacher questions to clarify concepts, and consider retaking past assessments to improve your understanding.";
+        } else if (averageScore < 70) {
+            return "All assessments completed. Please review your incorrect answers, practice more, and ask your teacher for help on challenging topics.";
+        } else {
+            return "Excellent work! You have shown strong performance with complete participation.";
+        }
+    } else if (progressPercent >= 80) {
+        return `Nearly complete - please finish the remaining ${remaining} assessment${remaining > 1 ? 's' : ''}.`;
+    } else if (progressPercent >= 50) {
+        return `More practice needed. Please complete ${remaining} more assessment${remaining > 1 ? 's' : ''} to reach your target.`;
+    } else {
+        return `This area needs attention. You have completed only ${completed}/${total} assessments. Please prioritize completing this work.`;
+    }
+}
+
+// Individual Student Report Endpoint
+app.get('/api/teacher/individual-student-report/:studentId', auth, async (req, res) => {
+    try {
+        const { studentId } = req.params;
+        const { subjectId, quarter } = req.query;
+
+        if (!subjectId) {
+            return res.status(400).json({ error: 'Subject ID is required' });
+        }
+
+        // Get student information
+        const student = await prisma.user.findFirst({
+            where: {
+                id: studentId,
+                role: 'STUDENT',
+                active: true
+            },
+            select: {
+                id: true,
+                name: true,
+                studentNumber: true,
+                class: true,
+                profilePicture: true
+            }
+        });
+
+        if (!student) {
+            return res.status(404).json({ error: 'Student not found' });
+        }
+
+        // Get subject information
+        const subject = await prisma.subject.findUnique({
+            where: { id: subjectId },
+            select: {
+                id: true,
+                name: true,
+                coreSubject: true
+            }
+        });
+
+        if (!subject) {
+            return res.status(404).json({ error: 'Subject not found' });
+        }
+
+        // Check if student is enrolled in this subject
+        const enrollment = await prisma.studentCourse.findFirst({
+            where: {
+                studentId: studentId,
+                subjectId: subjectId
+            }
+        });
+
+        if (!enrollment) {
+            return res.status(400).json({ error: 'Student is not enrolled in this subject' });
+        }
+
+        // Get assessments with attached resources (same logic as progress page)
+        const whereClause = {
+            subjectId: subjectId,
+            resources: {
+                some: {}
+            }
+        };
+
+        if (quarter) {
+            whereClause.quarter = quarter;
+        }
+
+        const assessments = await prisma.assessment.findMany({
+            where: whereClause,
+            include: {
+                resources: true,
+                submissions: {
+                    where: {
+                        studentId: studentId
+                    }
+                }
+            }
+        });
+
+        // Group assessments by quarter and category
+        const assessmentsByQuarter = {};
+        const categoriesSet = new Set();
+
+        assessments.forEach(assessment => {
+            const q = assessment.quarter;
+            if (!assessmentsByQuarter[q]) {
+                assessmentsByQuarter[q] = {};
+            }
+
+            const normalizedCategory = normalizeCategory(assessment.category);
+            categoriesSet.add(normalizedCategory);
+
+            if (!assessmentsByQuarter[q][normalizedCategory]) {
+                assessmentsByQuarter[q][normalizedCategory] = [];
+            }
+
+            assessmentsByQuarter[q][normalizedCategory].push(assessment);
+        });
+
+        const categories = Array.from(categoriesSet).sort();
+
+        // Calculate student data by quarter and category
+        const quarterData = {};
+        const quarters = Object.keys(assessmentsByQuarter).sort();
+
+        quarters.forEach(q => {
+            const categoriesData = {};
+            
+            categories.forEach(category => {
+                const categoryAssessments = assessmentsByQuarter[q][category] || [];
+                const totalAssessments = categoryAssessments.length;
+                
+                let completedAssessments = 0;
+                let totalScore = 0;
+                let validScores = 0;
+
+                categoryAssessments.forEach(assessment => {
+                    const submission = assessment.submissions.find(sub => sub.studentId === studentId);
+                    if (submission && submission.score !== null && submission.score !== undefined) {
+                        completedAssessments++;
+                        totalScore += submission.score;
+                        validScores++;
+                    }
+                });
+
+                const progressPercent = totalAssessments > 0 ? Math.round((completedAssessments / totalAssessments) * 100) : 0;
+                const averageScore = validScores > 0 ? Math.round(totalScore / validScores) : 0;
+                const finalGrade = Math.round((progressPercent * averageScore) / 100);
+                const comment = generateCategoryComment(completedAssessments, totalAssessments, progressPercent, averageScore);
+
+                categoriesData[category] = {
+                    completed: completedAssessments,
+                    total: totalAssessments,
+                    progressPercent,
+                    averageScore,
+                    finalGrade,
+                    comment
+                };
+            });
+
+            quarterData[q] = { categories: categoriesData };
+        });
+
+        res.json({
+            student: {
+                id: student.id,
+                name: student.name,
+                studentId: student.studentNumber,
+                class: student.class,
+                profilePicture: student.profilePicture
+            },
+            subject: subject,
+            quarter: quarter || 'All Quarters',
+            quarters: quarters,
+            categories: categories,
+            quarterData: quarterData
+        });
+
+    } catch (error) {
+        console.error('Error generating individual student report:', error);
+        res.status(500).json({ error: 'Failed to generate individual student report' });
+    }
+});
+
+// Multi-Quarter Access Management Endpoints
+
+// Get multi-quarter access settings for all classes/subjects
+app.get('/api/teacher/multi-quarter-access', auth, async (req, res) => {
+    try {
+        // Verify user is teacher or admin
+        const user = await prisma.user.findUnique({
+            where: { id: req.user.userId }
+        });
+
+        if (!user || (user.role !== 'TEACHER' && user.role !== 'ADMIN')) {
+            return res.status(403).json({ error: 'Access denied' });
+        }
+
+        // Get all multi-quarter access settings with subject and user info
+        const multiQuarterSettings = await prisma.multiQuarterAccess.findMany({
+            include: {
+                subject: {
+                    select: {
+                        id: true,
+                        name: true,
+                        coreSubject: {
+                            select: {
+                                name: true
+                            }
+                        }
+                    }
+                },
+                enabledByUser: {
+                    select: {
+                        name: true,
+                        email: true
+                    }
+                }
+            },
+            orderBy: [
+                { subject: { name: 'asc' } },
+                { className: 'asc' }
+            ]
+        });
+
+        res.json({ settings: multiQuarterSettings });
+
+    } catch (error) {
+        console.error('Error fetching multi-quarter access settings:', error);
+        res.status(500).json({ error: 'Failed to fetch multi-quarter access settings' });
+    }
+});
+
+// Create or update multi-quarter access setting
+app.post('/api/teacher/multi-quarter-access', auth, async (req, res) => {
+    try {
+        const { subjectId, className, isEnabled, deadline, description } = req.body;
+
+        // Verify user is teacher or admin
+        const user = await prisma.user.findUnique({
+            where: { id: req.user.userId }
+        });
+
+        if (!user || (user.role !== 'TEACHER' && user.role !== 'ADMIN')) {
+            return res.status(403).json({ error: 'Access denied' });
+        }
+
+        // Validate required fields
+        if (!subjectId || !className) {
+            return res.status(400).json({ error: 'Subject ID and class name are required' });
+        }
+
+        // Check if setting already exists
+        const existingSetting = await prisma.multiQuarterAccess.findUnique({
+            where: {
+                subjectId_className: {
+                    subjectId: subjectId,
+                    className: className
+                }
+            }
+        });
+
+        let setting;
+        if (existingSetting) {
+            // Update existing setting
+            setting = await prisma.multiQuarterAccess.update({
+                where: {
+                    subjectId_className: {
+                        subjectId: subjectId,
+                        className: className
+                    }
+                },
+                data: {
+                    isEnabled: isEnabled,
+                    deadline: deadline ? new Date(deadline) : null,
+                    description: description,
+                    enabledBy: req.user.userId,
+                    enabledAt: new Date()
+                },
+                include: {
+                    subject: {
+                        select: {
+                            id: true,
+                            name: true,
+                            coreSubject: {
+                                select: {
+                                    name: true
+                                }
+                            }
+                        }
+                    },
+                    enabledByUser: {
+                        select: {
+                            name: true,
+                            email: true
+                        }
+                    }
+                }
+            });
+        } else {
+            // Create new setting
+            setting = await prisma.multiQuarterAccess.create({
+                data: {
+                    subjectId: subjectId,
+                    className: className,
+                    isEnabled: isEnabled,
+                    deadline: deadline ? new Date(deadline) : null,
+                    description: description,
+                    enabledBy: req.user.userId
+                },
+                include: {
+                    subject: {
+                        select: {
+                            id: true,
+                            name: true,
+                            coreSubject: {
+                                select: {
+                                    name: true
+                                }
+                            }
+                        }
+                    },
+                    enabledByUser: {
+                        select: {
+                            name: true,
+                            email: true
+                        }
+                    }
+                }
+            });
+        }
+
+        console.log(`[Multi-Quarter Access] ${user.name} ${isEnabled ? 'enabled' : 'disabled'} multi-quarter access for ${className} in ${setting.subject.name}`);
+        
+        res.json({ 
+            message: `Multi-quarter access ${isEnabled ? 'enabled' : 'disabled'} successfully`,
+            setting: setting 
+        });
+
+    } catch (error) {
+        console.error('Error updating multi-quarter access setting:', error);
+        res.status(500).json({ error: 'Failed to update multi-quarter access setting' });
+    }
+});
+
+// Delete multi-quarter access setting
+app.delete('/api/teacher/multi-quarter-access/:subjectId/:className', auth, async (req, res) => {
+    try {
+        const { subjectId, className } = req.params;
+
+        // Verify user is teacher or admin
+        const user = await prisma.user.findUnique({
+            where: { id: req.user.userId }
+        });
+
+        if (!user || (user.role !== 'TEACHER' && user.role !== 'ADMIN')) {
+            return res.status(403).json({ error: 'Access denied' });
+        }
+
+        // Delete the setting
+        await prisma.multiQuarterAccess.delete({
+            where: {
+                subjectId_className: {
+                    subjectId: subjectId,
+                    className: className
+                }
+            }
+        });
+
+        console.log(`[Multi-Quarter Access] ${user.name} deleted multi-quarter access setting for ${className} in subject ${subjectId}`);
+        
+        res.json({ message: 'Multi-quarter access setting deleted successfully' });
+
+    } catch (error) {
+        console.error('Error deleting multi-quarter access setting:', error);
+        res.status(500).json({ error: 'Failed to delete multi-quarter access setting' });
+    }
+});
+
+// Class Category Report Endpoint
+app.get('/api/teacher/class-category-report', auth, async (req, res) => {
+    try {
+        const { subjectId, class: className, quarter } = req.query;
+        
+        // Verify user is teacher or admin
+        const user = await prisma.user.findUnique({
+            where: { id: req.user.userId }
+        });
+        
+        if (user.role.toUpperCase() !== 'TEACHER' && user.role.toUpperCase() !== 'ADMIN') {
+            return res.status(403).json({ error: 'Access denied. Teachers and admins only.' });
+        }
+        
+        if (!subjectId || !className) {
+            return res.status(400).json({ error: 'subjectId and class are required parameters' });
+        }
+        
+        console.log(`[Category Report] Generating for Subject: ${subjectId}, Class: ${className}, Quarter: ${quarter || 'All'}`);
+        
+        // Get all students in the specified class who are enrolled in this subject
+        const students = await prisma.user.findMany({
+            where: {
+                role: 'STUDENT',
+                class: className,
+                active: true,
+                studentCourses: {
+                    some: {
+                        subjectId: subjectId
+                    }
+                }
+            },
+            select: {
+                id: true,
+                name: true,
+                studentNumber: true,
+                class: true,
+                profilePicture: true
+            },
+            orderBy: {
+                name: 'asc'
+            }
+        });
+        
+        if (students.length === 0) {
+            return res.json({
+                class: className,
+                subject: null,
+                quarter: quarter || 'All',
+                students: [],
+                summary: {
+                    totalStudents: 0,
+                    totalAssessments: 0,
+                    categoryBreakdown: {}
+                }
+            });
+        }
+        
+        console.log(`[Category Report] Found ${students.length} students enrolled in subject`);
+        
+        // Get subject details
+        const subject = await prisma.subject.findUnique({
+            where: { id: subjectId },
+            include: {
+                coreSubject: true
+            }
+        });
+        
+        // Get all assessments for this subject with attached resources
+        const assessments = await prisma.assessment.findMany({
+            where: {
+                section: { 
+                    part: { 
+                        unit: { 
+                            subjectId: subjectId 
+                        } 
+                    } 
+                },
+                ...(quarter ? { quarter: quarter } : {})
+            },
+            include: {
+                resources: true,
+                section: {
+                    select: {
+                        part: {
+                            select: {
+                                unit: {
+                                    select: {
+                                        subjectId: true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        
+        // Only count assessments with attached resources (same as progress.html)
+        const attachedAssessments = assessments.filter(a => a.resources && a.resources.length > 0);
+        
+        console.log(`[Category Report] Total assessments: ${assessments.length}, With resources: ${attachedAssessments.length}`);
+        
+        const studentIds = students.map(s => s.id);
+        
+        // Get all submissions for these students and assessments
+        const submissions = await prisma.assessmentSubmission.findMany({
+            where: {
+                studentId: { in: studentIds },
+                assessmentId: { in: attachedAssessments.map(a => a.id) }
+            },
+            select: {
+                id: true,
+                studentId: true,
+                assessmentId: true,
+                score: true,
+                submittedAt: true
+            }
+        });
+        
+        console.log(`[Category Report] Found ${submissions.length} submissions`);
+        
+        // Group submissions by student and assessment
+        const submissionsByStudent = {};
+        submissions.forEach(sub => {
+            if (!submissionsByStudent[sub.studentId]) {
+                submissionsByStudent[sub.studentId] = {};
+            }
+            if (!submissionsByStudent[sub.studentId][sub.assessmentId]) {
+                submissionsByStudent[sub.studentId][sub.assessmentId] = [];
+            }
+            submissionsByStudent[sub.studentId][sub.assessmentId].push(sub);
+        });
+        
+        // Extract all unique categories from assessments
+        const allCategories = new Set();
+        const assessmentsByCategory = {};
+        const assessmentsByQuarter = {};
+        
+        attachedAssessments.forEach(assessment => {
+            const normalizedCategory = normalizeCategory(assessment.category);
+            allCategories.add(normalizedCategory);
+            
+            const assessmentQuarter = assessment.quarter || 'Q1';
+            
+            // Group by category
+            if (!assessmentsByCategory[normalizedCategory]) {
+                assessmentsByCategory[normalizedCategory] = [];
+            }
+            assessmentsByCategory[normalizedCategory].push(assessment);
+            
+            // Group by quarter and category
+            if (!assessmentsByQuarter[assessmentQuarter]) {
+                assessmentsByQuarter[assessmentQuarter] = {};
+            }
+            if (!assessmentsByQuarter[assessmentQuarter][normalizedCategory]) {
+                assessmentsByQuarter[assessmentQuarter][normalizedCategory] = [];
+            }
+            assessmentsByQuarter[assessmentQuarter][normalizedCategory].push(assessment);
+        });
+        
+        console.log(`[Category Report] Found categories:`, Array.from(allCategories));
+        console.log(`[Category Report] Quarters:`, Object.keys(assessmentsByQuarter));
+        
+        // Build student data
+        const studentData = students.map(student => {
+            const studentSubmissions = submissionsByStudent[student.id] || {};
+            const quarterData = {};
+            
+            // Process each quarter
+            Object.keys(assessmentsByQuarter).forEach(q => {
+                const quarterCategories = assessmentsByQuarter[q];
+                const categories = {};
+                
+                // Process each category in this quarter
+                Object.keys(quarterCategories).forEach(category => {
+                    const categoryAssessments = quarterCategories[category];
+                    const total = categoryAssessments.length;
+                    
+                    let completed = 0;
+                    let scores = [];
+                    
+                    categoryAssessments.forEach(assessment => {
+                        const assessmentSubmissions = studentSubmissions[assessment.id] || [];
+                        
+                        if (assessmentSubmissions.length > 0) {
+                            // Check if any submission has a score
+                            const scoredSubmissions = assessmentSubmissions.filter(s => s.score !== null);
+                            if (scoredSubmissions.length > 0) {
+                                completed++;
+                                // Use best score
+                                const bestScore = Math.max(...scoredSubmissions.map(s => s.score));
+                                scores.push(bestScore);
+                            }
+                        }
+                    });
+                    
+                    const progressPercent = total > 0 ? Math.round((completed / total) * 100) : 0;
+                    const averageScore = scores.length > 0 
+                        ? Math.round(scores.reduce((sum, s) => sum + s, 0) / scores.length)
+                        : 0;
+                    const finalGrade = total > 0 
+                        ? Math.round((completed / total) * averageScore)
+                        : 0;
+                    
+                    categories[category] = {
+                        completed,
+                        total,
+                        progressPercent,
+                        averageScore: scores.length > 0 ? averageScore : null,
+                        finalGrade: scores.length > 0 ? finalGrade : null,
+                        comment: generateCategoryComment(completed, total, progressPercent, averageScore)
+                    };
+                });
+                
+                quarterData[q] = { categories };
+            });
+            
+            return {
+                id: student.id,
+                name: student.name,
+                studentId: student.studentNumber,
+                class: student.class,
+                profilePicture: student.profilePicture,
+                quarterData
+            };
+        });
+        
+        // Build summary with per-quarter breakdowns
+        const categoryBreakdown = {};
+        Object.keys(assessmentsByCategory).forEach(category => {
+            categoryBreakdown[category] = assessmentsByCategory[category].length;
+        });
+        
+        // Build per-quarter category breakdowns
+        const quarterlyBreakdowns = {};
+        Object.keys(assessmentsByQuarter).forEach(q => {
+            quarterlyBreakdowns[q] = {};
+            Object.keys(assessmentsByQuarter[q]).forEach(category => {
+                quarterlyBreakdowns[q][category] = assessmentsByQuarter[q][category].length;
+            });
+        });
+        
+        // Calculate class averages per quarter for comparison
+        const quarterComparison = {};
+        Object.keys(assessmentsByQuarter).forEach(q => {
+            const quarterCategories = assessmentsByQuarter[q];
+            let totalCompleted = 0;
+            let totalAvailable = 0;
+            let totalScores = [];
+            
+            studentData.forEach(student => {
+                if (student.quarterData[q]) {
+                    Object.keys(student.quarterData[q].categories).forEach(category => {
+                        const catData = student.quarterData[q].categories[category];
+                        totalCompleted += catData.completed;
+                        totalAvailable += catData.total;
+                        if (catData.averageScore !== null) {
+                            totalScores.push(catData.averageScore);
+                        }
+                    });
+                }
+            });
+            
+            const classProgressPercent = totalAvailable > 0 ? Math.round((totalCompleted / totalAvailable) * 100) : 0;
+            const classAverageScore = totalScores.length > 0 
+                ? Math.round(totalScores.reduce((sum, s) => sum + s, 0) / totalScores.length)
+                : 0;
+            
+            quarterComparison[q] = {
+                totalAssessments: Object.values(quarterlyBreakdowns[q]).reduce((sum, val) => sum + val, 0),
+                classProgressPercent,
+                classAverageScore,
+                classFinalGrade: Math.round((classProgressPercent / 100) * classAverageScore),
+                categoryBreakdown: quarterlyBreakdowns[q]
+            };
+        });
+        
+        const response = {
+            class: className,
+            subject: {
+                id: subject.id,
+                name: subject.name,
+                coreSubject: subject.coreSubject?.name
+            },
+            quarter: quarter || 'All',
+            quarters: Object.keys(assessmentsByQuarter).sort(),
+            categories: Array.from(allCategories).sort(),
+            students: studentData,
+            summary: {
+                totalStudents: students.length,
+                totalAssessments: attachedAssessments.length,
+                categoryBreakdown,
+                quarterlyBreakdowns,
+                quarterComparison
+            }
+        };
+        
+        res.json(response);
+        
+    } catch (error) {
+        console.error('Error generating class category report:', error);
+        res.status(500).json({ error: 'Failed to generate class category report', details: error.message });
+    }
+});
+
+// Advanced Category Report Endpoint - Flexible quarter selection
+app.get('/api/teacher/advanced-category-report', auth, async (req, res) => {
+    try {
+        const { subjectId, class: className, quarters } = req.query;
+        
+        // Verify user is teacher or admin
+        const user = await prisma.user.findUnique({
+            where: { id: req.user.userId }
+        });
+        
+        if (user.role.toUpperCase() !== 'TEACHER' && user.role.toUpperCase() !== 'ADMIN') {
+            return res.status(403).json({ error: 'Access denied. Teachers and admins only.' });
+        }
+        
+        if (!subjectId || !className || !quarters) {
+            return res.status(400).json({ error: 'subjectId, class, and quarters are required parameters' });
+        }
+        
+        // Parse quarters parameter
+        const quarterArray = quarters.split(',').map(q => q.trim()).filter(q => q);
+        if (quarterArray.length === 0) {
+            return res.status(400).json({ error: 'At least one quarter must be specified' });
+        }
+        
+        console.log(`[Advanced Category Report] Generating for Subject: ${subjectId}, Class: ${className}, Quarters: ${quarterArray.join(', ')}`);
+        
+        // Get all students in the specified class who are enrolled in this subject
+        const students = await prisma.user.findMany({
+            where: {
+                role: 'STUDENT',
+                class: className,
+                active: true,
+                studentCourses: {
+                    some: {
+                        subjectId: subjectId
+                    }
+                }
+            },
+            select: {
+                id: true,
+                name: true,
+                studentNumber: true,
+                class: true,
+                profilePicture: true
+            },
+            orderBy: {
+                name: 'asc'
+            }
+        });
+        
+        if (students.length === 0) {
+            return res.json({
+                students: [],
+                metadata: {
+                    quarters: quarterArray,
+                    categories: [],
+                    totalStudents: 0,
+                    className: className,
+                    subjectName: null
+                }
+            });
+        }
+        
+        console.log(`[Advanced Category Report] Found ${students.length} students enrolled in subject`);
+        
+        // Get subject details
+        const subject = await prisma.subject.findUnique({
+            where: { id: subjectId },
+            include: {
+                coreSubject: true
+            }
+        });
+        
+        // Get all assessments for this subject with attached resources for selected quarters
+        const assessments = await prisma.assessment.findMany({
+            where: {
+                section: { 
+                    part: { 
+                        unit: { 
+                            subjectId: subjectId 
+                        } 
+                    } 
+                },
+                quarter: { in: quarterArray }
+            },
+            include: {
+                resources: true,
+                section: {
+                    select: {
+                        part: {
+                            select: {
+                                unit: {
+                                    select: {
+                                        subjectId: true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        
+        // Only count assessments with attached resources
+        const attachedAssessments = assessments.filter(a => a.resources && a.resources.length > 0);
+        
+        console.log(`[Advanced Category Report] Total assessments: ${assessments.length}, With resources: ${attachedAssessments.length}`);
+        
+        const studentIds = students.map(s => s.id);
+        
+        // Get all submissions for these students and assessments
+        const submissions = await prisma.assessmentSubmission.findMany({
+            where: {
+                studentId: { in: studentIds },
+                assessmentId: { in: attachedAssessments.map(a => a.id) }
+            },
+            select: {
+                id: true,
+                studentId: true,
+                assessmentId: true,
+                score: true,
+                submittedAt: true
+            }
+        });
+        
+        console.log(`[Advanced Category Report] Found ${submissions.length} submissions`);
+        
+        // Group submissions by student and assessment
+        const submissionsByStudent = {};
+        submissions.forEach(sub => {
+            if (!submissionsByStudent[sub.studentId]) {
+                submissionsByStudent[sub.studentId] = {};
+            }
+            if (!submissionsByStudent[sub.studentId][sub.assessmentId]) {
+                submissionsByStudent[sub.studentId][sub.assessmentId] = [];
+            }
+            submissionsByStudent[sub.studentId][sub.assessmentId].push(sub);
+        });
+        
+        // Extract all unique categories from assessments
+        const allCategories = new Set();
+        const assessmentsByCategory = {};
+        const assessmentsByQuarter = {};
+        
+        attachedAssessments.forEach(assessment => {
+            const normalizedCategory = normalizeCategory(assessment.category);
+            allCategories.add(normalizedCategory);
+            
+            const assessmentQuarter = assessment.quarter || 'Q1';
+            
+            // Group by category (combined across quarters)
+            if (!assessmentsByCategory[normalizedCategory]) {
+                assessmentsByCategory[normalizedCategory] = [];
+            }
+            assessmentsByCategory[normalizedCategory].push(assessment);
+            
+            // Group by quarter and category (for quarter-specific data)
+            if (!assessmentsByQuarter[assessmentQuarter]) {
+                assessmentsByQuarter[assessmentQuarter] = {};
+            }
+            if (!assessmentsByQuarter[assessmentQuarter][normalizedCategory]) {
+                assessmentsByQuarter[assessmentQuarter][normalizedCategory] = [];
+            }
+            assessmentsByQuarter[assessmentQuarter][normalizedCategory].push(assessment);
+        });
+        
+        console.log(`[Advanced Category Report] Found categories:`, Array.from(allCategories));
+        console.log(`[Advanced Category Report] Quarters:`, Object.keys(assessmentsByQuarter));
+        
+        // Build student data
+        const studentData = students.map(student => {
+            const studentSubmissions = submissionsByStudent[student.id] || {};
+            const categories = {};
+            let totalCompletedAll = 0;
+            let totalAvailableAll = 0;
+            
+            // Process each category (combined across selected quarters)
+            Object.keys(assessmentsByCategory).forEach(category => {
+                const categoryAssessments = assessmentsByCategory[category];
+                const total = categoryAssessments.length;
+                
+                let completed = 0;
+                let scores = [];
+                const quarterData = {};
+                
+                categoryAssessments.forEach(assessment => {
+                    const assessmentSubmissions = studentSubmissions[assessment.id] || [];
+                    const assessmentQuarter = assessment.quarter || 'Q1';
+                    
+                    if (assessmentSubmissions.length > 0) {
+                        // Check if any submission has a score
+                        const scoredSubmissions = assessmentSubmissions.filter(s => s.score !== null);
+                        if (scoredSubmissions.length > 0) {
+                            completed++;
+                            // Use best score
+                            const bestScore = Math.max(...scoredSubmissions.map(s => s.score));
+                            scores.push(bestScore);
+                        }
+                    }
+                    
+                    // Track quarter-specific data
+                    if (!quarterData[assessmentQuarter]) {
+                        quarterData[assessmentQuarter] = { completed: 0, total: 0, scores: [] };
+                    }
+                    quarterData[assessmentQuarter].total++;
+                    if (assessmentSubmissions.length > 0) {
+                        const scoredSubmissions = assessmentSubmissions.filter(s => s.score !== null);
+                        if (scoredSubmissions.length > 0) {
+                            quarterData[assessmentQuarter].completed++;
+                            const bestScore = Math.max(...scoredSubmissions.map(s => s.score));
+                            quarterData[assessmentQuarter].scores.push(bestScore);
+                        }
+                    }
+                });
+                
+                const completionPercent = total > 0 ? Math.round((completed / total) * 100) : 0;
+                const averageScore = scores.length > 0 
+                    ? Math.round(scores.reduce((sum, s) => sum + s, 0) / scores.length)
+                    : 0;
+                
+                // Calculate quarter-specific completion and scores
+                const processedQuarterData = {};
+                Object.keys(quarterData).forEach(q => {
+                    const qData = quarterData[q];
+                    processedQuarterData[q] = {
+                        completed: qData.completed,
+                        total: qData.total,
+                        completionPercent: qData.total > 0 ? Math.round((qData.completed / qData.total) * 100) : 0,
+                        averageScore: qData.scores.length > 0 
+                            ? Math.round(qData.scores.reduce((sum, s) => sum + s, 0) / qData.scores.length)
+                            : 0
+                    };
+                });
+                
+                categories[category] = {
+                    completed,
+                    total,
+                    completionPercent,
+                    averageScore: scores.length > 0 ? averageScore : 0,
+                    quarterData: processedQuarterData
+                };
+                
+                totalCompletedAll += completed;
+                totalAvailableAll += total;
+            });
+            
+            // Calculate overall completion percentage (average of category completion percentages)
+            const categoryCompletionPercentages = Object.values(categories).map(cat => cat.completionPercent);
+            const overallCompletion = categoryCompletionPercentages.length > 0 
+                ? Math.round(categoryCompletionPercentages.reduce((sum, p) => sum + p, 0) / categoryCompletionPercentages.length)
+                : 0;
+            
+            return {
+                id: student.id,
+                name: student.name,
+                studentNumber: student.studentNumber,
+                class: student.class,
+                profilePicture: student.profilePicture,
+                overallCompletion,
+                categories
+            };
+        });
+        
+        // Sort students by overall completion percentage (descending)
+        studentData.sort((a, b) => {
+            if (b.overallCompletion !== a.overallCompletion) {
+                return b.overallCompletion - a.overallCompletion;
+            }
+            // Tie-breaker: sort by name alphabetically
+            return a.name.localeCompare(b.name);
+        });
+        
+        const response = {
+            students: studentData,
+            metadata: {
+                quarters: quarterArray.sort(),
+                categories: Array.from(allCategories).sort(),
+                totalStudents: students.length,
+                className: className,
+                subjectName: subject ? subject.name : null
+            }
+        };
+        
+        res.json(response);
+        
+    } catch (error) {
+        console.error('Error generating advanced category report:', error);
+        res.status(500).json({ error: 'Failed to generate advanced category report', details: error.message });
     }
 });
 
@@ -4586,16 +6136,39 @@ app.post('/api/teacher/students/status', auth, async (req, res) => {
             return res.status(400).json({ error: 'No changes provided.' });
         }
 
-        const updatePromises = Object.entries(changes).map(([studentId, active]) =>
-            prisma.user.update({
-                where: { id: studentId },
-                data: { active: active },
-            })
-        );
+        const updatePromises = Object.entries(changes).map(async ([studentId, active]) => {
+            // If deactivating (active = false), also remove student number
+            if (active === false) {
+                return prisma.user.update({
+                    where: { id: studentId },
+                    data: { 
+                        active: false,
+                        studentNumber: null  // Remove student number when deactivating
+                    },
+                });
+            } else {
+                // If reactivating, just update the active status
+                return prisma.user.update({
+                    where: { id: studentId },
+                    data: { active: true },
+                });
+            }
+        });
 
         await Promise.all(updatePromises);
 
-        res.json({ success: true, message: 'Student statuses updated successfully.' });
+        const deactivatedCount = Object.values(changes).filter(status => status === false).length;
+        const reactivatedCount = Object.values(changes).filter(status => status === true).length;
+        
+        let message = 'Student statuses updated successfully.';
+        if (deactivatedCount > 0) {
+            message += ` ${deactivatedCount} student(s) deactivated and student numbers removed.`;
+        }
+        if (reactivatedCount > 0) {
+            message += ` ${reactivatedCount} student(s) reactivated.`;
+        }
+
+        res.json({ success: true, message });
 
     } catch (error) {
         console.error('Error updating student statuses:', error);
@@ -5588,16 +7161,35 @@ app.post('/api/user/update-student-number', auth, async (req, res) => {
             return res.status(400).json({ error: 'Student number must be a 5-digit number (10000-99999)' });
         }
 
-        // Check if student number is already taken by another user
+        // Get current user info to check if they're active
+        const currentUser = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { active: true, role: true }
+        });
+
+        if (!currentUser) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        // Only allow active students to assign student numbers
+        if (!currentUser.active || currentUser.role !== 'STUDENT') {
+            return res.status(403).json({ error: 'Only active students can assign student numbers' });
+        }
+
+        // Check if student number is already taken by another ACTIVE user
         const existingUser = await prisma.user.findFirst({
             where: {
                 studentNumber: studentNumber,
-                id: { not: userId } // Exclude current user
-            }
+                id: { not: userId }, // Exclude current user
+                active: true // Only check against active users
+            },
+            select: { name: true, email: true }
         });
 
         if (existingUser) {
-            return res.status(400).json({ error: 'This student number is already assigned to another student' });
+            return res.status(400).json({ 
+                error: `Student number ${studentNumber} is already taken by ${existingUser.name} (${existingUser.email}). Inactive accounts have been cleaned up, so this number should be available.` 
+            });
         }
 
         // Update the user's student number
@@ -6294,13 +7886,16 @@ app.get('/api/teacher/class-students/:subjectId', auth, async (req, res) => {
       where: {
         id: { in: studentIds },
         role: 'STUDENT',
-        organization: user.organization
+        organization: user.organization,
+        active: true
       },
       select: {
         id: true,
         nickname: true,
         name: true,
-        studentNumber: true
+        studentNumber: true,
+        class: true,
+        active: true
       }
     });
     res.json(students);
@@ -6724,15 +8319,621 @@ app.post('/api/teacher/export-database', auth, async (req, res) => {
                 'Metric', 'Value', 'Description'
             ]);
             
-            // Add quarter-filtered data if quarter is specified
-            if (quarter) {
-                console.log(`Adding quarter-filtered data for ${quarter}...`);
+            // Export comprehensive data based on selected tables
+            console.log('Adding comprehensive data export...');
+            
+            // Export Users
+            if (tables.includes('users')) {
+                console.log('Exporting users...');
+                const users = await prisma.user.findMany({
+                    include: {
+                        studentCourses: {
+                            include: { subject: true }
+                        },
+                        subjectTeacher: {
+                            include: { subject: true }
+                        }
+                    },
+                    orderBy: { name: 'asc' }
+                });
                 
-                // Export Resources with quarter filter
-                if (tables.includes('resources')) {
-                    console.log('Exporting resources with quarter filter...');
-                    const resources = await prisma.resource.findMany({
-                        where: { quarter: quarter },
+                const usersData = users.map(user => ({
+                    'User ID': user.id,
+                    'Name': user.name,
+                    'Email': user.email,
+                    'Role': user.role,
+                    'Organization': user.organization,
+                    'Student Number': user.studentNumber,
+                    'Year Level': user.yearLevel,
+                    'Class': user.class,
+                    'Active': user.active ? 'Yes' : 'No',
+                    'Last Login': user.lastLogin ? user.lastLogin.toISOString() : 'Never',
+                    'Created At': user.createdAt.toISOString(),
+                    'Updated At': user.updatedAt.toISOString(),
+                    'Enrolled Subjects': user.studentCourses?.map(sc => sc.subject.name).join(', ') || 'N/A',
+                    'Teaching Subjects': user.subjectTeacher?.map(st => st.subject.name).join(', ') || 'N/A'
+                }));
+                
+                addWorksheet('Users', usersData, [
+                    'User ID', 'Name', 'Email', 'Role', 'Organization', 'Student Number', 'Year Level', 'Class',
+                    'Active', 'Last Login', 'Created At', 'Updated At', 'Enrolled Subjects', 'Teaching Subjects'
+                ]);
+            }
+            
+            // Export Subjects
+            if (tables.includes('subjects')) {
+                try {
+                    console.log('Exporting subjects...');
+                    console.log('Starting subject query...');
+                    const subjects = await prisma.subject.findMany({
+                        include: {
+                            units: {
+                                include: {
+                                    parts: {
+                                        include: {
+                                            sections: {
+                                                include: {
+                                                    assessments: true,
+                                                    resources: true
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            studentCourses: {
+                                include: { student: true }
+                            },
+                            teachers: {
+                                include: { teacher: true }
+                            },
+                            topics: true
+                        },
+                        orderBy: { name: 'asc' }
+                    });
+                
+                console.log(`Found ${subjects.length} subjects`);
+                if (subjects.length > 0) {
+                    console.log('Sample subject structure:', JSON.stringify(subjects[0], null, 2));
+                } else {
+                    console.log('No subjects found in database!');
+                }
+                
+                console.log('Processing subjects data...');
+                const subjectsData = subjects.map((subject, index) => {
+                    console.log(`Processing subject ${index + 1}/${subjects.length}: ${subject.name}`);
+                    console.log(`Subject ${subject.name} has:`, {
+                        units: subject.units?.length || 0,
+                        topics: subject.topics?.length || 0,
+                        studentCourses: subject.studentCourses?.length || 0,
+                        teachers: subject.teachers?.length || 0
+                    });
+                    
+                    return {
+                    'Subject ID': subject.id,
+                    'Name': subject.name,
+                    'Description': subject.description || '',
+                    'Year Level': subject.yearLevel,
+                    'Units Count': subject.units?.length || 0,
+                    'Total Parts': subject.units?.reduce((sum, unit) => sum + (unit.parts?.length || 0), 0) || 0,
+                    'Total Sections': subject.units?.reduce((sum, unit) => 
+                        sum + (unit.parts?.reduce((partSum, part) => partSum + (part.sections?.length || 0), 0) || 0), 0) || 0,
+                    'Total Topics': subject.topics?.length || 0,
+                    'Total Assessments': subject.units?.reduce((sum, unit) => 
+                        sum + (unit.parts?.reduce((partSum, part) => 
+                            partSum + (part.sections?.reduce((sectionSum, section) => sectionSum + (section.assessments?.length || 0), 0) || 0), 0) || 0), 0) || 0,
+                    'Total Resources': subject.units?.reduce((sum, unit) => 
+                        sum + (unit.parts?.reduce((partSum, part) => 
+                            partSum + (part.sections?.reduce((sectionSum, section) => sectionSum + (section.resources?.length || 0), 0) || 0), 0) || 0), 0) || 0,
+                    'Enrolled Students': subject.studentCourses?.length || 0,
+                    'Assigned Teachers': subject.teachers?.length || 0,
+                    'Created At': subject.createdAt.toISOString(),
+                    'Updated At': subject.updatedAt.toISOString()
+                    };
+                });
+                
+                console.log(`Successfully processed ${subjectsData.length} subjects`);
+                
+                addWorksheet('Subjects', subjectsData, [
+                    'Subject ID', 'Name', 'Description', 'Year Level', 'Units Count', 'Total Parts', 'Total Sections',
+                    'Total Topics', 'Total Assessments', 'Total Resources', 'Enrolled Students', 'Assigned Teachers',
+                    'Created At', 'Updated At'
+                ]);
+                console.log('Subjects export completed successfully');
+                } catch (error) {
+                    console.error('Error in subjects export:', error);
+                    console.error('Error stack:', error.stack);
+                    throw error;
+                }
+            }
+            
+            // Export Course Structure
+            if (tables.includes('course-structure')) {
+                console.log('Exporting course structure...');
+                const units = await prisma.unit.findMany({
+                    include: {
+                        subject: true,
+                        parts: {
+                            include: {
+                                sections: {
+                                    include: {
+                                        topics: true,
+                                        assessments: true,
+                                        resources: true
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    orderBy: { name: 'asc' }
+                });
+                
+                const courseStructureData = [];
+                units.forEach(unit => {
+                    unit.parts.forEach(part => {
+                        part.sections.forEach(section => {
+                            courseStructureData.push({
+                                'Subject': unit.subject.name,
+                                'Unit': unit.name,
+                                'Part': part.name,
+                                'Section': section.name,
+                                'Topics Count': section.topics.length,
+                                'Assessments Count': section.assessments.length,
+                                'Resources Count': section.resources.length,
+                                'Unit Order': unit.order,
+                                'Part Order': part.order,
+                                'Section Order': section.order
+                            });
+                        });
+                    });
+                });
+                
+                addWorksheet('Course Structure', courseStructureData, [
+                    'Subject', 'Unit', 'Part', 'Section', 'Topics Count', 'Assessments Count', 'Resources Count',
+                    'Unit Order', 'Part Order', 'Section Order'
+                ]);
+            }
+            
+            // Export Resources (all quarters or filtered)
+            if (tables.includes('resources')) {
+                console.log('Exporting resources...');
+                const resourcesQuery = {
+                    include: {
+                        createdBy: true,
+                        topic: true,
+                        unit: true,
+                        part: true,
+                        section: true,
+                        assessments: true
+                    },
+                    orderBy: { createdAt: 'desc' }
+                };
+                
+                if (quarter) {
+                    resourcesQuery.where = { quarter: quarter };
+                }
+                
+                const resources = await prisma.resource.findMany(resourcesQuery);
+                
+                const resourcesData = resources.map(resource => ({
+                    'Resource ID': resource.id,
+                    'Title': resource.title,
+                    'Description': resource.description,
+                    'Type': resource.type,
+                    'Quarter': resource.quarter,
+                    'URL': resource.url,
+                    'File Path': resource.filePath,
+                    'Created By': resource.createdBy.name,
+                    'Topic': resource.topic?.name || 'N/A',
+                    'Unit': resource.unit?.name || 'N/A',
+                    'Part': resource.part?.name || 'N/A',
+                    'Section': resource.section?.name || 'N/A',
+                    'Usage Count': resource.usageCount,
+                    'Created At': resource.createdAt.toISOString(),
+                    'Updated At': resource.updatedAt.toISOString(),
+                    'Linked Assessments': resource.assessments.length
+                }));
+                
+                const quarterSuffix = quarter ? `_${quarter}` : '_AllQuarters';
+                addWorksheet(`Resources${quarterSuffix}`, resourcesData, [
+                    'Resource ID', 'Title', 'Description', 'Type', 'Quarter', 'URL', 'File Path',
+                    'Created By', 'Topic', 'Unit', 'Part', 'Section', 'Usage Count', 'Created At', 'Updated At', 'Linked Assessments'
+                ]);
+            }
+            
+            // Export Assessments (all quarters or filtered)
+            if (tables.includes('assessments')) {
+                console.log('Exporting assessments...');
+                const assessmentsQuery = {
+                    include: {
+                        createdBy: true,
+                        section: {
+                            include: {
+                                part: {
+                                    include: {
+                                        unit: {
+                                            include: {
+                                                subject: true
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        mediaFiles: true,
+                        resources: true
+                    },
+                    orderBy: { createdAt: 'desc' }
+                };
+                
+                if (quarter) {
+                    assessmentsQuery.where = { quarter: quarter };
+                }
+                
+                const assessments = await prisma.assessment.findMany(assessmentsQuery);
+                
+                const assessmentsData = assessments.map(assessment => ({
+                    'Assessment ID': assessment.id,
+                    'Title': assessment.title,
+                    'Description': assessment.description,
+                    'Type': assessment.type,
+                    'Category': assessment.category,
+                    'Quarter': assessment.quarter,
+                    'Published': assessment.published ? 'Yes' : 'No',
+                    'Due Date': assessment.dueDate ? assessment.dueDate.toISOString() : 'N/A',
+                    'Created By': assessment.createdBy.name,
+                    'Subject': assessment.section?.part?.unit?.subject?.name || 'N/A',
+                    'Unit': assessment.section?.part?.unit?.name || 'N/A',
+                    'Part': assessment.section?.part?.name || 'N/A',
+                    'Section': assessment.section?.name || 'N/A',
+                    'Questions Count': assessment.questions ? assessment.questions.length : 0,
+                    'Media Files': assessment.mediaFiles.length,
+                    'Linked Resources': assessment.resources.length,
+                    'Created At': assessment.createdAt.toISOString(),
+                    'Updated At': assessment.updatedAt.toISOString()
+                }));
+                
+                const quarterSuffix = quarter ? `_${quarter}` : '_AllQuarters';
+                addWorksheet(`Assessments${quarterSuffix}`, assessmentsData, [
+                    'Assessment ID', 'Title', 'Description', 'Type', 'Category', 'Quarter', 'Published', 'Due Date',
+                    'Created By', 'Subject', 'Unit', 'Part', 'Section', 'Questions Count', 'Media Files', 'Linked Resources', 'Created At', 'Updated At'
+                ]);
+            }
+            
+            // Export Submissions (all quarters or filtered)
+            if (tables.includes('submissions')) {
+                console.log('Exporting submissions...');
+                const submissionsQuery = {
+                    include: {
+                        student: true,
+                        assessment: {
+                            include: {
+                                section: {
+                                    include: {
+                                        part: {
+                                            include: {
+                                                unit: {
+                                                    include: {
+                                                        subject: true
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    orderBy: { submittedAt: 'desc' }
+                };
+                
+                if (quarter) {
+                    submissionsQuery.where = {
+                        assessment: {
+                            quarter: quarter
+                        }
+                    };
+                }
+                
+                const submissions = await prisma.assessmentSubmission.findMany(submissionsQuery);
+                
+                // Calculate attempt numbers for each submission
+                const submissionsWithAttempts = await Promise.all(submissions.map(async (submission) => {
+                    // Count how many submissions this student has made for this assessment up to this submission
+                    const attemptNumber = await prisma.assessmentSubmission.count({
+                        where: {
+                            studentId: submission.studentId,
+                            assessmentId: submission.assessmentId,
+                            submittedAt: {
+                                lte: submission.submittedAt
+                            }
+                        }
+                    });
+                    
+                    return {
+                        ...submission,
+                        calculatedAttempts: attemptNumber
+                    };
+                }));
+
+                const submissionsData = submissionsWithAttempts.map(submission => ({
+                    'Submission ID': submission.id,
+                    'Student ID': submission.student.id,
+                    'Student Name': submission.student.name,
+                    'Student Email': submission.student.email,
+                    'Assessment ID': submission.assessment.id,
+                    'Assessment Title': submission.assessment.title,
+                    'Assessment Type': submission.assessment.type,
+                    'Assessment Quarter': submission.assessment.quarter,
+                    'Score': submission.score,
+                    'Attempts': submission.calculatedAttempts || 1,
+                    'Total Time': submission.totalTime,
+                    'Status': submission.status,
+                    'Subject': submission.assessment.section?.part?.unit?.subject?.name || 'N/A',
+                    'Unit': submission.assessment.section?.part?.unit?.name || 'N/A',
+                    'Part': submission.assessment.section?.part?.name || 'N/A',
+                    'Section': submission.assessment.section?.name || 'N/A',
+                    'Submitted At': submission.submittedAt ? submission.submittedAt.toISOString() : 'N/A',
+                    'Updated At': submission.updatedAt ? submission.updatedAt.toISOString() : 'N/A'
+                }));
+                
+                const quarterSuffix = quarter ? `_${quarter}` : '_AllQuarters';
+                addWorksheet(`Submissions${quarterSuffix}`, submissionsData, [
+                    'Submission ID', 'Student ID', 'Student Name', 'Student Email', 'Assessment ID', 'Assessment Title', 'Assessment Type', 'Assessment Quarter',
+                    'Score', 'Attempts', 'Total Time', 'Status', 'Subject', 'Unit', 'Part', 'Section', 'Submitted At', 'Updated At'
+                ]);
+            }
+            
+            // Export Progress
+            if (tables.includes('progress')) {
+                console.log('Exporting progress...');
+                const progress = await prisma.studentProgress.findMany({
+                    include: {
+                        student: true,
+                        subject: true,
+                        topic: true
+                    },
+                    orderBy: { lastUpdated: 'desc' }
+                });
+                
+                const progressData = progress.map(p => ({
+                    'Progress ID': p.id,
+                    'Student ID': p.student.id,
+                    'Student Name': p.student.name,
+                    'Subject': p.subject.name,
+                    'Skill Category': p.skillCategory || p.topic?.name || 'N/A',
+                    'Topic': p.topic?.name || 'N/A',
+                    'Status': p.status,
+                    'Score': p.score,
+                    'Last Updated': p.lastUpdated ? p.lastUpdated.toISOString() : 'N/A',
+                    'Created At': p.createdAt ? p.createdAt.toISOString() : 'N/A',
+                    'Updated At': p.updatedAt ? p.updatedAt.toISOString() : 'N/A'
+                }));
+                
+                addWorksheet('Progress', progressData, [
+                    'Progress ID', 'Student ID', 'Student Name', 'Subject', 'Skill Category', 'Topic', 'Status', 'Score', 'Last Updated', 'Created At', 'Updated At'
+                ]);
+            }
+            
+            // Export Student Courses
+            if (tables.includes('student-courses')) {
+                console.log('Exporting student courses...');
+                const studentCourses = await prisma.studentCourse.findMany({
+                    include: {
+                        student: true,
+                        subject: true
+                    },
+                    orderBy: { createdAt: 'desc' }
+                });
+                
+                const studentCoursesData = studentCourses.map(sc => ({
+                    'Enrollment ID': sc.id,
+                    'Student ID': sc.student.id,
+                    'Student Name': sc.student.name,
+                    'Student Email': sc.student.email,
+                    'Subject ID': sc.subject.id,
+                    'Subject Name': sc.subject.name,
+                    'Created At': sc.createdAt.toISOString(),
+                    'Updated At': sc.updatedAt.toISOString()
+                }));
+                
+                addWorksheet('Student Courses', studentCoursesData, [
+                    'Enrollment ID', 'Student ID', 'Student Name', 'Student Email', 'Subject ID', 'Subject Name', 'Created At', 'Updated At'
+                ]);
+            }
+            
+            // Export Teacher Assignments
+            if (tables.includes('teacher-assignments')) {
+                console.log('Exporting teacher assignments...');
+                const teacherAssignments = await prisma.subjectTeacher.findMany({
+                    include: {
+                        teacher: true,
+                        subject: true
+                    },
+                    orderBy: { createdAt: 'desc' }
+                });
+                
+                const teacherAssignmentsData = teacherAssignments.map(ta => ({
+                    'Assignment ID': ta.id,
+                    'Teacher ID': ta.teacher.id,
+                    'Teacher Name': ta.teacher.name,
+                    'Teacher Email': ta.teacher.email,
+                    'Subject ID': ta.subject.id,
+                    'Subject Name': ta.subject.name,
+                    'Created At': ta.createdAt.toISOString(),
+                    'Updated At': ta.updatedAt.toISOString()
+                }));
+                
+                addWorksheet('Teacher Assignments', teacherAssignmentsData, [
+                    'Assignment ID', 'Teacher ID', 'Teacher Name', 'Teacher Email', 'Subject ID', 'Subject Name', 'Created At', 'Updated At'
+                ]);
+            }
+            
+            // Export Weekly Schedules
+            if (tables.includes('weekly-schedules')) {
+                console.log('Exporting weekly schedules...');
+                const weeklySchedules = await prisma.weeklySchedule.findMany({
+                    include: {
+                        subject: true,
+                        assessments: true,
+                        resources: true
+                    },
+                    orderBy: { weekNumber: 'asc' }
+                });
+                
+                const weeklySchedulesData = weeklySchedules.map(ws => ({
+                    'Schedule ID': ws.id,
+                    'Week Number': ws.weekNumber,
+                    'Start Date': ws.startDate.toISOString(),
+                    'End Date': ws.endDate.toISOString(),
+                    'Objectives': ws.objectives,
+                    'Subject': ws.subject.name,
+                    'Assessments Count': ws.assessments.length,
+                    'Resources Count': ws.resources.length,
+                    'Created At': ws.createdAt.toISOString(),
+                    'Updated At': ws.updatedAt.toISOString()
+                }));
+                
+                addWorksheet('Weekly Schedules', weeklySchedulesData, [
+                    'Schedule ID', 'Week Number', 'Start Date', 'End Date', 'Objectives', 'Subject', 'Assessments Count', 'Resources Count', 'Created At', 'Updated At'
+                ]);
+            }
+            
+            // Export User Sessions
+            if (tables.includes('user-sessions')) {
+                console.log('Exporting user sessions...');
+                const sessions = await prisma.userSession.findMany({
+                    include: {
+                        user: true
+                    },
+                    orderBy: { startTime: 'desc' }
+                });
+                
+                const sessionsData = sessions.map(session => ({
+                    'Session ID': session.id,
+                    'User ID': session.user.id,
+                    'User Name': session.user.name,
+                    'User Email': session.user.email,
+                    'Start Time': session.startTime.toISOString(),
+                    'End Time': session.endTime ? session.endTime.toISOString() : 'Active',
+                    'Duration (minutes)': session.endTime ? 
+                        Math.round((new Date(session.endTime) - new Date(session.startTime)) / (1000 * 60)) : 'N/A',
+                    'IP Address': session.ipAddress,
+                    'User Agent': session.userAgent,
+                    'Created At': session.createdAt.toISOString()
+                }));
+                
+                addWorksheet('User Sessions', sessionsData, [
+                    'Session ID', 'User ID', 'User Name', 'User Email', 'Start Time', 'End Time', 'Duration (minutes)', 'IP Address', 'User Agent', 'Created At'
+                ]);
+            }
+            
+            // Export Resource Usage
+            if (tables.includes('resource-usage')) {
+                console.log('Exporting resource usage...');
+                const resourceUsage = await prisma.resourceUsage.findMany({
+                    include: {
+                        user: true,
+                        resource: true
+                    },
+                    orderBy: { usedAt: 'desc' }
+                });
+                
+                const resourceUsageData = resourceUsage.map(ru => ({
+                    'Usage ID': ru.id,
+                    'User ID': ru.user.id,
+                    'User Name': ru.user.name,
+                    'Resource ID': ru.resource.id,
+                    'Resource Title': ru.resource.title,
+                    'Accessed At': ru.usedAt.toISOString(),
+                    'Duration (seconds)': ru.duration,
+                    'Created At': ru.createdAt.toISOString()
+                }));
+                
+                addWorksheet('Resource Usage', resourceUsageData, [
+                    'Usage ID', 'User ID', 'User Name', 'Resource ID', 'Resource Title', 'Accessed At', 'Duration (seconds)', 'Created At'
+                ]);
+            }
+            
+            // Export Media Files
+            if (tables.includes('media-files')) {
+                console.log('Exporting media files...');
+                const mediaFiles = await prisma.mediaFile.findMany({
+                    include: {
+                        assessment: true
+                    },
+                    orderBy: { createdAt: 'desc' }
+                });
+                
+                const mediaFilesData = mediaFiles.map(mf => ({
+                    'Media File ID': mf.id,
+                    'File Path': mf.filePath,
+                    'Type': mf.type,
+                    'Label': mf.label,
+                    'Assessment ID': mf.assessmentId,
+                    'Assessment Title': mf.assessment?.title || 'N/A',
+                    'Created At': mf.createdAt.toISOString()
+                }));
+                
+                addWorksheet('Media Files', mediaFilesData, [
+                    'Media File ID', 'File Path', 'Type', 'Label', 'Assessment ID', 'Assessment Title', 'Created At'
+                ]);
+            }
+            
+            // Export Transfer Logs
+            if (tables.includes('transfer-logs')) {
+                console.log('Exporting transfer logs...');
+                const transferLogs = await prisma.teacherTransferLog.findMany({
+                    orderBy: { transferredAt: 'desc' }
+                });
+                
+                const transferLogsData = transferLogs.map(tl => ({
+                    'Transfer ID': tl.id,
+                    'From Teacher ID': tl.fromTeacherId,
+                    'To Teacher ID': tl.toTeacherId,
+                    'Subject IDs': tl.subjectIds,
+                    'Transferred At': tl.transferredAt.toISOString(),
+                    'Reason': tl.reason || 'N/A',
+                    'Created At': tl.createdAt.toISOString()
+                }));
+                
+                addWorksheet('Transfer Logs', transferLogsData, [
+                    'Transfer ID', 'From Teacher ID', 'To Teacher ID', 'Subject IDs', 'Transferred At', 'Reason', 'Created At'
+                ]);
+            }
+            
+            // Export Configuration
+            if (tables.includes('config')) {
+                console.log('Exporting configuration...');
+                const config = await prisma.config.findMany({
+                    orderBy: { key: 'asc' }
+                });
+                
+                const configData = config.map(c => ({
+                    'Config ID': c.id,
+                    'Key': c.key,
+                    'Value': c.value,
+                    'Description': c.description || 'N/A',
+                    'Created At': c.createdAt.toISOString(),
+                    'Updated At': c.updatedAt.toISOString()
+                }));
+                
+                addWorksheet('Configuration', configData, [
+                    'Config ID', 'Key', 'Value', 'Description', 'Created At', 'Updated At'
+                ]);
+            }
+            
+            // Export Quarter-Specific Data (if no specific quarter selected, export all quarters)
+            if (!quarter) {
+                console.log('Exporting quarter-specific data for all quarters...');
+                const quarters = ['Q1', 'Q2', 'Q3', 'Q4'];
+                
+                for (const q of quarters) {
+                    console.log(`Exporting data for ${q}...`);
+                    
+                    // Q1 Resources
+                    const qResources = await prisma.resource.findMany({
+                        where: { quarter: q },
                         include: {
                             createdBy: true,
                             topic: true,
@@ -6744,36 +8945,35 @@ app.post('/api/teacher/export-database', auth, async (req, res) => {
                         orderBy: { createdAt: 'desc' }
                     });
                     
-                    const resourcesData = resources.map(resource => ({
-                        'Resource ID': resource.id,
-                        'Title': resource.title,
-                        'Description': resource.description,
-                        'Type': resource.type,
-                        'Quarter': resource.quarter,
-                        'URL': resource.url,
-                        'File Path': resource.filePath,
-                        'Created By': resource.createdBy.name,
-                        'Topic': resource.topic?.name || 'N/A',
-                        'Unit': resource.unit?.name || 'N/A',
-                        'Part': resource.part?.name || 'N/A',
-                        'Section': resource.section?.name || 'N/A',
-                        'Usage Count': resource.usageCount,
-                        'Created At': resource.createdAt.toISOString(),
-                        'Updated At': resource.updatedAt.toISOString(),
-                        'Linked Assessments': resource.assessments.length
-                    }));
+                    if (qResources.length > 0) {
+                        const qResourcesData = qResources.map(resource => ({
+                            'Resource ID': resource.id,
+                            'Title': resource.title,
+                            'Description': resource.description,
+                            'Type': resource.type,
+                            'Quarter': resource.quarter,
+                            'URL': resource.url,
+                            'File Path': resource.filePath,
+                            'Created By': resource.createdBy.name,
+                            'Topic': resource.topic?.name || 'N/A',
+                            'Unit': resource.unit?.name || 'N/A',
+                            'Part': resource.part?.name || 'N/A',
+                            'Section': resource.section?.name || 'N/A',
+                            'Usage Count': resource.usageCount,
+                            'Created At': resource.createdAt.toISOString(),
+                            'Updated At': resource.updatedAt.toISOString(),
+                            'Linked Assessments': resource.assessments.length
+                        }));
+                        
+                        addWorksheet(`Resources_${q}`, qResourcesData, [
+                            'Resource ID', 'Title', 'Description', 'Type', 'Quarter', 'URL', 'File Path',
+                            'Created By', 'Topic', 'Unit', 'Part', 'Section', 'Usage Count', 'Created At', 'Updated At', 'Linked Assessments'
+                        ]);
+                    }
                     
-                    addWorksheet(`Resources_${quarter}`, resourcesData, [
-                        'Resource ID', 'Title', 'Description', 'Type', 'Quarter', 'URL', 'File Path',
-                        'Created By', 'Topic', 'Unit', 'Part', 'Section', 'Usage Count', 'Created At', 'Updated At', 'Linked Assessments'
-                    ]);
-                }
-                
-                // Export Assessments with quarter filter
-                if (tables.includes('assessments')) {
-                    console.log('Exporting assessments with quarter filter...');
-                    const assessments = await prisma.assessment.findMany({
-                        where: { quarter: quarter },
+                    // Q1 Assessments
+                    const qAssessments = await prisma.assessment.findMany({
+                        where: { quarter: q },
                         include: {
                             createdBy: true,
                             section: {
@@ -6795,38 +8995,39 @@ app.post('/api/teacher/export-database', auth, async (req, res) => {
                         orderBy: { createdAt: 'desc' }
                     });
                     
-                    const assessmentsData = assessments.map(assessment => ({
-                        'Assessment ID': assessment.id,
-                        'Title': assessment.title,
-                        'Description': assessment.description,
-                        'Type': assessment.type,
-                        'Category': assessment.category,
-                        'Quarter': assessment.quarter,
-                        'Published': assessment.published ? 'Yes' : 'No',
-                        'Created By': assessment.createdBy.name,
-                        'Subject': assessment.section?.part?.unit?.subject?.name || 'N/A',
-                        'Unit': assessment.section?.part?.unit?.name || 'N/A',
-                        'Part': assessment.section?.part?.name || 'N/A',
-                        'Section': assessment.section?.name || 'N/A',
-                        'Media Files': assessment.mediaFiles.length,
-                        'Linked Resources': assessment.resources.length,
-                        'Created At': assessment.createdAt.toISOString(),
-                        'Updated At': assessment.updatedAt.toISOString()
-                    }));
+                    if (qAssessments.length > 0) {
+                        const qAssessmentsData = qAssessments.map(assessment => ({
+                            'Assessment ID': assessment.id,
+                            'Title': assessment.title,
+                            'Description': assessment.description,
+                            'Type': assessment.type,
+                            'Category': assessment.category,
+                            'Quarter': assessment.quarter,
+                            'Published': assessment.published ? 'Yes' : 'No',
+                            'Due Date': assessment.dueDate ? assessment.dueDate.toISOString() : 'N/A',
+                            'Created By': assessment.createdBy.name,
+                            'Subject': assessment.section?.part?.unit?.subject?.name || 'N/A',
+                            'Unit': assessment.section?.part?.unit?.name || 'N/A',
+                            'Part': assessment.section?.part?.name || 'N/A',
+                            'Section': assessment.section?.name || 'N/A',
+                            'Questions Count': assessment.questions ? assessment.questions.length : 0,
+                            'Media Files': assessment.mediaFiles.length,
+                            'Linked Resources': assessment.resources.length,
+                            'Created At': assessment.createdAt.toISOString(),
+                            'Updated At': assessment.updatedAt.toISOString()
+                        }));
+                        
+                        addWorksheet(`Assessments_${q}`, qAssessmentsData, [
+                            'Assessment ID', 'Title', 'Description', 'Type', 'Category', 'Quarter', 'Published', 'Due Date',
+                            'Created By', 'Subject', 'Unit', 'Part', 'Section', 'Questions Count', 'Media Files', 'Linked Resources', 'Created At', 'Updated At'
+                        ]);
+                    }
                     
-                    addWorksheet(`Assessments_${quarter}`, assessmentsData, [
-                        'Assessment ID', 'Title', 'Description', 'Type', 'Category', 'Quarter', 'Published',
-                        'Created By', 'Subject', 'Unit', 'Part', 'Section', 'Media Files', 'Linked Resources', 'Created At', 'Updated At'
-                    ]);
-                }
-                
-                // Export Submissions with quarter filter (for assessments in the specified quarter)
-                if (tables.includes('submissions')) {
-                    console.log('Exporting submissions with quarter filter...');
-                    const submissions = await prisma.assessmentSubmission.findMany({
+                    // Q1 Submissions
+                    const qSubmissions = await prisma.assessmentSubmission.findMany({
                         where: {
                             assessment: {
-                                quarter: quarter
+                                quarter: q
                             }
                         },
                         include: {
@@ -6852,30 +9053,57 @@ app.post('/api/teacher/export-database', auth, async (req, res) => {
                         orderBy: { submittedAt: 'desc' }
                     });
                     
-                    const submissionsData = submissions.map(submission => ({
-                        'Submission ID': submission.id,
-                        'Student ID': submission.student.id,
-                        'Student Name': submission.student.name,
-                        'Assessment ID': submission.assessment.id,
-                        'Assessment Title': submission.assessment.title,
-                        'Assessment Quarter': submission.assessment.quarter,
-                        'Score': submission.score,
-                        'Attempts': submission.attempts,
-                        'Total Time': submission.totalTime,
-                        'Status': submission.status,
-                        'Subject': submission.assessment.section?.part?.unit?.subject?.name || 'N/A',
-                        'Submitted At': submission.submittedAt.toISOString(),
-                        'Updated At': submission.updatedAt.toISOString()
-                    }));
-                    
-                    addWorksheet(`Submissions_${quarter}`, submissionsData, [
-                        'Submission ID', 'Student ID', 'Student Name', 'Assessment ID', 'Assessment Title', 'Assessment Quarter',
-                        'Score', 'Attempts', 'Total Time', 'Status', 'Subject', 'Submitted At', 'Updated At'
-                    ]);
+                    if (qSubmissions.length > 0) {
+                        // Calculate attempt numbers for quarter-specific submissions
+                        const qSubmissionsWithAttempts = await Promise.all(qSubmissions.map(async (submission) => {
+                            const attemptNumber = await prisma.assessmentSubmission.count({
+                                where: {
+                                    studentId: submission.studentId,
+                                    assessmentId: submission.assessmentId,
+                                    submittedAt: {
+                                        lte: submission.submittedAt
+                                    }
+                                }
+                            });
+                            
+                            return {
+                                ...submission,
+                                calculatedAttempts: attemptNumber
+                            };
+                        }));
+
+                        const qSubmissionsData = qSubmissionsWithAttempts.map(submission => ({
+                            'Submission ID': submission.id,
+                            'Student ID': submission.student.id,
+                            'Student Name': submission.student.name,
+                            'Student Email': submission.student.email,
+                            'Assessment ID': submission.assessment.id,
+                            'Assessment Title': submission.assessment.title,
+                            'Assessment Type': submission.assessment.type,
+                            'Assessment Quarter': submission.assessment.quarter,
+                            'Score': submission.score,
+                            'Attempts': submission.calculatedAttempts || 1,
+                            'Total Time': submission.totalTime,
+                            'Status': submission.status,
+                            'Subject': submission.assessment.section?.part?.unit?.subject?.name || 'N/A',
+                            'Unit': submission.assessment.section?.part?.unit?.name || 'N/A',
+                            'Part': submission.assessment.section?.part?.name || 'N/A',
+                            'Section': submission.assessment.section?.name || 'N/A',
+                            'Submitted At': submission.submittedAt ? submission.submittedAt.toISOString() : 'N/A',
+                            'Updated At': submission.updatedAt ? submission.updatedAt.toISOString() : 'N/A'
+                        }));
+                        
+                        addWorksheet(`Submissions_${q}`, qSubmissionsData, [
+                            'Submission ID', 'Student ID', 'Student Name', 'Student Email', 'Assessment ID', 'Assessment Title', 'Assessment Type', 'Assessment Quarter',
+                            'Score', 'Attempts', 'Total Time', 'Status', 'Subject', 'Unit', 'Part', 'Section', 'Submitted At', 'Updated At'
+                        ]);
+                    }
                 }
             }
             
             console.log('Worksheets added successfully');
+            console.log('Total worksheets created:', workbook.worksheets.length);
+            console.log('Worksheet names:', workbook.worksheets.map(ws => ws.name));
 
             console.log('Generating Excel file...');
             const buffer = await workbook.xlsx.writeBuffer();
@@ -6912,16 +9140,31 @@ app.get('/api/teacher/student-performance', auth, async (req, res) => {
             return res.status(403).json({ error: 'Access denied. Teachers and admins only.' });
         }
 
-        // Get all active students with their performance data
-        const students = await prisma.user.findMany({
-            where: { 
+        // Get query parameters for filtering
+        const { subjectId, quarter, class: classFilter } = req.query;
+
+        // Build student filter conditions
+        const studentFilterConditions = {
                 role: 'STUDENT',
                 active: true  // Only include active students
-            },
+        };
+        
+        // Add class filter if specified
+        if (classFilter) {
+            studentFilterConditions.class = classFilter;
+        }
+
+        // Get all active students with their performance data
+        const students = await prisma.user.findMany({
+            where: studentFilterConditions,
             include: {
                 studentCourses: {
                     include: {
-                        subject: true
+                        subject: {
+                            include: {
+                                coreSubject: true
+                            }
+                        }
                     }
                 },
                 assessmentSubmissions: {
@@ -6961,19 +9204,67 @@ app.get('/api/teacher/student-performance', auth, async (req, res) => {
         });
 
         // Process student data for dashboard
-        const studentPerformanceData = students.map(student => {
-            // Calculate performance metrics
-            const uniqueAssessments = new Set(student.assessmentSubmissions.map(sub => sub.assessmentId)).size;
-            const completedUniqueAssessments = new Set(
+        const studentPerformanceData = await Promise.all(students.map(async student => {
+            // Filter student courses by subject if specified
+            let enrolledSubjectIds;
+            if (subjectId) {
+                // Only include the specified subject
+                enrolledSubjectIds = student.studentCourses
+                    .filter(sc => sc.subjectId === subjectId)
+                    .map(sc => sc.subjectId);
+                
+                // Skip students who are not enrolled in the specified subject
+                if (enrolledSubjectIds.length === 0) {
+                    return null;
+                }
+            } else {
+                // Include all enrolled subjects
+                enrolledSubjectIds = student.studentCourses.map(sc => sc.subjectId);
+            }
+            
+            // Build assessment filter conditions
+            const assessmentFilterConditions = {
+                section: {
+                    part: {
+                        unit: {
+                            subjectId: { in: enrolledSubjectIds }
+                        }
+                    }
+                },
+                published: true
+            };
+            
+            // Add quarter filter if specified
+            if (quarter) {
+                assessmentFilterConditions.quarter = quarter;
+            }
+            
+            // Get all assessments available to this student
+            const availableAssessments = await prisma.assessment.findMany({
+                where: assessmentFilterConditions,
+                include: {
+                    resources: true
+                }
+            });
+            
+            // Filter to only assessments with attached resources (same logic as progress page)
+            const assessmentsWithResources = availableAssessments.filter(a => a.resources && a.resources.length > 0);
+            const totalAvailableAssessments = assessmentsWithResources.length;
+            
+            // Calculate completed assessments (those with valid scores AND available to student)
+            const availableAssessmentIds = new Set(assessmentsWithResources.map(a => a.id));
+            const completedAssessments = new Set(
                 student.assessmentSubmissions
-                    .filter(sub => sub.score !== null)
+                    .filter(sub => sub.score !== null && sub.score !== undefined)
+                    .filter(sub => availableAssessmentIds.has(sub.assessmentId)) // Only count if assessment is available
                     .map(sub => sub.assessmentId)
             ).size;
+            
             const averageScore = student.assessmentSubmissions.length > 0 
                 ? (student.assessmentSubmissions.reduce((sum, sub) => sum + (sub.score || 0), 0) / student.assessmentSubmissions.length).toFixed(1)
                 : 0;
             
-            const completionRate = uniqueAssessments > 0 ? ((completedUniqueAssessments / uniqueAssessments) * 100).toFixed(1) : 0;
+            const completionRate = totalAvailableAssessments > 0 ? ((completedAssessments / totalAvailableAssessments) * 100).toFixed(1) : 0;
             
             // Calculate engagement metrics
             const loginDays = student.sessions ? 
@@ -7007,8 +9298,11 @@ app.get('/api/teacher/student-performance', auth, async (req, res) => {
                 engagementPattern = 'Inactive';
             }
 
-            // Extract subjects from student courses
-            const subjects = student.studentCourses.map(sc => sc.subject.name);
+            // Extract subjects from student courses (include CoreSubject info)
+            const subjects = student.studentCourses.map(sc => ({
+                name: sc.subject.name,
+                coreSubject: sc.subject.coreSubject
+            }));
             
             return {
                 id: student.id,
@@ -7019,8 +9313,8 @@ app.get('/api/teacher/student-performance', auth, async (req, res) => {
                 class: student.class,
                 active: student.active,
                 subjects: subjects,
-                uniqueAssessments: uniqueAssessments,
-                completedUniqueAssessments: completedUniqueAssessments,
+                uniqueAssessments: totalAvailableAssessments,
+                completedUniqueAssessments: completedAssessments,
                 completionRate: parseFloat(completionRate),
                 averageScore: parseFloat(averageScore),
                 loginDays: loginDays,
@@ -7030,13 +9324,164 @@ app.get('/api/teacher/student-performance', auth, async (req, res) => {
                 lastLogin: student.lastLogin,
                 lastActivity: lastActivity ? lastActivity.toISOString() : null
             };
-        });
+        }));
 
-        res.json(studentPerformanceData);
+        // Filter out null values (students not enrolled in specified subject)
+        const filteredStudentData = studentPerformanceData.filter(data => data !== null);
+
+        res.json(filteredStudentData);
 
     } catch (error) {
         console.error('Student performance API error:', error);
         res.status(500).json({ error: 'Failed to load student performance data' });
+    }
+});
+
+// Combined Quarter Report API - Q1+Q2 combined performance
+app.get('/api/teacher/combined-quarter-report', auth, async (req, res) => {
+    try {
+        // Check if user is teacher or admin
+        const user = await prisma.user.findUnique({
+            where: { id: req.user.userId }
+        });
+
+        if (user.role !== 'TEACHER' && user.role !== 'ADMIN') {
+            return res.status(403).json({ error: 'Access denied. Teachers and admins only.' });
+        }
+
+        // Get query parameters for filtering
+        const { subjectId, class: classFilter } = req.query;
+
+        if (!subjectId) {
+            return res.status(400).json({ error: 'subjectId is required' });
+        }
+
+        // Build student filter conditions
+        const studentFilterConditions = {
+            role: 'STUDENT',
+            active: true
+        };
+        
+        // Add class filter if specified
+        if (classFilter) {
+            studentFilterConditions.class = classFilter;
+        }
+
+        // Get all students with their performance data
+        const students = await prisma.user.findMany({
+            where: studentFilterConditions,
+            include: {
+                studentCourses: {
+                    include: {
+                        subject: true
+                    }
+                },
+                assessmentSubmissions: {
+                    include: {
+                        assessment: {
+                            include: {
+                                section: {
+                                    include: {
+                                        part: {
+                                            include: {
+                                                unit: {
+                                                    include: {
+                                                        subject: true
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                },
+                                resources: true
+                            }
+                        }
+                    }
+                }
+            },
+            orderBy: { name: 'asc' }
+        });
+
+        // Process student data for combined Q1+Q2 report
+        const studentReportData = await Promise.all(students.map(async student => {
+            // Check if student is enrolled in the specified subject
+            const isEnrolledInSubject = student.studentCourses.some(sc => sc.subjectId === subjectId);
+            if (!isEnrolledInSubject) {
+                return null; // Skip students not enrolled in this subject
+            }
+
+            // Get all assessments for Q1 and Q2 combined for this subject
+            const availableAssessments = await prisma.assessment.findMany({
+                where: {
+                    section: {
+                        part: {
+                            unit: {
+                                subjectId: subjectId
+                            }
+                        }
+                    },
+                    quarter: { in: ['Q1', 'Q2'] }, // Combined Q1 and Q2
+                    published: true
+                },
+                include: {
+                    resources: true
+                }
+            });
+            
+            // Filter to only assessments with attached resources (same logic as other reports)
+            const assessmentsWithResources = availableAssessments.filter(a => a.resources && a.resources.length > 0);
+            const totalAvailableAssessments = assessmentsWithResources.length;
+            
+            // Calculate completed assessments (those with valid scores) for Q1+Q2
+            const availableAssessmentIds = new Set(assessmentsWithResources.map(a => a.id));
+            const completedAssessments = new Set(
+                student.assessmentSubmissions
+                    .filter(sub => sub.score !== null && sub.score !== undefined)
+                    .filter(sub => availableAssessmentIds.has(sub.assessmentId)) // Only count if assessment is available
+                    .map(sub => sub.assessmentId)
+            ).size;
+            
+            // Calculate completion percentage
+            const completionPercentage = totalAvailableAssessments > 0 ? 
+                ((completedAssessments / totalAvailableAssessments) * 100) : 0;
+            
+            // Calculate average score for Q1+Q2 assessments only
+            const relevantSubmissions = student.assessmentSubmissions.filter(sub => 
+                availableAssessmentIds.has(sub.assessmentId) && 
+                sub.score !== null && 
+                sub.score !== undefined
+            );
+            
+            const averageScore = relevantSubmissions.length > 0 ? 
+                (relevantSubmissions.reduce((sum, sub) => sum + sub.score, 0) / relevantSubmissions.length) : 0;
+            
+            // Calculate final total: (completionPercentage / 100) * averageScore
+            const finalTotal = (completionPercentage / 100) * averageScore;
+            
+            return {
+                id: student.id,
+                name: student.name,
+                studentNumber: student.studentNumber,
+                class: student.class,
+                completionPercentage: parseFloat(completionPercentage.toFixed(1)),
+                averageScore: parseFloat(averageScore.toFixed(1)),
+                finalTotal: parseFloat(finalTotal.toFixed(1)),
+                totalAvailableAssessments,
+                completedAssessments
+            };
+        }));
+
+        // Filter out null values (students not enrolled in specified subject)
+        const filteredStudentData = studentReportData.filter(data => data !== null);
+        
+        // Sort by final total (highest first) - can be changed to other fields in future
+        filteredStudentData.sort((a, b) => b.finalTotal - a.finalTotal);
+
+        res.json(filteredStudentData);
+
+    } catch (error) {
+        console.error('Combined quarter report API error:', error);
+        res.status(500).json({ error: 'Failed to load combined quarter report data' });
     }
 });
 
@@ -7149,6 +9594,24 @@ app.get('/api/teacher/quarter-report', auth, async (req, res) => {
             }
         });
 
+        // Get unique students for this quarter
+        const uniqueStudents = [...new Set(submissions.map(s => s.student.id))];
+        const students = uniqueStudents.map(studentId => {
+            const studentSubmissions = submissions.filter(s => s.student.id === studentId);
+            const student = studentSubmissions[0].student;
+            return {
+                id: student.id,
+                name: student.name,
+                email: student.email,
+                class: student.class,
+                yearLevel: student.yearLevel,
+                submissions: studentSubmissions.length,
+                averageScore: studentSubmissions.length > 0 
+                    ? (studentSubmissions.reduce((sum, s) => sum + (s.score || 0), 0) / studentSubmissions.length).toFixed(2)
+                    : 0
+            };
+        });
+
         const report = {
             quarter: quarter,
             summary: {
@@ -7159,6 +9622,7 @@ app.get('/api/teacher/quarter-report', auth, async (req, res) => {
                 averageScore: parseFloat(averageScore),
                 completionRate: totalAssessments > 0 ? ((publishedAssessments / totalAssessments) * 100).toFixed(1) : 0
             },
+            students: students,
             subjectStats,
             resources: resources.map(r => ({
                 id: r.id,
@@ -7178,6 +9642,9 @@ app.get('/api/teacher/quarter-report', auth, async (req, res) => {
                 createdBy: a.createdBy.name,
                 subject: a.section?.part?.unit?.subject?.name,
                 submissions: a.submissions.length,
+                averageScore: a.submissions.length > 0 
+                    ? (a.submissions.reduce((sum, s) => sum + (s.score || 0), 0) / a.submissions.length).toFixed(2)
+                    : 0,
                 createdAt: a.createdAt
             })),
             submissions: submissions.map(s => ({
@@ -7198,9 +9665,17 @@ app.get('/api/teacher/quarter-report', auth, async (req, res) => {
     }
 });
 
-// Login without activity tracking endpoint
-app.get('/api/teacher/login-without-activity', auth, async (req, res) => {
+// English Class Student Report Generator
+app.get('/api/teacher/english-student-report', auth, async (req, res) => {
     try {
+        const { studentId, quarter } = req.query;
+        
+        if (!studentId || !quarter) {
+            return res.status(400).json({ 
+                error: 'Student ID and quarter parameters are required' 
+            });
+        }
+        
         // Check if user is teacher or admin
         const user = await prisma.user.findUnique({
             where: { id: req.user.userId }
@@ -7210,168 +9685,759 @@ app.get('/api/teacher/login-without-activity', auth, async (req, res) => {
             return res.status(403).json({ error: 'Access denied. Teachers and admins only.' });
         }
 
-        const { days = 30, quarter } = req.query;
-        const daysAgo = new Date();
-        daysAgo.setDate(daysAgo.getDate() - parseInt(days));
+        console.log(`Generating English class report for student ${studentId}, quarter ${quarter}...`);
 
-        console.log(`Analyzing login without activity for the past ${days} days...`);
-
-        // Get all active students with their login sessions and assessment submissions
-        const students = await prisma.user.findMany({
-            where: { 
-                role: 'STUDENT',
-                active: true  // Only include active students
-            },
+        // Get student information
+        const student = await prisma.user.findUnique({
+            where: { id: studentId },
             include: {
-                sessions: {
-                    where: {
-                        startTime: {
-                            gte: daysAgo
+                studentCourses: {
+                    include: {
+                        subject: {
+                            include: {
+                                coreSubject: true
+                            }
                         }
-                    },
-                    orderBy: {
-                        startTime: 'desc'
                     }
                 },
                 assessmentSubmissions: {
-                    where: {
-                        submittedAt: {
-                            gte: daysAgo
-                        }
-                    },
-                    orderBy: {
-                        submittedAt: 'desc'
-                    }
-                },
-                studentCourses: {
                     include: {
-                        subject: true
-                    }
+                        assessment: true
+                    },
+                    orderBy: { submittedAt: 'desc' }
+                },
+                sessions: {
+                    orderBy: { startTime: 'desc' }
                 }
-            },
-            orderBy: { name: 'asc' }
+            }
         });
 
-        // Analyze each student's login vs activity pattern
-        const analysis = students.map(student => {
-            const loginSessions = student.sessions;
-            const recentSubmissions = student.assessmentSubmissions;
-            
-            // Count distinct login days
-            const loginDays = new Set(loginSessions.map(s => 
-                new Date(s.startTime).toDateString()
-            )).size;
-            
-            // Count distinct activity days (submission days)
-            const activityDays = new Set(recentSubmissions.map(s => 
-                new Date(s.submittedAt).toDateString()
-            )).size;
-            
-            // Find login sessions that didn't result in activity
-            const loginWithoutActivity = loginSessions.filter(session => {
-                const sessionDate = new Date(session.startTime).toDateString();
-                const hadActivityOnDay = recentSubmissions.some(submission => 
-                    new Date(submission.submittedAt).toDateString() === sessionDate
-                );
-                return !hadActivityOnDay;
+        if (!student || student.role !== 'STUDENT' || !student.active) {
+            return res.status(404).json({ error: 'Student not found or inactive' });
+        }
+
+        // Find English subject (using CoreSubject)
+        const englishSubject = student.studentCourses.find(sc => 
+            sc.subject.coreSubject.name.toLowerCase().includes('english')
+        );
+
+        if (!englishSubject) {
+            return res.status(404).json({ 
+                error: 'Student is not enrolled in English class. Available subjects: ' + 
+                       student.studentCourses.map(sc => sc.subject.name).join(', ')
             });
+        }
+
+        // Get all assessments for English subject in the specified quarter
+        // Only count assessments with resources attached (matching Student Progress table logic)
+        const assessments = await prisma.assessment.findMany({
+            where: {
+                quarter: quarter,
+                section: {
+                    part: {
+                        unit: {
+                            subjectId: englishSubject.subjectId
+                        }
+                    }
+                },
+                resources: {
+                    some: {} // Only include assessments with at least one resource
+                }
+            },
+            include: {
+                section: {
+                    include: {
+                        part: {
+                            include: {
+                                unit: {
+                                    include: {
+                                        subject: true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                submissions: {
+                    where: { studentId: studentId },
+                    orderBy: { submittedAt: 'desc' }
+                }
+            }
+        });
+
+        // Get student progress for English subject
+        const studentProgress = await prisma.studentProgress.findMany({
+            where: {
+                studentId: studentId,
+                subjectId: englishSubject.subjectId
+            }
+        });
+
+        // Separate Test Practice from skill-based assessments
+        const testPracticeAssessments = assessments.filter(a => 
+            a.title.toLowerCase().includes('test practice') || 
+            a.category?.toLowerCase().includes('test practice')
+        );
+
+        // Include all assessments for skill categorization (including Test Practice)
+        const skillBasedAssessments = assessments;
+
+        // Define skill categories
+        const skillCategories = ['Reading', 'Writing', 'Listening', 'Speaking', 'Vocabulary', 'Grammar', 'Test Practice'];
+
+        // Get all students in the same English class for class averages
+        const classStudents = await prisma.studentCourse.findMany({
+            where: {
+                subjectId: englishSubject.subjectId
+            },
+            include: {
+                student: {
+                    include: {
+                        assessmentSubmissions: {
+                            include: {
+                                assessment: true
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        // Function to categorize assessments correctly
+        function categorizeAssessment(category) {
+            if (!category) return 'Uncategorized';
             
-            // Calculate engagement metrics
-            const totalLoginSessions = loginSessions.length;
-            const sessionsWithActivity = totalLoginSessions - loginWithoutActivity.length;
-            const sessionsWithoutActivity = loginWithoutActivity.length;
-            const activityRate = totalLoginSessions > 0 ? 
-                ((sessionsWithActivity / totalLoginSessions) * 100).toFixed(1) : 0;
+            const categoryLower = category.toLowerCase();
             
-            // Determine engagement pattern
-            let engagementPattern = 'Unknown';
-            if (totalLoginSessions === 0) {
-                engagementPattern = 'No Logins';
-            } else if (sessionsWithoutActivity === 0) {
-                engagementPattern = 'Always Active';
-            } else if (sessionsWithoutActivity === totalLoginSessions) {
-                engagementPattern = 'Login Only - No Activity';
-            } else if (activityRate >= 75) {
-                engagementPattern = 'Highly Engaged';
-            } else if (activityRate >= 50) {
-                engagementPattern = 'Moderately Engaged';
-            } else if (activityRate >= 25) {
-                engagementPattern = 'Low Engagement';
-            } else {
-                engagementPattern = 'Minimal Engagement';
+            // Reading includes all reading-related categories
+            if (categoryLower.includes('reading')) {
+                return 'Reading';
+            }
+            // Listening includes all listening-related categories (but not reading)
+            if (categoryLower.includes('listening')) {
+                return 'Listening';
+            }
+            // Speaking includes all speaking-related categories (but not reading)
+            if (categoryLower.includes('speaking')) {
+                return 'Speaking';
+            }
+            // Writing includes all writing-related categories (but not reading)
+            if (categoryLower.includes('writing')) {
+                return 'Writing';
+            }
+            // Test Practice is separate
+            if (categoryLower.includes('test practice')) {
+                return 'Test Practice';
+            }
+            // Grammar is separate (but not "Reading and Grammar")
+            if (categoryLower.includes('grammar')) {
+                return 'Grammar';
+            }
+            // Vocabulary is separate
+            if (categoryLower.includes('vocabulary')) {
+                return 'Vocabulary';
             }
             
-            // Get last login and last activity
-            const lastLogin = loginSessions.length > 0 ? 
-                new Date(loginSessions[0].startTime) : null;
-            const lastActivity = recentSubmissions.length > 0 ? 
-                new Date(recentSubmissions[0].submittedAt) : null;
-            
-            // Calculate days since last login and activity
-            const now = new Date();
-            const daysSinceLogin = lastLogin ? 
-                Math.floor((now - lastLogin) / (1000 * 60 * 60 * 24)) : 'Never';
-            const daysSinceActivity = lastActivity ? 
-                Math.floor((now - lastActivity) / (1000 * 60 * 60 * 24)) : 'Never';
-            
-            return {
-                id: student.id,
-                name: student.name,
-                email: student.email,
-                organization: student.organization,
-                yearLevel: student.yearLevel,
-                class: student.class,
-                active: student.active,
-                subjects: student.studentCourses.map(sc => sc.subject.name),
-                totalLoginSessions,
-                sessionsWithActivity,
-                sessionsWithoutActivity,
-                activityRate: parseFloat(activityRate),
-                engagementPattern,
-                loginDays,
-                activityDays,
-                lastLogin: lastLogin ? lastLogin.toISOString() : null,
-                lastActivity: lastActivity ? lastActivity.toISOString() : null,
-                daysSinceLogin,
-                daysSinceActivity,
-                loginWithoutActivitySessions: loginWithoutActivity.map(session => ({
-                    id: session.id,
-                    startTime: session.startTime,
-                    endTime: session.endTime,
-                    duration: session.duration,
-                    ipAddress: session.ipAddress
-                }))
-            };
+            return category;
+        }
+
+        // Filter student submissions by quarter
+        const quarterStart = new Date(`${quarter === 'Q1' ? '2025-05-01' : '2025-07-21'}`);
+        const quarterEnd = new Date(`${quarter === 'Q1' ? '2025-07-21' : '2025-10-01'}`);
+        
+        const studentQuarterSubmissions = student.assessmentSubmissions.filter(submission => {
+            const submittedAt = new Date(submission.submittedAt);
+            return submittedAt >= quarterStart && submittedAt < quarterEnd;
         });
+
+        // Calculate class averages for this quarter
+        const classCategoryScores = {};
+        classStudents.forEach(studentCourse => {
+            const classStudent = studentCourse.student;
+            const classStudentSubmissions = classStudent.assessmentSubmissions.filter(submission => {
+                const submittedAt = new Date(submission.submittedAt);
+                return submittedAt >= quarterStart && submittedAt < quarterEnd;
+            });
+            
+            classStudentSubmissions.forEach(submission => {
+                const category = categorizeAssessment(submission.assessment.category);
+                if (!classCategoryScores[category]) {
+                    classCategoryScores[category] = [];
+                }
+                if (submission.score !== null) {
+                    classCategoryScores[category].push(submission.score);
+                }
+            });
+        });
+
+        // Calculate skill-based metrics with class comparisons
+        const skillMetrics = {};
+        let totalAssessmentsProvided = 0;
+        let totalAssessmentsCompleted = 0;
         
-        // Calculate summary statistics
-        const totalStudents = analysis.length;
-        const studentsWithLogins = analysis.filter(s => s.totalLoginSessions > 0).length;
-        const studentsWithActivity = analysis.filter(s => s.sessionsWithActivity > 0).length;
-        const studentsLoginOnly = analysis.filter(s => s.engagementPattern === 'Login Only - No Activity').length;
-        const studentsNoLogins = analysis.filter(s => s.engagementPattern === 'No Logins').length;
-        
-        const averageActivityRate = analysis.reduce((sum, s) => sum + s.activityRate, 0) / totalStudents;
-        
-        const summary = {
-            totalStudents,
-            studentsWithLogins,
-            studentsWithActivity,
-            studentsLoginOnly,
-            studentsNoLogins,
-            averageActivityRate: averageActivityRate.toFixed(1),
-            analysisPeriod: `${days} days`,
-            analysisDate: new Date().toISOString()
+        skillCategories.forEach(skill => {
+            const skillAssessments = skillBasedAssessments.filter(a => {
+                const category = a.category?.toLowerCase() || '';
+                
+                // Special categorization rules
+                if (skill === 'Reading') {
+                    // Reading includes all reading-related categories
+                    return category.includes('reading');
+                } else if (skill === 'Listening') {
+                    // Listening includes all listening-related categories (but not reading)
+                    return category.includes('listening') && !category.includes('reading');
+                } else if (skill === 'Speaking') {
+                    // Speaking includes all speaking-related categories (but not reading)
+                    return category.includes('speaking') && !category.includes('reading');
+                } else if (skill === 'Writing') {
+                    // Writing includes all writing-related categories (but not reading)
+                    return category.includes('writing') && !category.includes('reading');
+                } else if (skill === 'Grammar') {
+                    // Grammar includes only pure grammar (not "Reading and Grammar")
+                    return category.includes('grammar') && !category.includes('reading');
+                } else if (skill === 'Vocabulary') {
+                    // Vocabulary is separate
+                    return category.includes('vocabulary');
+                } else if (skill === 'Test Practice') {
+                    // Test Practice is separate
+                    return category.includes('test practice');
+                }
+                
+                // Fallback for other categories
+                return category === skill.toLowerCase() || category.includes(skill.toLowerCase());
+            });
+
+            const totalAssessments = skillAssessments.length;
+            const completedAssessments = skillAssessments.filter(a => 
+                a.submissions && a.submissions.length > 0
+            ).length;
+
+            const completionRate = totalAssessments > 0 ? 
+                Math.round((completedAssessments / totalAssessments) * 100) : 0;
+
+            // Calculate student's average score for this skill
+            const studentSkillSubmissions = studentQuarterSubmissions.filter(submission => {
+                const category = categorizeAssessment(submission.assessment.category);
+                return category === skill;
+            });
+
+            const studentScores = studentSkillSubmissions
+                .map(s => s.score)
+                .filter(score => score !== null);
+
+            const studentAverageScore = studentScores.length > 0 ? 
+                Math.round((studentScores.reduce((sum, score) => sum + score, 0) / studentScores.length) * 10) / 10 : 0;
+
+            // Calculate class average for this skill
+            const classScores = classCategoryScores[skill] || [];
+            const classAverageScore = classScores.length > 0 ? 
+                Math.round((classScores.reduce((sum, score) => sum + score, 0) / classScores.length) * 10) / 10 : 0;
+
+            // Calculate struggling assessments (below 70%)
+            const strugglingCount = studentScores.filter(score => score < 70).length;
+            const strugglingPercent = studentScores.length > 0 ? 
+                Math.round((strugglingCount / studentScores.length) * 100) : 0;
+
+            // Calculate performance vs class
+            const performanceVsClass = studentAverageScore - classAverageScore;
+            let performanceLevel = 'Near class average';
+            if (performanceVsClass > 5) {
+                performanceLevel = `Above class average (+${performanceVsClass.toFixed(1)}%)`;
+            } else if (performanceVsClass < -5) {
+                performanceLevel = `Below class average (${performanceVsClass.toFixed(1)}%)`;
+            } else {
+                performanceLevel = `Near class average (${performanceVsClass > 0 ? '+' : ''}${performanceVsClass.toFixed(1)}%)`;
+            }
+
+        skillMetrics[skill] = {
+            total: totalAssessments,
+            completed: completedAssessments,
+            completionRate: completionRate,
+            studentAverageScore: studentAverageScore,
+            classAverageScore: classAverageScore,
+            performanceVsClass: performanceLevel,
+            strugglingCount: strugglingCount,
+            strugglingPercent: strugglingPercent,
+            studentAssessments: studentScores.length,
+            classAssessments: classScores.length,
+            notAttempted: totalAssessments - completedAssessments
         };
         
-        res.json({
-            summary,
-            students: analysis
+        // Add to totals
+        totalAssessmentsProvided += totalAssessments;
+        totalAssessmentsCompleted += completedAssessments;
+        });
+
+        // Test Practice metrics are now calculated as part of skill-based metrics
+
+        // Calculate overall completion rate (including Test Practice)
+        // Note: totalAssessments should match the expected counts (Q1: 50, Q2: 71)
+        const totalAssessments = assessments.length;
+        const totalCompletedAssessments = assessments.filter(a => 
+            a.submissions && a.submissions.length > 0
+        ).length;
+        const overallCompletionRate = totalAssessments > 0 ? 
+            Math.round((totalCompletedAssessments / totalAssessments) * 100) : 0;
+            
+        // Calculate unique submissions count (not total submissions)
+        const uniqueSubmissionsCount = studentQuarterSubmissions.length;
+
+        // Calculate overall performance with class comparison
+        const allStudentScores = studentQuarterSubmissions
+            .map(s => s.score)
+            .filter(score => score !== null);
+
+        const overallStudentAverage = allStudentScores.length > 0 ? 
+            Math.round((allStudentScores.reduce((sum, score) => sum + score, 0) / allStudentScores.length) * 10) / 10 : 0;
+
+        const allClassScores = Object.values(classCategoryScores).flat();
+        const overallClassAverage = allClassScores.length > 0 ? 
+            Math.round((allClassScores.reduce((sum, score) => sum + score, 0) / allClassScores.length) * 10) / 10 : 0;
+
+        const overallPerformanceVsClass = overallStudentAverage - overallClassAverage;
+        let overallPerformanceLevel = 'Near class average';
+        if (overallPerformanceVsClass > 5) {
+            overallPerformanceLevel = `Above class average (+${overallPerformanceVsClass.toFixed(1)}%)`;
+        } else if (overallPerformanceVsClass < -5) {
+            overallPerformanceLevel = `Below class average (${overallPerformanceVsClass.toFixed(1)}%)`;
+        } else {
+            overallPerformanceLevel = `Near class average (${overallPerformanceVsClass > 0 ? '+' : ''}${overallPerformanceVsClass.toFixed(1)}%)`;
+        }
+
+        // Calculate overall struggling percentage
+        const overallStrugglingCount = allStudentScores.filter(score => score < 70).length;
+        const overallStrugglingPercent = allStudentScores.length > 0 ? 
+            Math.round((overallStrugglingCount / allStudentScores.length) * 100) : 0;
+
+        // Calculate engagement metrics
+        const loginDays = student.sessions ? 
+            new Set(student.sessions.map(s => new Date(s.startTime).toDateString())).size : 0;
+
+        // Count submissions for this quarter
+        const quarterSubmissions = assessments
+            .flatMap(a => a.submissions || [])
+            .filter(s => {
+                const submittedAt = new Date(s.submittedAt);
+                const quarterStart = new Date(`${quarter === 'Q1' ? '2025-05-01' : '2025-07-21'}`);
+                const quarterEnd = new Date(`${quarter === 'Q1' ? '2025-07-21' : '2025-10-01'}`);
+                return submittedAt >= quarterStart && submittedAt < quarterEnd;
+            });
+
+        const totalSubmissions = quarterSubmissions.length;
+
+        // Determine engagement style based on submission times (class vs homework)
+        let classSubmissions = 0;
+        let homeworkSubmissions = 0;
+
+        quarterSubmissions.forEach(submission => {
+            const submissionDate = new Date(submission.submittedAt);
+            const dayOfWeek = submissionDate.getDay();
+            const hour = submissionDate.getHours();
+
+            // Class time: Thursday/Friday between 8am-4pm
+            if ((dayOfWeek === 4 || dayOfWeek === 5) && hour >= 8 && hour < 16) {
+                classSubmissions++;
+            } else {
+                // Homework: any other time (evenings, weekends, or before 8am/after 4pm)
+                homeworkSubmissions++;
+            }
+        });
+
+        const engagementStyle = classSubmissions > homeworkSubmissions ? 'Active Learner' : 
+                               homeworkSubmissions > classSubmissions ? 'Homework Focused' : 'Balanced';
+
+        // Analyze login frequency patterns for Thursday/Friday class days
+        const quarterStartDate = new Date(`${quarter === 'Q1' ? '2025-05-01' : '2025-07-21'}`);
+        const quarterEndDate = new Date(`${quarter === 'Q1' ? '2025-07-21' : '2025-10-01'}`);
+        
+        // Get all sessions for the quarter (convert to Date objects for comparison)
+        const quarterSessions = student.sessions ? student.sessions.filter(session => {
+            const sessionDate = new Date(session.startTime);
+            return sessionDate >= quarterStartDate && sessionDate < quarterEndDate;
+        }) : [];
+
+        // Filter for Thursday/Friday class sessions (8am-4pm)
+        const classDaySessions = quarterSessions.filter(session => {
+            const dayOfWeek = new Date(session.startTime).getDay();
+            const hour = new Date(session.startTime).getHours();
+            return (dayOfWeek === 4 || dayOfWeek === 5) && hour >= 8 && hour < 16;
+        });
+
+        // Calculate class day login metrics
+        const totalClassDayLogins = classDaySessions.length;
+        
+        // Group sessions by date to count logins per day
+        const loginsByDate = {};
+        classDaySessions.forEach(session => {
+            const dateKey = new Date(session.startTime).toDateString();
+            if (!loginsByDate[dateKey]) {
+                loginsByDate[dateKey] = {
+                    date: dateKey,
+                    count: 0,
+                    totalDuration: 0,
+                    sessions: [],
+                    completedSessions: 0,
+                    incompleteSessions: 0
+                };
+            }
+            loginsByDate[dateKey].count++;
+            
+            // Handle duration calculation - use stored duration or calculate from endTime
+            let sessionDuration = 0;
+            if (session.duration && session.duration > 0) {
+                sessionDuration = session.duration;
+            } else if (session.endTime) {
+                sessionDuration = Math.round((new Date(session.endTime) - new Date(session.startTime)) / 1000);
+            }
+            
+            loginsByDate[dateKey].totalDuration += sessionDuration;
+            loginsByDate[dateKey].sessions.push({
+                ...session,
+                calculatedDuration: sessionDuration
+            });
+            
+            if (sessionDuration > 0) {
+                loginsByDate[dateKey].completedSessions++;
+            } else {
+                loginsByDate[dateKey].incompleteSessions++;
+            }
         });
         
+        // Calculate comprehensive statistics
+        const classDayDates = Object.keys(loginsByDate);
+        const averageLoginsPerDay = classDayDates.length > 0 ? 
+            Math.round((totalClassDayLogins / classDayDates.length) * 10) / 10 : 0;
+        
+        // Calculate total duration for class days
+        const totalClassDayDuration = classDaySessions.reduce((sum, session) => {
+            let sessionDuration = 0;
+            if (session.duration && session.duration > 0) {
+                sessionDuration = session.duration;
+            } else if (session.endTime) {
+                sessionDuration = Math.round((new Date(session.endTime) - new Date(session.startTime)) / 1000);
+            }
+            return sum + sessionDuration;
+        }, 0);
+        
+        const averageSessionDuration = totalClassDayLogins > 0 ? 
+            Math.round(totalClassDayDuration / totalClassDayLogins) : 0;
+        
+        // Calculate completed vs incomplete sessions
+        const completedSessions = classDaySessions.filter(session => {
+            if (session.duration && session.duration > 0) return true;
+            if (session.endTime) {
+                const calculatedDuration = Math.round((new Date(session.endTime) - new Date(session.startTime)) / 1000);
+                return calculatedDuration > 0;
+            }
+            return false;
+        }).length;
+        
+        const incompleteSessions = totalClassDayLogins - completedSessions;
+        
+        // Find days with excessive logins (more than 3)
+        const excessiveLoginDays = classDayDates.filter(date => 
+            loginsByDate[date].count > 3
+        ).length;
+        
+        // Calculate ratios and additional metrics
+        const completionRate = totalClassDayLogins > 0 ? 
+            Math.round((completedSessions / totalClassDayLogins) * 100) : 0;
+        
+        const totalClassDayMinutes = Math.round(totalClassDayDuration / 60);
+        const averageSessionMinutes = Math.round(averageSessionDuration / 60);
+        
+        // Calculate per-day statistics
+        const dayStats = classDayDates.map(date => {
+            const dayData = loginsByDate[date];
+            return {
+                date: date,
+                logins: dayData.count,
+                totalMinutes: Math.round(dayData.totalDuration / 60),
+                avgMinutesPerLogin: dayData.count > 0 ? Math.round(dayData.totalDuration / dayData.count / 60) : 0,
+                completedSessions: dayData.completedSessions,
+                incompleteSessions: dayData.incompleteSessions,
+                completionRate: dayData.count > 0 ? Math.round((dayData.completedSessions / dayData.count) * 100) : 0
+            };
+        });
+
+        // Calculate persistence metrics
+        const assessmentAttempts = assessments
+            .filter(a => a.submissions && a.submissions.length > 0)
+            .map(a => a.submissions.length);
+
+        const averageAttempts = assessmentAttempts.length > 0 ? 
+            (assessmentAttempts.reduce((sum, attempts) => sum + attempts, 0) / assessmentAttempts.length).toFixed(1) : '0';
+        
+        const maxAttempts = assessmentAttempts.length > 0 ? 
+            Math.max(...assessmentAttempts) : 0;
+
+        // Generate narrative (excluding Test Practice from skills)
+        const skillEntries = Object.entries(skillMetrics).filter(([skill]) => skill !== 'Test Practice');
+        const proficientSkills = skillEntries.filter(([skill, metrics]) => metrics.completionRate >= 90);
+        const needsWorkSkills = skillEntries.filter(([skill, metrics]) => metrics.completionRate < 80);
+        
+        let narrative = '';
+        if (proficientSkills.length >= 5) {
+            narrative = 'Proficient in all language skills.';
+        } else if (needsWorkSkills.length === 0) {
+            narrative = 'Good progress in all language skills.';
+        } else if (needsWorkSkills.length === 1) {
+            narrative = `Proficient in most language skills; needs extra work in ${needsWorkSkills[0][0]}.`;
+        } else if (needsWorkSkills.length === skillEntries.length) {
+            narrative = 'Needs improvement in all language skills.';
+        } else {
+            narrative = `Proficient in ${proficientSkills.map(([skill]) => skill).join(', ')}; needs improvement in ${needsWorkSkills.map(([skill]) => skill).join(', ')}.`;
+        }
+
+        // Add Test Practice information
+        const testPracticeMetrics = skillMetrics['Test Practice'];
+        if (testPracticeMetrics) {
+            const testPracticeNarrative = testPracticeMetrics.total > 0 
+                ? ` Test Practice: ${testPracticeMetrics.completed}/${testPracticeMetrics.total} completed.${testPracticeMetrics.completed === testPracticeMetrics.total ? ' The student completed all test practices.' : ' The student did not complete all test practices.'}`
+                : ' No Test Practice assessments available.';
+            narrative += testPracticeNarrative;
+        }
+
+        // Generate report
+        const report = {
+            student: {
+                name: student.name,
+                id: student.id,
+                studentNumber: student.studentNumber,
+                class: student.class
+            },
+            quarter: quarter,
+            classInfo: {
+                size: classStudents.length,
+                subject: englishSubject.subject.name
+            },
+            achievement: {
+                overallCompletionRate: overallCompletionRate,
+                totalAssessments: totalAssessments,
+                studentSubmissions: uniqueSubmissionsCount,
+                completionRate: totalAssessments > 0 ? Math.round((uniqueSubmissionsCount / totalAssessments) * 100) : 0,
+                description: `${student.name} completed ${overallCompletionRate}% of the coursework. This shows ${
+                    overallCompletionRate >= 90 ? 'excellent' : 
+                    overallCompletionRate >= 80 ? 'good' : 
+                    overallCompletionRate >= 70 ? 'satisfactory' : 'needs improvement'
+                } achievement.`
+            },
+            performance: {
+                studentAverage: overallStudentAverage,
+                classAverage: overallClassAverage,
+                performanceVsClass: overallPerformanceLevel,
+                strugglingPercent: overallStrugglingPercent,
+                strugglingCount: overallStrugglingCount,
+                totalAssessments: allStudentScores.length,
+                strugglingDescription: `Assessments in which ${student.name} is struggling (scoring below 70%)`,
+                note: "Only submitted assessments with scores are included in averages. Missing assessments are excluded entirely."
+            },
+            skills: skillMetrics,
+            skillsSummary: {
+                totalAssessmentsProvided: totalAssessmentsProvided,
+                totalAssessmentsCompleted: totalAssessmentsCompleted,
+                overallCompletionRate: totalAssessmentsProvided > 0 ? Math.round((totalAssessmentsCompleted / totalAssessmentsProvided) * 100) : 0
+            },
+            narrative: narrative,
+            engagement: {
+                totalSubmissions: totalSubmissions,
+                loginDays: loginDays,
+                engagementStyle: engagementStyle,
+                classSubmissions: classSubmissions,
+                homeworkSubmissions: homeworkSubmissions,
+                classDayLogins: totalClassDayLogins,
+                averageLoginsPerDay: averageLoginsPerDay,
+                totalClassDayDuration: totalClassDayDuration,
+                totalClassDayMinutes: totalClassDayMinutes,
+                averageSessionDuration: averageSessionDuration,
+                averageSessionMinutes: averageSessionMinutes,
+                completedSessions: completedSessions,
+                incompleteSessions: incompleteSessions,
+                completionRate: completionRate,
+                excessiveLoginDays: excessiveLoginDays,
+                loginsByDate: loginsByDate,
+                dayStats: dayStats,
+                description: `${student.name} had ${totalSubmissions} submissions over ${loginDays} login days. Engagement style: ${engagementStyle} (${classSubmissions} class submissions, ${homeworkSubmissions} homework submissions). Class day logins: ${totalClassDayLogins} total (avg ${averageLoginsPerDay} per day). Total class time: ${totalClassDayMinutes} minutes (avg ${averageSessionMinutes} min per session). Session completion: ${completedSessions}/${totalClassDayLogins} (${completionRate}%).`
+            },
+            persistence: {
+                averageAttempts: averageAttempts,
+                maxAttempts: maxAttempts,
+                description: `Average ${averageAttempts} attempts per assessment (max ${maxAttempts}).`
+            }
+        };
+
+        res.json(report);
+
     } catch (error) {
-        console.error('Login without activity analysis error:', error);
-        res.status(500).json({ error: 'Failed to analyze login without activity patterns' });
+        console.error('English student report error:', error);
+        res.status(500).json({ error: 'Failed to generate English student report' });
     }
 });
 
+// Combined Q1+Q2 English Class Reports Generator
+app.get('/api/teacher/english-combined-reports', auth, async (req, res) => {
+    try {
+        const { subjectId } = req.query;
+        
+        if (!subjectId) {
+            return res.status(400).json({ 
+                error: 'Subject ID parameter is required' 
+            });
+        }
+        
+        // Check if user is teacher or admin
+        const user = await prisma.user.findUnique({
+            where: { id: req.user.userId }
+        });
+
+        if (user.role !== 'TEACHER' && user.role !== 'ADMIN') {
+            return res.status(403).json({ error: 'Access denied. Teachers and admins only.' });
+        }
+
+        console.log(`Generating combined Q1+Q2 English class reports for subject ${subjectId}...`);
+
+        // Get the specified subject
+        const subject = await prisma.subject.findUnique({
+            where: { id: subjectId },
+            include: {
+                coreSubject: true
+            }
+        });
+
+        if (!subject) {
+            return res.status(404).json({ error: 'Subject not found' });
+        }
+
+        // Get all students enrolled in this subject
+        const englishStudents = await prisma.user.findMany({
+            where: {
+                role: 'STUDENT',
+                active: true,
+                studentCourses: {
+                    some: {
+                        subjectId: subjectId
+                    }
+                }
+            },
+            include: {
+                studentCourses: {
+                    include: {
+                        subject: {
+                            include: {
+                                coreSubject: true
+                            }
+                        }
+                    }
+                },
+                assessmentSubmissions: {
+                    include: {
+                        assessment: true
+                    },
+                    orderBy: { submittedAt: 'desc' }
+                },
+                sessions: {
+                    orderBy: { startTime: 'desc' }
+                }
+            }
+        });
+
+        const reports = [];
+
+        for (const student of englishStudents) {
+            try {
+                // Get the specific subject for this student
+                const studentSubject = student.studentCourses.find(sc => 
+                    sc.subjectId === subjectId
+                );
+
+                if (!studentSubject) continue;
+
+                // Generate Q1 and Q2 reports directly (simplified approach)
+                let q1Report = null;
+                let q2Report = null;
+
+                try {
+                    // For now, just create placeholder reports with basic info
+                    q1Report = {
+                        student: {
+                            name: student.name,
+                            id: student.id,
+                            studentNumber: student.studentNumber,
+                            class: student.class
+                        },
+                        quarter: 'Q1',
+                        classInfo: {
+                            size: englishStudents.length,
+                            subject: subject.name
+                        },
+                        achievement: {
+                            description: `${student.name} completed Q1 coursework.`
+                        },
+                        skills: {},
+                        narrative: 'Q1 report data available.',
+                        engagement: {
+                            description: 'Q1 engagement data available.'
+                        },
+                        persistence: {
+                            description: 'Q1 persistence data available.'
+                        }
+                    };
+
+                    q2Report = {
+                        student: {
+                            name: student.name,
+                            id: student.id,
+                            studentNumber: student.studentNumber,
+                            class: student.class
+                        },
+                        quarter: 'Q2',
+                        classInfo: {
+                            size: englishStudents.length,
+                            subject: subject.name
+                        },
+                        achievement: {
+                            description: `${student.name} completed Q2 coursework.`
+                        },
+                        skills: {},
+                        narrative: 'Q2 report data available.',
+                        engagement: {
+                            description: 'Q2 engagement data available.'
+                        },
+                        persistence: {
+                            description: 'Q2 persistence data available.'
+                        }
+                    };
+                } catch (error) {
+                    console.error(`Error generating placeholder reports for student ${student.id}:`, error);
+                }
+
+                // Combine the reports into a single document
+                const combinedReport = {
+                    student: student,
+                    classInfo: {
+                        size: englishStudents.length,
+                        subject: subject.name
+                    },
+                    quarter: 'Q1 + Q2 Combined',
+                    q1Report: q1Report,
+                    q2Report: q2Report
+                };
+
+                reports.push(combinedReport);
+            } catch (error) {
+                console.error(`Error generating combined report for student ${student.id}:`, error);
+                // Continue with other students
+            }
+        }
+
+        res.json({
+            quarter: 'Q1 + Q2 Combined',
+            totalStudents: reports.length,
+            reports: reports
+        });
+
+    } catch (error) {
+        console.error('Combined English reports error:', error);
+        res.status(500).json({ error: 'Failed to generate combined English reports' });
+    }
+});

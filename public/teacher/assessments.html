@@ -727,21 +727,22 @@
                     // Add enough choice inputs
                     const choicesContainer = card.querySelector('.choices-container');
                     if (choicesContainer && options.length > 0) {
+                        // Get the first option input (choice text) from each choice group
+                        let choiceTextInputs = choicesContainer.querySelectorAll('.input-group input[type="text"]:first-of-type');
                         const addChoiceBtn = choicesContainer.querySelector('.btn-outline-primary');
-                        let optionInputs = choicesContainer.querySelectorAll('input[type="text"]');
-                        
-                        // Add more choices if needed
                         let safety = 0;
-                        while (optionInputs.length < options.length && safety < 10) {
+                        
+                        // Add more choices if needed (each choice has 2 text inputs: choice + explanation)
+                        while (choiceTextInputs.length < options.length && safety < 20) {
                             if (addChoiceBtn) addChoiceBtn.click();
-                            optionInputs = choicesContainer.querySelectorAll('input[type="text"]');
+                            choiceTextInputs = choicesContainer.querySelectorAll('.input-group input[type="text"]:first-of-type');
                             safety++;
                         }
                         
-                        // Populate option values
+                        // Populate option values (only the first text input of each choice group)
                         options.forEach((option, index) => {
-                            if (optionInputs[index]) {
-                                optionInputs[index].value = option;
+                            if (choiceTextInputs[index]) {
+                                choiceTextInputs[index].value = option;
                             }
                         });
                         
@@ -1325,19 +1326,21 @@
                             : (Array.isArray(questionData.choices) ? questionData.choices : []);
 
                         if (choicesContainer && options.length > 0) {
-                            // Ensure we have enough inputs to display all options
-                            let optionInputs = choicesContainer.querySelectorAll('input[type="text"]');
+                            // Get the first option input (choice text) from each choice group
+                            let choiceTextInputs = choicesContainer.querySelectorAll('.input-group input[type="text"]:first-of-type');
                             const addChoiceBtn = choicesContainer.querySelector('.btn-outline-primary');
                             let safetyCounter = 0;
-                            while (optionInputs.length < options.length && safetyCounter < 50) {
+                            
+                            // Add more choices if needed (each choice has 2 text inputs: choice + explanation)
+                            while (choiceTextInputs.length < options.length && safetyCounter < 50) {
                                 if (addChoiceBtn) addChoiceBtn.click();
-                                optionInputs = choicesContainer.querySelectorAll('input[type="text"]');
+                                choiceTextInputs = choicesContainer.querySelectorAll('.input-group input[type="text"]:first-of-type');
                                 safetyCounter++;
                             }
 
-                            // Populate option texts
+                            // Populate option texts (only the first text input of each choice group)
                             options.forEach((opt, i) => {
-                                if (optionInputs[i]) optionInputs[i].value = (opt ?? '').toString();
+                                if (choiceTextInputs[i]) choiceTextInputs[i].value = (opt ?? '').toString();
                             });
 
                             // Determine and set the correct option
@@ -2599,19 +2602,33 @@ Ooh, exciting!|That sounds fun.</pre>
                 alert('Import failed: Could not find choices container in the question card.');
                 return;
             }
-            let optionInputs = choicesContainer.querySelectorAll('input[type="text"]');
+            
+            // Get the first option input (choice text) from each choice group
+            let choiceTextInputs = choicesContainer.querySelectorAll('.input-group input[type="text"]:first-of-type');
             const addChoiceBtn = choicesContainer.querySelector('.btn-outline-primary');
             let safety = 0;
-            while (optionInputs.length < options.length && safety < 10) {
+            
+            // Add more choices if needed (each choice has 2 text inputs: choice + explanation)
+            while (choiceTextInputs.length < options.length && safety < 20) {
                 if (addChoiceBtn) addChoiceBtn.click();
-                optionInputs = choicesContainer.querySelectorAll('input[type="text"]');
+                choiceTextInputs = choicesContainer.querySelectorAll('.input-group input[type="text"]:first-of-type');
                 safety++;
             }
+            
+            // Populate option values (only the first text input of each choice group)
             options.forEach((opt, i) => {
-                if (optionInputs[i]) optionInputs[i].value = opt;
+                if (choiceTextInputs[i]) choiceTextInputs[i].value = opt;
             });
-            const correctInputs = choicesContainer.querySelectorAll('input[type="radio"]');
-            if (correctInputs[correctIndex]) correctInputs[correctIndex].checked = true;
+            
+            // Set correct answer radio button
+            const radioInputs = choicesContainer.querySelectorAll(`input[type="radio"][name="correct_${questionId}"]`);
+            console.log('Setting correct answer:', correctIndex, 'Total radios:', radioInputs.length);
+            if (radioInputs[correctIndex]) {
+                radioInputs[correctIndex].checked = true;
+                console.log('Correct answer set successfully');
+            } else {
+                console.error('Could not set correct answer - radio button not found at index:', correctIndex);
+            }
         }
 
         // Helper to add a question with a specific ID
@@ -2641,6 +2658,7 @@ Ooh, exciting!|That sounds fun.</pre>
                                         <input type="radio" name="correct_${questionId}" required>
                                     </div>
                                     <input type="text" class="form-control" placeholder="Choice 1" required>
+                                    <input type="text" class="form-control" placeholder="Explanation (optional)">
                                     <button type="button" class="btn btn-outline-danger" onclick="removeChoice(this)">
                                         <i class="bi bi-dash"></i>
                                     </button>
@@ -3185,6 +3203,44 @@ Ooh, exciting!|That sounds fun.</pre>
             const question = { type };
             // Handle different question types
             switch(type) {
+                case 'multiple-choice':
+                    const textArea = cardBody.querySelector('textarea');
+                    if (textArea) {
+                        question.text = textArea.value;
+                    }
+                    
+                    // Get choices from the choices container
+                    const choicesContainer = cardBody.querySelector('.choices-container');
+                    if (choicesContainer) {
+                        const choiceInputs = choicesContainer.querySelectorAll('.input-group input[type="text"]:first-of-type');
+                        const explanationInputs = choicesContainer.querySelectorAll('.input-group input[type="text"]:last-of-type');
+                        const radioInputs = choicesContainer.querySelectorAll('input[type="radio"]');
+                        
+                        const options = [];
+                        const explanations = [];
+                        let correctOption = 0;
+                        
+                        choiceInputs.forEach((input, index) => {
+                            if (input.value.trim()) {
+                                options.push(input.value.trim());
+                                // Get corresponding explanation if it exists
+                                if (explanationInputs[index]) {
+                                    explanations.push(explanationInputs[index].value.trim());
+                                }
+                                
+                                // Check if this is the correct answer
+                                if (radioInputs[index] && radioInputs[index].checked) {
+                                    correctOption = index;
+                                }
+                            }
+                        });
+                        
+                        question.options = options;
+                        question.explanations = explanations;
+                        question.correctOption = correctOption;
+                    }
+                    break;
+                    
                 case 'text-input':
                     const textInputQuestion = cardBody.querySelector('.text-input-question').value;
                     const answersText = cardBody.querySelector('.text-input-answers').value;

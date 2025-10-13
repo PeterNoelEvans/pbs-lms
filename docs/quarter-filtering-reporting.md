@@ -167,27 +167,78 @@ const q2Report = await fetch('/api/teacher/quarter-report?quarter=Q2');
 console.log('Q1 vs Q2 Resources:', q1Report.summary.totalResources, 'vs', q2Report.summary.totalResources);
 ```
 
+## Enhanced Reporting Features
+
+### 1. **Individual Student Reports**
+- **Location**: Teacher Portal → Individual Student Report
+- **Features**:
+  - Quarter-specific student performance analysis
+  - Subject-wise performance breakdown
+  - Assessment submission history
+  - Progress tracking over time
+  - Comprehensive statistics
+
+### 2. **Parent Reports Export**
+- **Location**: Teacher Portal → Database Export → "Parent Reports" button
+- **Features**:
+  - Single-click export for end-of-term reports
+  - Student Performance Dashboard with all students
+  - Quarter-by-quarter performance breakdown
+  - Complete student data for parent communication
+
+### 3. **Class Progress Tracking**
+- **Location**: Teacher Portal → Student Progress
+- **Features**:
+  - Class-based student performance view
+  - Quarter filtering for class data
+  - Individual student report access
+  - CSV export for class data
+
+### 4. **Comprehensive Data Export**
+- **Location**: Teacher Portal → Database Export
+- **Export Modes**:
+  - **All Quarters (Comprehensive)**: Complete data with separate Q1, Q2, Q3, Q4 sheets
+  - **Specific Quarter**: Data from selected quarter only
+  - **Export All**: All available data tables
+  - **Parent Reports**: Single-click export for parent reports
+
 ## Benefits for Reporting
 
 ### 1. **Historical Analysis**
 - Access Q1 data even when Q2 is active
 - Compare performance across quarters
 - Track content development over time
+- Generate comprehensive historical reports
 
 ### 2. **Quarter-Specific Reports**
 - Generate reports for specific quarters
 - Export quarter-specific data for external analysis
 - Create quarter comparison reports
+- Track progress across academic year
 
 ### 3. **Content Management**
 - Review Q1 content while working on Q2
 - Plan Q3 content based on Q1/Q2 performance
 - Archive completed quarters
+- Monitor content coverage by quarter
 
 ### 4. **Performance Tracking**
 - Track student performance by quarter
 - Compare assessment completion rates
 - Monitor resource usage patterns
+- Identify trends and patterns
+
+### 5. **Parent Communication**
+- Generate comprehensive parent reports
+- Include quarter-by-quarter progress
+- Highlight achievements and areas for improvement
+- Provide detailed performance breakdowns
+
+### 6. **Administrative Reporting**
+- Create detailed administrative reports
+- Include engagement metrics and usage statistics
+- Provide comprehensive performance analysis
+- Support data-driven decision making
 
 ## Technical Implementation
 

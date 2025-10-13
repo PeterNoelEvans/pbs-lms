@@ -187,11 +187,11 @@
                             <div class="d-flex align-items-center me-3">
                                 <label for="quarterFilter" class="form-label mb-0 me-2">Quarter:</label>
                                 <select id="quarterFilter" class="form-select form-select-sm" style="width: auto;">
-                                    <option value="">All Quarters</option>
-                                    <option value="Q1">Q1</option>
-                                    <option value="Q2" selected>Q2</option>
-                                    <option value="Q3">Q3</option>
-                                    <option value="Q4">Q4</option>
+                                    <option value="">All Quarters (Comprehensive)</option>
+                                    <option value="Q1">Q1 Only</option>
+                                    <option value="Q2" selected>Q2 Only</option>
+                                    <option value="Q3">Q3 Only</option>
+                                    <option value="Q4">Q4 Only</option>
                                 </select>
                             </div>
                             <button type="button" class="btn btn-sm btn-outline-secondary" onclick="exportSelected()">
@@ -199,6 +199,15 @@
                             </button>
                             <button type="button" class="btn btn-sm btn-outline-primary" onclick="exportAll()">
                                 <i class="bi bi-download-all"></i> Export All
+                            </button>
+                            <button type="button" class="btn btn-sm btn-success" onclick="exportComprehensive()">
+                                <i class="bi bi-database"></i> Export Everything
+                            </button>
+                            <button type="button" class="btn btn-sm btn-warning" onclick="exportParentReports()">
+                                <i class="bi bi-file-earmark-text"></i> Parent Reports
+                            </button>
+                            <button type="button" class="btn btn-sm btn-info" onclick="exportQuarterlyClassReports()">
+                                <i class="bi bi-calendar-check"></i> Quarterly Class Reports
                             </button>
                         </div>
                     </div>
@@ -210,6 +219,18 @@
                         <div class="export-section">
                             <h4><i class="bi bi-database"></i> Export Options</h4>
                             <p class="text-muted">Click on the cubes below to select which data tables you want to export. Each table will be exported as a separate Excel sheet.</p>
+                            
+                            <div class="alert alert-info">
+                                <h6><i class="bi bi-info-circle"></i> Export Modes:</h6>
+                                <p class="mb-2"><small><i class="bi bi-download"></i> <strong>Note:</strong> Your browser may ask permission to download large Excel files. This is normal security behavior - click "Allow" to proceed.</small></p>
+                                <ul class="mb-0">
+                                    <li><strong>All Quarters (Comprehensive):</strong> Exports everything including separate Q1, Q2, Q3, Q4 sheets for resources, assessments, and submissions</li>
+                                    <li><strong>Specific Quarter:</strong> Exports only data from the selected quarter (Q1, Q2, Q3, or Q4)</li>
+                                    <li><strong>Export All:</strong> Exports all available data tables with comprehensive relationships</li>
+                                    <li><strong>Parent Reports:</strong> <span class="text-warning"><strong>Single-click export</strong></span> of Student Performance Dashboard - perfect for end-of-term parent reports with all students' data</li>
+                                    <li><strong>Quarterly Class Reports:</strong> <span class="text-info"><strong>Single-click export</strong></span> of quarterly data organized by class - perfect for class-specific quarterly analysis and reporting</li>
+                                </ul>
+                            </div>
                             
                             <div class="export-grid">
                                 <!-- Users -->
@@ -539,6 +560,46 @@
             startExport(allTables);
         }
 
+        function exportComprehensive() {
+            // Export everything with comprehensive data
+            const comprehensiveTables = [
+                'users', 'subjects', 'course-structure', 'resources', 'assessments', 
+                'submissions', 'progress', 'student-courses', 'teacher-assignments',
+                'weekly-schedules', 'user-sessions', 'resource-usage', 'media-files',
+                'transfer-logs', 'config'
+            ];
+            
+            // Set quarter filter to empty for comprehensive export
+            document.getElementById('quarterFilter').value = '';
+            
+            startExport(comprehensiveTables);
+        }
+
+        function exportParentReports() {
+            // Single-click export for parent reports - Student Performance Dashboard only
+            // Set quarter filter to empty for comprehensive export
+            document.getElementById('quarterFilter').value = '';
+            
+            // Export with no specific tables selected - this triggers the Student Performance Dashboard
+            const parentReportTables = [];
+            
+            startExport(parentReportTables);
+        }
+
+        function exportQuarterlyClassReports() {
+            // Single-click export for quarterly class reports
+            // Set quarter filter to empty for comprehensive export
+            document.getElementById('quarterFilter').value = '';
+            
+            // Export quarterly class reports with specific tables for class analysis
+            const quarterlyClassTables = [
+                'users', 'subjects', 'assessments', 'submissions', 'progress', 
+                'student-courses', 'resources'
+            ];
+            
+            startExport(quarterlyClassTables);
+        }
+
         function startExport(tables) {
             const progressSection = document.getElementById('progressSection');
             const progressBar = document.getElementById('exportProgress');
@@ -547,7 +608,7 @@
 
             progressSection.style.display = 'block';
             progressBar.style.width = '0%';
-            statusText.textContent = 'Starting export...';
+            statusText.textContent = 'Starting export... (Your browser may ask permission to download the file)';
 
             fetch('/api/teacher/export-database', {
                 method: 'POST',

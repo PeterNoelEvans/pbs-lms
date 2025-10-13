@@ -18,7 +18,11 @@
     <div class="container mt-5">
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h1 class="mb-0">Student Progress</h1>
-            <a href="/teacher/dashboard.html" class="btn btn-outline-primary"><i class="bi bi-arrow-left"></i> Back to Dashboard</a>
+            <div>
+                <a href="/teacher/class-category-report.html" class="btn btn-outline-success me-2"><i class="bi bi-clipboard-data"></i> Category Reports</a>
+                <a href="/teacher/progress-by-submissions.html" class="btn btn-outline-warning me-2"><i class="bi bi-trophy"></i> Sort by Submissions</a>
+                <a href="/teacher/dashboard.html" class="btn btn-outline-primary"><i class="bi bi-arrow-left"></i> Back to Dashboard</a>
+            </div>
         </div>
         <div class="mb-3">
             <label for="classSelect" class="form-label"><strong>Class:</strong></label>
@@ -48,6 +52,7 @@
                             <th>Nickname</th>
                             <th>Class</th>
                             <th>Assessment</th>
+                            <th>Actions</th>
                             <th>Quarter</th>
                             <th>Attempts</th>
                             <th>Best Score</th>
@@ -186,7 +191,12 @@
         const tbody = document.getElementById('progressTableBody');
         const selectedStudent = document.getElementById('studentSelect').value;
         tbody.innerHTML = '';
-        filteredProgress = allProgress.filter(row => !selectedStudent || row.studentName === selectedStudent);
+        filteredProgress = allProgress.filter(row => {
+            // Filter out inactive students
+            if (row.studentActive === false) return false;
+            // Filter by selected student if specified
+            return !selectedStudent || row.studentName === selectedStudent;
+        });
         if (filteredProgress.length === 0) {
             const selectedQuarter = document.getElementById('quarterSelect').value;
             let message = 'No progress data found.';
@@ -224,6 +234,11 @@
                     <td>${row.studentNickname || '-'}</td>
                     <td>${row.studentClass || '-'}</td>
                     <td>${row.assessmentTitle || '-'}</td>
+                    <td class="text-center">
+                        <button class="btn btn-sm btn-outline-primary" onclick="openStudentReport('${row.studentId}')" title="View Individual Report">
+                            <i class="bi bi-person-lines-fill"></i>
+                        </button>
+                    </td>
                     <td><span class="badge bg-primary">${row.assessmentQuarter || 'N/A'}</span></td>
                     <td>${attempts}</td>
                     <td>${bestScore}</td>
@@ -235,6 +250,19 @@
             });
         });
     }
+    function openStudentReport(studentId) {
+        // Get current quarter filter
+        const selectedQuarter = document.getElementById('quarterSelect').value;
+        
+        // Open student report page with quarter filter
+        let url = `/teacher/student-report.html?studentId=${studentId}`;
+        if (selectedQuarter) {
+            url += `&quarter=${encodeURIComponent(selectedQuarter)}`;
+        }
+        
+        window.open(url, '_blank');
+    }
+
     function renderClassGraph() {
         const graphDiv = document.getElementById('classGraph');
         const selectedStudent = document.getElementById('studentSelect').value;

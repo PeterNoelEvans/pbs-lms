@@ -175,48 +175,41 @@
                 <div class="filter-section">
                     <div class="row">
                         <div class="col-md-2">
-                            <label for="searchInput" class="form-label">Search Students</label>
-                            <input type="text" class="form-control" id="searchInput" placeholder="Name, email...">
+                            <label for="coreSubjectFilter" class="form-label">Core Subject</label>
+                            <select class="form-select" id="coreSubjectFilter">
+                                <option value="">Select Core Subject</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label for="subjectFilter" class="form-label">Course</label>
+                            <select class="form-select" id="subjectFilter" disabled>
+                                <option value="">Select Course First</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label for="quarterFilter" class="form-label">Quarter</label>
+                            <select class="form-select" id="quarterFilter" disabled>
+                                <option value="">Select Quarter</option>
+                                <option value="Q1">Q1</option>
+                                <option value="Q2">Q2</option>
+                                <option value="Q3">Q3</option>
+                                <option value="Q4">Q4</option>
+                            </select>
                         </div>
                         <div class="col-md-2">
                             <label for="classFilter" class="form-label">Class</label>
-                            <select class="form-select" id="classFilter">
+                            <select class="form-select" id="classFilter" disabled>
                                 <option value="">All Classes</option>
                             </select>
                         </div>
                         <div class="col-md-2">
-                            <label for="subjectFilter" class="form-label">Subject</label>
-                            <select class="form-select" id="subjectFilter">
-                                <option value="">All Subjects</option>
-                            </select>
+                            <label for="searchInput" class="form-label">Search Students</label>
+                            <input type="text" class="form-control" id="searchInput" placeholder="Name, email...">
                         </div>
-                        <div class="col-md-2">
-                            <label for="engagementFilter" class="form-label">Engagement Level</label>
-                            <select class="form-select" id="engagementFilter">
-                                <option value="">All Levels</option>
-                                <option value="high">High Engagement</option>
-                                <option value="medium">Medium Engagement</option>
-                                <option value="low">Low Engagement</option>
-                            </select>
-                        </div>
-                        <div class="col-md-2">
-                            <label for="completionFilter" class="form-label">Completion Rate</label>
-                            <select class="form-select" id="completionFilter">
-                                <option value="">All Rates</option>
-                                <option value="0-25">0-25%</option>
-                                <option value="25-50">25-50%</option>
-                                <option value="50-75">50-75%</option>
-                                <option value="75-100">75-100%</option>
-                            </select>
-                        </div>
-                        <div class="col-md-2">
-                            <label for="activityFilter" class="form-label">Last Activity</label>
-                            <select class="form-select" id="activityFilter">
-                                <option value="">All Time</option>
-                                <option value="7">Last 7 days</option>
-                                <option value="30">Last 30 days</option>
-                                <option value="90">Last 90 days</option>
-                            </select>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button class="btn btn-outline-secondary w-100" onclick="clearFilters()">
+                                <i class="bi bi-x-circle"></i> Clear
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -302,11 +295,44 @@
         let studentData = [];
         let filteredData = [];
         let currentSort = { column: 'name', direction: 'asc' };
+        let coreSubjects = [];
+        let subjects = [];
 
-        // Load student performance data
+        // Load core subjects on page load
+        async function loadCoreSubjects() {
+            try {
+                const response = await fetch('/api/core-subjects', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to load core subjects');
+                }
+
+                coreSubjects = await response.json();
+                populateCoreSubjectFilter();
+            } catch (error) {
+                console.error('Error loading core subjects:', error);
+            }
+        }
+
+        // Load student performance data with filters
         async function loadStudentData() {
             try {
-                const response = await fetch('/api/teacher/student-performance', {
+                const coreSubjectId = document.getElementById('coreSubjectFilter').value;
+                const subjectId = document.getElementById('subjectFilter').value;
+                const quarter = document.getElementById('quarterFilter').value;
+                const classFilter = document.getElementById('classFilter').value;
+
+                // Build query parameters
+                const params = new URLSearchParams();
+                if (subjectId) params.append('subjectId', subjectId);
+                if (quarter) params.append('quarter', quarter);
+                if (classFilter) params.append('class', classFilter);
+
+                const response = await fetch(`/api/teacher/student-performance?${params}`, {
                     headers: {
                         'Authorization': `Bearer ${token}`
                     }
@@ -329,44 +355,88 @@
             }
         }
 
-        // Populate class and subject filters with available data
+        // Populate core subject filter
+        function populateCoreSubjectFilter() {
+            const coreSubjectFilter = document.getElementById('coreSubjectFilter');
+            coreSubjectFilter.innerHTML = '<option value="">Select Core Subject</option>';
+            
+            coreSubjects.forEach(coreSubject => {
+                const option = document.createElement('option');
+                option.value = coreSubject.id;
+                option.textContent = coreSubject.name;
+                coreSubjectFilter.appendChild(option);
+            });
+        }
+
+        // Load subjects based on selected core subject
+        async function loadSubjects(coreSubjectId) {
+            try {
+                const response = await fetch(`/api/subjects?coreSubjectId=${coreSubjectId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to load subjects');
+                }
+
+                subjects = await response.json();
+                populateSubjectFilter();
+            } catch (error) {
+                console.error('Error loading subjects:', error);
+            }
+        }
+
+        // Populate subject filter
+        function populateSubjectFilter() {
+            const subjectFilter = document.getElementById('subjectFilter');
+            const quarterFilter = document.getElementById('quarterFilter');
+            const classFilter = document.getElementById('classFilter');
+            
+            // Reset dependent filters
+            quarterFilter.disabled = true;
+            quarterFilter.value = '';
+            classFilter.disabled = true;
+            classFilter.value = '';
+            
+            subjectFilter.innerHTML = '<option value="">Select Course</option>';
+            subjectFilter.disabled = subjects.length === 0;
+            
+            subjects.forEach(subject => {
+                const option = document.createElement('option');
+                option.value = subject.id;
+                option.textContent = subject.name;
+                subjectFilter.appendChild(option);
+            });
+            
+            if (subjects.length > 0) {
+                subjectFilter.disabled = false;
+            }
+        }
+
+        // Populate class filter
         function populateClassFilter() {
             const classFilter = document.getElementById('classFilter');
-            const subjectFilter = document.getElementById('subjectFilter');
             const allClasses = new Set();
-            const allSubjects = new Set();
             
             studentData.forEach(student => {
-                // Extract classes (like "M2/1", "M2/1-")
                 if (student.class) {
                     allClasses.add(student.class);
                 }
-                
-                // Extract subjects (like "Mathematics", "Science")
-                if (student.subjects && Array.isArray(student.subjects)) {
-                    student.subjects.forEach(subject => {
-                        allSubjects.add(subject);
-                    });
-                }
             });
             
-            // Clear and populate class filter
             classFilter.innerHTML = '<option value="">All Classes</option>';
             Array.from(allClasses).sort().forEach(className => {
                 const option = document.createElement('option');
-                option.value = className.toLowerCase();
+                option.value = className;
                 option.textContent = className;
                 classFilter.appendChild(option);
             });
             
-            // Clear and populate subject filter
-            subjectFilter.innerHTML = '<option value="">All Subjects</option>';
-            Array.from(allSubjects).sort().forEach(subject => {
-                const option = document.createElement('option');
-                option.value = subject.toLowerCase();
-                option.textContent = subject;
-                subjectFilter.appendChild(option);
-            });
+            if (allClasses.size > 0) {
+                classFilter.disabled = false;
+            }
         }
 
         // Update summary metrics
@@ -631,17 +701,62 @@
             loadStudentData();
         }
 
+        // Clear all filters
+        function clearFilters() {
+            document.getElementById('coreSubjectFilter').value = '';
+            document.getElementById('subjectFilter').value = '';
+            document.getElementById('quarterFilter').value = '';
+            document.getElementById('classFilter').value = '';
+            document.getElementById('searchInput').value = '';
+            
+            // Reset filter states
+            document.getElementById('subjectFilter').disabled = true;
+            document.getElementById('quarterFilter').disabled = true;
+            document.getElementById('classFilter').disabled = true;
+            
+            // Clear data and reload
+            studentData = [];
+            filteredData = [];
+            loadStudentData();
+        }
+
         // Event listeners
         document.getElementById('searchInput').addEventListener('input', applyFilters);
         document.getElementById('classFilter').addEventListener('change', applyFilters);
         document.getElementById('subjectFilter').addEventListener('change', applyFilters);
-        document.getElementById('engagementFilter').addEventListener('change', applyFilters);
-        document.getElementById('completionFilter').addEventListener('change', applyFilters);
-        document.getElementById('activityFilter').addEventListener('change', applyFilters);
+        document.getElementById('quarterFilter').addEventListener('change', loadStudentData);
+        document.getElementById('coreSubjectFilter').addEventListener('change', function() {
+            const coreSubjectId = this.value;
+            if (coreSubjectId) {
+                loadSubjects(coreSubjectId);
+            } else {
+                // Reset dependent filters
+                document.getElementById('subjectFilter').disabled = true;
+                document.getElementById('quarterFilter').disabled = true;
+                document.getElementById('classFilter').disabled = true;
+                document.getElementById('subjectFilter').value = '';
+                document.getElementById('quarterFilter').value = '';
+                document.getElementById('classFilter').value = '';
+            }
+        });
+
+        document.getElementById('subjectFilter').addEventListener('change', function() {
+            const subjectId = this.value;
+            if (subjectId) {
+                document.getElementById('quarterFilter').disabled = false;
+                document.getElementById('classFilter').disabled = false;
+                loadStudentData();
+            } else {
+                document.getElementById('quarterFilter').disabled = true;
+                document.getElementById('classFilter').disabled = true;
+                document.getElementById('quarterFilter').value = '';
+                document.getElementById('classFilter').value = '';
+            }
+        });
 
         // Initialize
         document.addEventListener('DOMContentLoaded', function() {
-            loadStudentData();
+            loadCoreSubjects();
         });
     </script>
 </body>

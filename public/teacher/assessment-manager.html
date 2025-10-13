@@ -224,17 +224,30 @@
             loadingIndicator.style.display = 'block';
 
             try {
-                const response = await fetch('/api/teacher/assessments?attachment=attached', {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
+                // Load assessments from both Q1 and Q2 to allow due date management for past quarter assessments
+                const [q1Response, q2Response] = await Promise.all([
+                    fetch('/api/teacher/assessments?attachment=attached&quarter=Q1', {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    }),
+                    fetch('/api/teacher/assessments?attachment=attached&quarter=Q2', {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    })
+                ]);
 
-                if (!response.ok) {
+                if (!q1Response.ok || !q2Response.ok) {
                     throw new Error('Failed to load assessments');
                 }
 
-                allAssessments = await response.json();
-                console.log('Loaded assessments:', allAssessments.length);
-                console.log('Sample assessment IDs:', allAssessments.slice(0, 3).map(a => ({ id: a.id, title: a.title })));
+                const q1Assessments = await q1Response.json();
+                const q2Assessments = await q2Response.json();
+                
+                // Combine Q1 and Q2 assessments
+                allAssessments = [...q1Assessments, ...q2Assessments];
+                console.log('Loaded Q1 assessments:', q1Assessments.length);
+                console.log('Loaded Q2 assessments:', q2Assessments.length);
+                console.log('Total assessments:', allAssessments.length);
+                console.log('Sample Q1 assessments:', q1Assessments.slice(0, 3).map(a => ({ id: a.id, title: a.title, quarter: a.quarter })));
+                console.log('Sample Q2 assessments:', q2Assessments.slice(0, 3).map(a => ({ id: a.id, title: a.title, quarter: a.quarter })));
                 filteredAssessments = [...allAssessments];
                 renderAssessments();
                 applyFilters();
@@ -253,6 +266,14 @@
             const subjectFilter = document.getElementById('subjectFilter').value;
             const statusFilter = document.getElementById('statusFilter').value;
 
+            console.log('Applying filters:', {
+                searchTerm,
+                quarterFilter,
+                subjectFilter,
+                statusFilter,
+                totalAssessments: allAssessments.length
+            });
+
             filteredAssessments = allAssessments.filter(assessment => {
                 // Search filter
                 const matchesSearch = !searchTerm || 
@@ -266,11 +287,23 @@
                 const matchesSubject = !subjectFilter || assessment.subjectId === subjectFilter;
 
                 // Status filter
-                const matchesStatus = !statusFilter || getAssessmentStatus(assessment) === statusFilter;
+                const assessmentStatus = getAssessmentStatus(assessment);
+                const matchesStatus = !statusFilter || assessmentStatus === statusFilter;
+
+                console.log(`Assessment "${assessment.title}" (${assessment.quarter}):`, {
+                    matchesSearch,
+                    matchesQuarter,
+                    matchesSubject,
+                    assessmentStatus,
+                    matchesStatus,
+                    subjectId: assessment.subjectId,
+                    subjectName: assessment.subjectName
+                });
 
                 return matchesSearch && matchesQuarter && matchesSubject && matchesStatus;
             });
 
+            console.log('Filtered assessments:', filteredAssessments.length);
             renderAssessments();
         }
 

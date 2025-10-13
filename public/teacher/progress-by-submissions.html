@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Progress by Submissions - Teacher Portal</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css">
+    <style>
+        body { background: #f8f9fa; }
+        .progress-table th, .progress-table td { vertical-align: middle; }
+        .status-completed { color: #28a745; font-weight: bold; }
+        .status-inprogress { color: #ffc107; font-weight: bold; }
+        .status-notstarted { color: #dc3545; font-weight: bold; }
+        .submission-count { font-weight: bold; color: #0d6efd; }
+        .ranking-badge { background: linear-gradient(45deg, #007bff, #0056b3); color: white; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1 class="mb-0">Student Progress by Submissions</h1>
+            <div>
+                <a href="/teacher/progress.html" class="btn btn-outline-secondary me-2"><i class="bi bi-arrow-left"></i> Standard Progress</a>
+                <a href="/teacher/dashboard.html" class="btn btn-outline-primary"><i class="bi bi-house"></i> Dashboard</a>
+            </div>
+        </div>
+        
+        
+        <div class="mb-3">
+            <label for="classSelect" class="form-label"><strong>Class:</strong></label>
+            <select id="classSelect" class="form-select d-inline-block w-auto"></select>
+            <label for="quarterSelect" class="form-label ms-4"><strong>Quarter:</strong></label>
+            <select id="quarterSelect" class="form-select d-inline-block w-auto">
+                <option value="">All Quarters</option>
+                <option value="Q1">Q1</option>
+                <option value="Q2">Q2</option>
+                <option value="Q3">Q3</option>
+                <option value="Q4">Q4</option>
+            </select>
+            <label for="completionFilter" class="form-label ms-4"><strong>Completion %:</strong></label>
+            <select id="completionFilter" class="form-select d-inline-block w-auto">
+                <option value="">All Students</option>
+                <option value="90-100">90-100% (Excellent)</option>
+                <option value="80-89">80-89% (Good)</option>
+                <option value="70-79">70-79% (Satisfactory)</option>
+                <option value="60-69">60-69% (Needs Improvement)</option>
+                <option value="0-59">0-59% (Requires Attention)</option>
+                <option value="0">0% (Not Started)</option>
+            </select>
+            <button id="clearFiltersBtn" class="btn btn-outline-secondary ms-2" onclick="clearFilters()"><i class="bi bi-x-circle"></i> Clear Filters</button>
+            <button id="downloadCsvBtn" class="btn btn-success ms-2"><i class="bi bi-download"></i> Download CSV</button>
+        </div>
+        
+        <div id="classGraph" class="mb-4"></div>
+    </div>
+    
+    <script>
+    let allProgress = [];
+    let filteredProgress = [];
+    let allStudents = [];
+    let allStudentsWithProgress = [];
+
+    // Fetch active quarter and set as default
+    fetch('/api/config/active-quarter', {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+        cache: 'no-store'
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.activeQuarter) {
+            document.getElementById('quarterSelect').value = data.activeQuarter;
+        }
+    })
+    .catch(error => {
+        console.error('Error fetching active quarter:', error);
+    });
+
+    // Fetch classes for dropdown
+    fetch('/api/teacher/classes', {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+        cache: 'no-store'
+    })
+    .then(res => res.json())
+    .then(data => {
+        const classSelect = document.getElementById('classSelect');
+        classSelect.innerHTML = '<option value="">All Classes</option>';
+
+        const classes = data.classes || [];
+
+        if (Array.isArray(classes)) {
+            classes.forEach(cls => {
+                const opt = document.createElement('option');
+                opt.value = cls;
+                opt.textContent = cls;
+                classSelect.appendChild(opt);
+            });
+            
+            if (classes.length > 0) {
+                 setTimeout(() => {
+                     loadProgressForClass(classes[0]);
+                     document.getElementById('classSelect').value = classes[0];
+                 }, 100);
+            } else {
+                 setTimeout(() => {
+                     loadProgressForClass('');
+                 }, 100);
+            }
+        } else {
+            console.error("Received data is not an array:", data);
+            loadProgressForClass('');
+        }
+    })
+    .catch(error => {
+        console.error('Error fetching classes:', error);
+        loadProgressForClass('');
+    });
+
+    document.getElementById('classSelect').onchange = function() {
+        loadProgressForClass(this.value);
+    };
+    
+    document.getElementById('quarterSelect').onchange = function() {
+        const selectedClass = document.getElementById('classSelect').value;
+        loadProgressForClass(selectedClass);
+    };
+    
+    document.getElementById('completionFilter').onchange = function() {
+        renderClassGraph();
+    };
+    
+    function clearFilters() {
+        document.getElementById('completionFilter').value = '';
+        renderClassGraph();
+    }
+
+    function loadProgressForClass(className) {
+        const selectedQuarter = document.getElementById('quarterSelect').value;
+        
+        let progressUrl = `/api/teacher/progress-by-submissions?class=${encodeURIComponent(className)}`;
+        if (selectedQuarter) {
+            progressUrl += `&quarter=${encodeURIComponent(selectedQuarter)}`;
+        }
+        
+        fetch(progressUrl, {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+            cache: 'no-store'
+        })
+        .then(res => res.json())
+        .then(data => {
+            allProgress = data.students || [];
+            renderProgressTable();
+            renderClassGraph();
+        })
+        .catch(error => {
+            console.error("Error loading progress data:", error);
+        });
+    }
+
+    function renderProgressTable() {
+        // This function is not used in the new layout - data is rendered in renderClassGraph
+    }
+
+    function openStudentReport(studentId) {
+        const selectedQuarter = document.getElementById('quarterSelect').value;
+        
+        let url = `/teacher/student-report.html?studentId=${studentId}`;
+        if (selectedQuarter) {
+            url += `&quarter=${encodeURIComponent(selectedQuarter)}`;
+        }
+        
+        window.open(url, '_blank');
+    }
+
+    function renderClassGraph() {
+        const graphDiv = document.getElementById('classGraph');
+        
+        if (!allProgress.length) {
+            graphDiv.innerHTML = '';
+            return;
+        }
+
+        // Filter students by completion percentage if filter is selected
+        let filteredStudents = allProgress;
+        const completionFilter = document.getElementById('completionFilter').value;
+        
+        if (completionFilter) {
+            filteredStudents = allProgress.filter(student => {
+                // Calculate percentage based on completed vs total assessments
+                // Assuming everyone has the same total, we can use the first student's total as reference
+                const totalAssessments = allProgress.length > 0 ? 
+                    (allProgress[0].completed + allProgress[0].inProgress + allProgress[0].notStarted) : 
+                    (student.completed + student.inProgress + student.notStarted);
+                const percent = totalAssessments > 0 ? Math.round((student.completed / totalAssessments) * 100) : 0;
+                
+                switch (completionFilter) {
+                    case '90-100':
+                        return percent >= 90;
+                    case '80-89':
+                        return percent >= 80 && percent < 90;
+                    case '70-79':
+                        return percent >= 70 && percent < 80;
+                    case '60-69':
+                        return percent >= 60 && percent < 70;
+                    case '0-59':
+                        return percent >= 0 && percent < 60;
+                    case '0':
+                        return percent === 0;
+                    default:
+                        return true;
+                }
+            });
+        }
+
+        // Sort students by completion percentage (highest to lowest)
+        const sortedStudents = filteredStudents.sort((a, b) => {
+            // Since everyone has the same total assessments, just sort by completed count
+            // Primary sort: completed assessments (highest first)
+            if (a.completed !== b.completed) {
+                return b.completed - a.completed;
+            }
+            
+            // Secondary sort: total submissions (highest first) for tie-breaking
+            return b.totalSubmissions - a.totalSubmissions;
+        });
+        
+        // Split into two columns
+        const mid = Math.ceil(sortedStudents.length / 2);
+        const col1 = sortedStudents.slice(0, mid);
+        const col2 = sortedStudents.slice(mid);
+        
+        const filterText = completionFilter ? ` (Filtered: ${completionFilter})` : '';
+        const studentCount = sortedStudents.length;
+        const totalCount = allProgress.length;
+        let html = `<strong>Students Sorted by Completion Percentage${filterText}</strong> 
+                    <span class="badge bg-info ms-2">${studentCount} of ${totalCount} students</span><br>
+            <div style="display: flex; font-size: 0.95em; color: #888; margin-bottom: 4px; align-items: center;">
+                <div style="width: 200px;">Student</div>
+                <div style="width: 100px;">Student ID</div>
+                <div style="flex: 1; text-align: center;">Progress</div>
+                <div style="width: 110px; text-align: right;">Completed</div>
+                <div style="width: 60px; text-align: right;">Avg.<br>Score</div>
+                <div style="width: 70px; text-align: right;">Final<br>Grade</div>
+            </div>`;
+        
+        sortedStudents.forEach(student => {
+            const totalAssessments = student.completed + student.inProgress + student.notStarted;
+            const percent = totalAssessments > 0 ? Math.round((student.completed / totalAssessments) * 100) : 0;
+            const avgScore = student.averageScore ?? null;
+            const finalGrade = (avgScore !== null) ? Math.round(percent * avgScore / 100) : null;
+            
+            html += `
+                <div class="d-flex align-items-center mb-1" style="width:100%;">
+                    <div style="width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${student.name}">${student.name}</div>
+                    <div style="width: 100px; font-size: 0.9rem; color: #6c757d;" title="Student ID">${student.studentId || 'N/A'}</div>
+                    <div class="flex-grow-1 mx-2" style="min-width: 100px;">
+                        <div class="progress" style="height: 18px;">
+                            <div class="progress-bar bg-success" role="progressbar" style="width: ${percent}%" aria-valuenow="${percent}" aria-valuemin="0" aria-valuemax="100"></div>
+                        </div>
+                    </div>
+                    <div style="width: 110px; text-align: right; font-size: 0.9rem; color: #495057;" title="Completed assessments out of total">${student.completed}/${totalAssessments} (${percent}%)</div>
+                    <div style="width: 60px; text-align: right; font-size: 0.9rem; color: #495057; font-weight: 500;" title="Average score across all completed assessments">${avgScore !== null ? avgScore + '%' : 'N/A'}</div>
+                    <div style="width: 70px; text-align: right; font-size: 0.9rem; color: #0d6efd; font-weight: 500;" title="Final Grade = Progress % × Avg. Score %">${finalGrade !== null ? finalGrade + '%' : 'N/A'}</div>
+                </div>
+            `;
+        });
+        graphDiv.innerHTML = html;
+    }
+
+    document.getElementById('downloadCsvBtn').addEventListener('click', () => {
+        if (allProgress.length === 0) {
+            alert('No data to download.');
+            return;
+        }
+        
+        const headers = ['Rank','Student','Student ID','Total Submissions','Completed','In Progress','Not Started','Average Score'];
+        const csv = [headers.join(',')].concat(
+            allProgress.map((student, index) => {
+                const rank = index + 1;
+                const avgScore = student.averageScore !== null ? student.averageScore + '%' : 'N/A';
+                return [
+                    rank,
+                    `"${student.name}"`,
+                    `"${student.studentId || ''}"`,
+                    student.totalSubmissions,
+                    student.completed,
+                    student.inProgress,
+                    student.notStarted,
+                    avgScore
+                ].join(',');
+            })
+        ).join('\n');
+        
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'student_progress_by_submissions.csv';
+        a.click();
+        URL.revokeObjectURL(url);
+    });
+    </script>
+</body>
+</html>

@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Individual Student Report - Teacher Portal</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css">
+    <style>
+        .report-card {
+            border-left: 4px solid #007bff;
+        }
+        .quarter-card {
+            border-left: 4px solid #28a745;
+        }
+        .subject-card {
+            border-left: 4px solid #ffc107;
+        }
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/teacher/dashboard.html">
+                <i class="bi bi-house-fill"></i> Teacher Portal
+            </a>
+            <div class="navbar-nav ms-auto">
+                <a class="nav-link" href="/teacher/progress.html">
+                    <i class="bi bi-arrow-left"></i> Back to Progress
+                </a>
+                <a class="nav-link" href="#" onclick="logout()">
+                    <i class="bi bi-box-arrow-right"></i> Logout
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid mt-4">
+        <div class="row">
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h2><i class="bi bi-person-lines-fill"></i> Individual Student Report</h2>
+                    <div class="text-muted">
+                        Detailed performance analysis with quarter filtering
+                    </div>
+                </div>
+
+                <!-- Student Selection and Quarter Filter -->
+                <div class="card mb-4">
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label class="form-label">Select Student:</label>
+                                <select class="form-select" id="studentSelect">
+                                    <option value="">Choose a student...</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Quarter Filter:</label>
+                                <select class="form-select" id="quarterSelect">
+                                    <option value="">All Quarters</option>
+                                    <option value="Q1">Q1</option>
+                                    <option value="Q2">Q2</option>
+                                    <option value="Q3">Q3</option>
+                                    <option value="Q4">Q4</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">&nbsp;</label>
+                                <button class="btn btn-primary w-100" onclick="loadStudentReport()">
+                                    <i class="bi bi-search"></i> Generate Report
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Loading Indicator -->
+                <div id="loadingIndicator" class="text-center my-5" style="display: none;">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-2">Generating report...</p>
+                </div>
+
+                <!-- Report Content -->
+                <div id="reportContent" style="display: none;">
+                    <!-- Student Info -->
+                    <div class="card report-card mb-4">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="bi bi-person"></i> Student Information</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row" id="studentInfo">
+                                <!-- Student details will be populated here -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Summary Statistics -->
+                    <div class="row mb-4">
+                        <div class="col-md-3">
+                            <div class="card stat-card">
+                                <div class="card-body text-center">
+                                    <h3 id="totalSubmissions">0</h3>
+                                    <p class="mb-0">Total Submissions</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card stat-card">
+                                <div class="card-body text-center">
+                                    <h3 id="completedSubmissions">0</h3>
+                                    <p class="mb-0">Completed</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card stat-card">
+                                <div class="card-body text-center">
+                                    <h3 id="averageScore">0%</h3>
+                                    <p class="mb-0">Average Score</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="card stat-card">
+                                <div class="card-body text-center">
+                                    <h3 id="completionRate">0%</h3>
+                                    <p class="mb-0">Completion Rate</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Quarter Statistics -->
+                    <div class="card quarter-card mb-4">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="bi bi-calendar3"></i> Performance by Quarter</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row" id="quarterStats">
+                                <!-- Quarter statistics will be populated here -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Subject Statistics -->
+                    <div class="card subject-card mb-4">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="bi bi-book"></i> Performance by Subject</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row" id="subjectStats">
+                                <!-- Subject statistics will be populated here -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Detailed Submissions -->
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i class="bi bi-list-check"></i> Assessment Submissions</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-striped">
+                                    <thead>
+                                        <tr>
+                                            <th>Assessment</th>
+                                            <th>Type</th>
+                                            <th>Quarter</th>
+                                            <th>Subject</th>
+                                            <th>Score</th>
+                                            <th>Status</th>
+                                            <th>Submitted</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="submissionsTable">
+                                        <!-- Submissions will be populated here -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Error Message -->
+                <div id="errorMessage" class="alert alert-danger" style="display: none;">
+                    <i class="bi bi-exclamation-triangle"></i> <span id="errorText"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/logout.js"></script>
+    <script>
+        const token = localStorage.getItem('token');
+        if (!token) {
+            window.location.href = '/login';
+        }
+
+        let currentReport = null;
+
+        // Load students on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadStudents();
+            
+            // Check for URL parameters
+            const urlParams = new URLSearchParams(window.location.search);
+            const studentId = urlParams.get('studentId');
+            const quarter = urlParams.get('quarter');
+            
+            if (studentId) {
+                // Wait for students to load, then select the student
+                setTimeout(() => {
+                    document.getElementById('studentSelect').value = studentId;
+                    if (quarter) {
+                        document.getElementById('quarterSelect').value = quarter;
+                    }
+                    loadStudentReport();
+                }, 1000);
+            }
+        });
+
+        async function loadStudents() {
+            try {
+                const response = await fetch('/api/teacher/students', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to load students');
+                }
+                
+                const students = await response.json();
+                const studentSelect = document.getElementById('studentSelect');
+                
+                students.forEach(student => {
+                    const option = document.createElement('option');
+                    option.value = student.id;
+                    option.textContent = `${student.name} (${student.class || 'No Class'})`;
+                    studentSelect.appendChild(option);
+                });
+                
+            } catch (error) {
+                console.error('Error loading students:', error);
+                showError('Failed to load students: ' + error.message);
+            }
+        }
+
+        async function loadStudentReport() {
+            const studentId = document.getElementById('studentSelect').value;
+            const quarter = document.getElementById('quarterSelect').value;
+            
+            if (!studentId) {
+                showError('Please select a student');
+                return;
+            }
+            
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            const reportContent = document.getElementById('reportContent');
+            const errorMessage = document.getElementById('errorMessage');
+            
+            // Show loading
+            loadingIndicator.style.display = 'block';
+            reportContent.style.display = 'none';
+            errorMessage.style.display = 'none';
+            
+            try {
+                let url = `/api/teacher/student-report/${studentId}`;
+                if (quarter) {
+                    url += `?quarter=${encodeURIComponent(quarter)}`;
+                }
+                
+                const response = await fetch(url, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to generate report');
+                }
+                
+                const report = await response.json();
+                currentReport = report;
+                
+                // Populate report
+                populateReport(report);
+                
+                // Show content
+                loadingIndicator.style.display = 'none';
+                reportContent.style.display = 'block';
+                
+            } catch (error) {
+                console.error('Error generating report:', error);
+                loadingIndicator.style.display = 'none';
+                showError('Failed to generate report: ' + error.message);
+            }
+        }
+
+        function populateReport(report) {
+            // Student info
+            document.getElementById('studentInfo').innerHTML = `
+                <div class="col-md-6">
+                    <p><strong>Name:</strong> ${report.student.name}</p>
+                    <p><strong>Email:</strong> ${report.student.email}</p>
+                    <p><strong>Class:</strong> ${report.student.class || 'Not assigned'}</p>
+                </div>
+                <div class="col-md-6">
+                    <p><strong>Year Level:</strong> ${report.student.yearLevel || 'Not assigned'}</p>
+                    <p><strong>Enrolled Subjects:</strong> ${report.student.enrolledSubjects.join(', ')}</p>
+                    <p><strong>Report Filter:</strong> ${report.filter.quarter}</p>
+                </div>
+            `;
+            
+            // Summary stats
+            document.getElementById('totalSubmissions').textContent = report.summary.totalSubmissions;
+            document.getElementById('completedSubmissions').textContent = report.summary.completedSubmissions;
+            document.getElementById('averageScore').textContent = report.summary.averageScore + '%';
+            document.getElementById('completionRate').textContent = report.summary.completionRate + '%';
+            
+            // Quarter stats
+            const quarterStatsHtml = Object.keys(report.quarterStats).map(quarter => {
+                const stats = report.quarterStats[quarter];
+                return `
+                    <div class="col-md-3 mb-3">
+                        <div class="card">
+                            <div class="card-body">
+                                <h6 class="card-title">${quarter}</h6>
+                                <p class="mb-1"><small>Submissions: ${stats.totalSubmissions}</small></p>
+                                <p class="mb-1"><small>Completed: ${stats.completedSubmissions}</small></p>
+                                <p class="mb-1"><small>Avg Score: ${stats.averageScore}%</small></p>
+                                <p class="mb-0"><small>Completion: ${stats.completionRate}%</small></p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            document.getElementById('quarterStats').innerHTML = quarterStatsHtml;
+            
+            // Subject stats
+            const subjectStatsHtml = Object.keys(report.subjectStats).map(subject => {
+                const stats = report.subjectStats[subject];
+                return `
+                    <div class="col-md-4 mb-3">
+                        <div class="card">
+                            <div class="card-body">
+                                <h6 class="card-title">${subject}</h6>
+                                <p class="mb-1"><small>Submissions: ${stats.totalSubmissions}</small></p>
+                                <p class="mb-1"><small>Completed: ${stats.completedSubmissions}</small></p>
+                                <p class="mb-1"><small>Avg Score: ${stats.averageScore}%</small></p>
+                                <p class="mb-0"><small>Completion: ${stats.completionRate}%</small></p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            document.getElementById('subjectStats').innerHTML = subjectStatsHtml;
+            
+            // Submissions table
+            const submissionsHtml = report.submissions.map(submission => `
+                <tr>
+                    <td>${submission.assessmentTitle}</td>
+                    <td><span class="badge bg-secondary">${submission.assessmentType}</span></td>
+                    <td><span class="badge bg-info">${submission.quarter}</span></td>
+                    <td>${submission.subject}</td>
+                    <td>${submission.score !== null ? submission.score + '%' : 'Not graded'}</td>
+                    <td><span class="badge bg-${submission.status === 'Completed' ? 'success' : 'warning'}">${submission.status}</span></td>
+                    <td>${new Date(submission.submittedAt).toLocaleDateString()}</td>
+                </tr>
+            `).join('');
+            document.getElementById('submissionsTable').innerHTML = submissionsHtml;
+        }
+
+        function showError(message) {
+            const errorMessage = document.getElementById('errorMessage');
+            const errorText = document.getElementById('errorText');
+            errorText.textContent = message;
+            errorMessage.style.display = 'block';
+        }
+    </script>
+</body>
+</html>

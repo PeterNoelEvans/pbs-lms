@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Combined Quarter Report - Teacher Portal</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        .report-card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .filter-section {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        .table-responsive {
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .table th {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            font-weight: 600;
+        }
+        .table td {
+            vertical-align: middle;
+        }
+        .score-excellent { color: #28a745; font-weight: bold; }
+        .score-good { color: #ffc107; font-weight: bold; }
+        .score-poor { color: #dc3545; font-weight: bold; }
+        .header-info {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <div class="container-fluid">
+        <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
+            <div class="container">
+                <a class="navbar-brand" href="/teacher/dashboard">
+                    <i class="bi bi-mortarboard-fill me-2"></i>Teacher Portal
+                </a>
+                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                    <span class="navbar-toggler-icon"></span>
+                </button>
+                <div class="collapse navbar-collapse" id="navbarNav">
+                    <ul class="navbar-nav me-auto">
+                        <li class="nav-item">
+                            <a class="nav-link" href="/teacher/dashboard">Dashboard</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/teacher/reports-hub">Reports Hub</a>
+                        </li>
+                    </ul>
+                    <ul class="navbar-nav">
+                        <li class="nav-item">
+                            <button class="btn btn-outline-light" onclick="logout()">
+                                <i class="bi bi-box-arrow-right"></i> Logout
+                            </button>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </nav>
+
+        <div class="container">
+            <!-- Header -->
+            <div class="header-info text-center">
+                <h1><i class="bi bi-bar-chart-line"></i> Combined Quarter Report</h1>
+                <p class="mb-0">Q1 + Q2 Combined Performance Analysis</p>
+                <small>Students sorted by Final Total (highest first)</small>
+            </div>
+
+            <!-- Filters -->
+            <div class="filter-section">
+                <div class="row">
+                    <div class="col-md-3">
+                        <label for="coreSubjectFilter" class="form-label">Core Subject</label>
+                        <select class="form-select" id="coreSubjectFilter">
+                            <option value="">Select Core Subject</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="subjectFilter" class="form-label">Course</label>
+                        <select class="form-select" id="subjectFilter" disabled>
+                            <option value="">Select Course First</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="classFilter" class="form-label">Class</label>
+                        <select class="form-select" id="classFilter" disabled>
+                            <option value="">All Classes</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <button class="btn btn-primary w-100" onclick="loadReportData()" disabled id="loadReportBtn">
+                            <i class="bi bi-search"></i> Load Report
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Report Info -->
+            <div class="report-card" id="reportInfo" style="display: none;">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h5><i class="bi bi-info-circle"></i> Report Information</h5>
+                        <p class="mb-1"><strong>Course:</strong> <span id="reportCourse">-</span></p>
+                        <p class="mb-1"><strong>Class:</strong> <span id="reportClass">-</span></p>
+                        <p class="mb-1"><strong>Period:</strong> Q1 + Q2 Combined</p>
+                        <p class="mb-0"><strong>Total Students:</strong> <span id="reportStudentCount">-</span></p>
+                    </div>
+                    <div class="col-md-6 text-end">
+                        <button class="btn btn-outline-primary" onclick="loadReportData()">
+                            <i class="bi bi-arrow-clockwise"></i> Refresh
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Student Table -->
+            <div class="report-card" id="studentTable" style="display: none;">
+                <h5><i class="bi bi-table"></i> Student Performance Data</h5>
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead>
+                            <tr>
+                                <th>Rank</th>
+                                <th>Student Name</th>
+                                <th>Student ID</th>
+                                <th>Class</th>
+                                <th>Completion (%)</th>
+                                <th>Average Score (%)</th>
+                                <th>Final Total (%)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="studentTableBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Loading/Error States -->
+            <div class="report-card text-center" id="loadingState" style="display: none;">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-2">Loading report data...</p>
+            </div>
+
+            <div class="report-card text-center" id="errorState" style="display: none;">
+                <i class="bi bi-exclamation-triangle text-warning" style="font-size: 2rem;"></i>
+                <p class="mt-2 text-danger">Failed to load report data. Please try again.</p>
+                <button class="btn btn-primary" onclick="loadReportData()">Retry</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const token = localStorage.getItem('token');
+        if (!token) {
+            window.location.href = '/login';
+        }
+
+        // Check if user is teacher or admin
+        const userRole = localStorage.getItem('userRole');
+        if (userRole !== 'TEACHER' && userRole !== 'ADMIN') {
+            window.location.href = '/login';
+        }
+
+        let coreSubjects = [];
+        let subjects = [];
+        let reportData = [];
+
+        // Load core subjects on page load
+        async function loadCoreSubjects() {
+            try {
+                const response = await fetch('/api/core-subjects', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to load core subjects');
+                }
+
+                coreSubjects = await response.json();
+                populateCoreSubjectFilter();
+            } catch (error) {
+                console.error('Error loading core subjects:', error);
+            }
+        }
+
+        // Load subjects based on selected core subject
+        async function loadSubjects(coreSubjectId) {
+            try {
+                const response = await fetch(`/api/subjects?coreSubjectId=${coreSubjectId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to load subjects');
+                }
+
+                subjects = await response.json();
+                populateSubjectFilter();
+            } catch (error) {
+                console.error('Error loading subjects:', error);
+            }
+        }
+
+        // Load classes based on selected subject
+        async function loadClasses(subjectId) {
+            try {
+                const response = await fetch(`/api/teacher/classes?subjectId=${subjectId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to load classes');
+                }
+
+                const classes = await response.json();
+                populateClassFilter(classes);
+            } catch (error) {
+                console.error('Error loading classes:', error);
+            }
+        }
+
+        // Load report data
+        async function loadReportData() {
+            const subjectId = document.getElementById('subjectFilter').value;
+            const classFilter = document.getElementById('classFilter').value;
+
+            if (!subjectId) {
+                alert('Please select a course first');
+                return;
+            }
+
+            showLoadingState();
+
+            try {
+                // Build query parameters
+                const params = new URLSearchParams();
+                params.append('subjectId', subjectId);
+                if (classFilter) {
+                    params.append('class', classFilter);
+                }
+
+                const response = await fetch(`/api/teacher/combined-quarter-report?${params}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to load report data');
+                }
+
+                reportData = await response.json();
+                renderReport();
+            } catch (error) {
+                console.error('Error loading report data:', error);
+                showErrorState();
+            }
+        }
+
+        // Render the report
+        function renderReport() {
+            const reportInfo = document.getElementById('reportInfo');
+            const studentTable = document.getElementById('studentTable');
+            const reportCourse = document.getElementById('reportCourse');
+            const reportClass = document.getElementById('reportClass');
+            const reportStudentCount = document.getElementById('reportStudentCount');
+            const studentTableBody = document.getElementById('studentTableBody');
+
+            // Update report info
+            const selectedSubject = subjects.find(s => s.id === document.getElementById('subjectFilter').value);
+            const selectedClass = document.getElementById('classFilter').value;
+            
+            reportCourse.textContent = selectedSubject ? selectedSubject.name : '-';
+            reportClass.textContent = selectedClass || 'All Classes';
+            reportStudentCount.textContent = reportData.length;
+
+            // Render student table
+            studentTableBody.innerHTML = '';
+            reportData.forEach((student, index) => {
+                const rank = index + 1;
+                const completionClass = getScoreClass(student.completionPercentage);
+                const scoreClass = getScoreClass(student.averageScore);
+                const totalClass = getScoreClass(student.finalTotal);
+
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td><span class="badge bg-primary">${rank}</span></td>
+                    <td><strong>${student.name}</strong></td>
+                    <td><code>${student.studentNumber || '-'}</code></td>
+                    <td>${student.class || '-'}</td>
+                    <td><span class="${completionClass}">${student.completionPercentage}%</span></td>
+                    <td><span class="${scoreClass}">${student.averageScore}%</span></td>
+                    <td><span class="${totalClass}"><strong>${student.finalTotal}%</strong></span></td>
+                `;
+                studentTableBody.appendChild(row);
+            });
+
+            // Show the report
+            hideAllStates();
+            reportInfo.style.display = 'block';
+            studentTable.style.display = 'block';
+        }
+
+        // Get CSS class for score coloring
+        function getScoreClass(score) {
+            if (score >= 80) return 'score-excellent';
+            if (score >= 60) return 'score-good';
+            return 'score-poor';
+        }
+
+        // Show/hide states
+        function showLoadingState() {
+            hideAllStates();
+            document.getElementById('loadingState').style.display = 'block';
+        }
+
+        function showErrorState() {
+            hideAllStates();
+            document.getElementById('errorState').style.display = 'block';
+        }
+
+        function hideAllStates() {
+            document.getElementById('loadingState').style.display = 'none';
+            document.getElementById('errorState').style.display = 'none';
+            document.getElementById('reportInfo').style.display = 'none';
+            document.getElementById('studentTable').style.display = 'none';
+        }
+
+        // Populate filters
+        function populateCoreSubjectFilter() {
+            const coreSubjectFilter = document.getElementById('coreSubjectFilter');
+            coreSubjectFilter.innerHTML = '<option value="">Select Core Subject</option>';
+            
+            coreSubjects.forEach(coreSubject => {
+                const option = document.createElement('option');
+                option.value = coreSubject.id;
+                option.textContent = coreSubject.name;
+                coreSubjectFilter.appendChild(option);
+            });
+        }
+
+        function populateSubjectFilter() {
+            const subjectFilter = document.getElementById('subjectFilter');
+            const classFilter = document.getElementById('classFilter');
+            const loadReportBtn = document.getElementById('loadReportBtn');
+            
+            // Reset dependent filters
+            classFilter.disabled = true;
+            classFilter.value = '';
+            loadReportBtn.disabled = true;
+            
+            subjectFilter.innerHTML = '<option value="">Select Course</option>';
+            subjectFilter.disabled = subjects.length === 0;
+            
+            subjects.forEach(subject => {
+                const option = document.createElement('option');
+                option.value = subject.id;
+                option.textContent = subject.name;
+                subjectFilter.appendChild(option);
+            });
+            
+            if (subjects.length > 0) {
+                subjectFilter.disabled = false;
+            }
+        }
+
+        function populateClassFilter(classes) {
+            const classFilter = document.getElementById('classFilter');
+            const loadReportBtn = document.getElementById('loadReportBtn');
+            
+            loadReportBtn.disabled = false;
+            
+            classFilter.innerHTML = '<option value="">All Classes</option>';
+            classFilter.disabled = classes.length === 0;
+            
+            classes.forEach(className => {
+                const option = document.createElement('option');
+                option.value = className;
+                option.textContent = className;
+                classFilter.appendChild(option);
+            });
+            
+            if (classes.length > 0) {
+                classFilter.disabled = false;
+            }
+        }
+
+        // Event listeners
+        document.getElementById('coreSubjectFilter').addEventListener('change', function() {
+            const coreSubjectId = this.value;
+            if (coreSubjectId) {
+                loadSubjects(coreSubjectId);
+            } else {
+                // Reset dependent filters
+                document.getElementById('subjectFilter').disabled = true;
+                document.getElementById('classFilter').disabled = true;
+                document.getElementById('loadReportBtn').disabled = true;
+                document.getElementById('subjectFilter').value = '';
+                document.getElementById('classFilter').value = '';
+            }
+        });
+
+        document.getElementById('subjectFilter').addEventListener('change', function() {
+            const subjectId = this.value;
+            if (subjectId) {
+                loadClasses(subjectId);
+            } else {
+                document.getElementById('classFilter').disabled = true;
+                document.getElementById('loadReportBtn').disabled = true;
+                document.getElementById('classFilter').value = '';
+            }
+        });
+
+        // Logout function
+        function logout() {
+            localStorage.removeItem('token');
+            localStorage.removeItem('userRole');
+            window.location.href = '/login';
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            loadCoreSubjects();
+        });
+    </script>
+</body>
+</html>

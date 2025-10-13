@@ -359,6 +359,168 @@ You can create subtitles in two ways:
    - Audit trails
    - Backup systems
 
+## Student Progress and Reporting
+
+### Overview
+
+The platform provides comprehensive tools for tracking student progress and generating detailed reports for parents and administrators. These features help you monitor student engagement, assess performance, and create meaningful reports.
+
+### Student Progress Tracking
+
+Our platform now features **Skills-Based Progress Tracking** that monitors student development across specific language skills rather than abstract topics.
+
+#### 1. **Skills-Based Progress System**
+- **What it tracks**: Reading, Grammar, Speaking, Listening, Vocabulary, Writing
+- **How it works**: Every assessment submission automatically updates student progress in the relevant skill area
+- **Benefits**:
+  - Meaningful progress reports ("Student excels in Reading but needs help with Speaking")
+  - Actionable insights for teachers and parents
+  - Clear skill development pathways
+  - Easy identification of strengths and weaknesses
+
+#### 2. **Class Progress View**
+- **Location**: Teacher Portal → Student Progress
+- **Features**:
+  - View all students in a selected class
+  - Filter by quarter (Q1, Q2, Q3, Q4)
+  - **NEW**: See skill-based progress breakdowns
+  - Track completion rates and scores by skill category
+  - Export class data to CSV with skill analysis
+
+#### 3. **Individual Student Reports**
+- **Location**: Teacher Portal → Individual Student Report
+- **Features**:
+  - Detailed performance analysis for specific students
+  - **NEW**: Skills-based progress breakdown (Reading: 85%, Speaking: 60%, etc.)
+  - Quarter-specific skill development tracking
+  - Subject-wise performance metrics
+  - Assessment submission history organized by skills
+  - Progress tracking over time with skill trends
+
+#### 4. **Quarter-Based Filtering**
+- **Purpose**: Separate data by academic quarters
+- **Benefits**:
+  - Track skill progress across Q1, Q2, Q3, Q4
+  - Generate quarter-specific skill reports
+  - Compare skill development between quarters
+  - Create targeted skill-based interventions
+
+### Database Export and Reporting
+
+#### 1. **Comprehensive Data Export**
+- **Location**: Teacher Portal → Database Export
+- **Export Modes**:
+  - **All Quarters (Comprehensive)**: Complete data with separate Q1, Q2, Q3, Q4 sheets
+  - **Specific Quarter**: Data from selected quarter only
+  - **Export All**: All available data tables
+  - **Parent Reports**: Single-click export for end-of-term reports
+
+#### 2. **Available Data Tables**
+- **Users**: Student and teacher information
+- **Subjects**: Course structure and content
+- **Resources**: Learning materials and usage
+- **Assessments**: Quizzes, assignments, and tests
+- **Submissions**: Student responses and scores
+- **Progress**: **NEW** Skills-based student progress tracking (Reading, Grammar, Speaking, etc.)
+- **Sessions**: Login and activity data
+- **Media Files**: Uploaded content
+- **Configuration**: System settings
+
+#### 3. **Parent Reports Export**
+- **Purpose**: End-of-term parent reports
+- **Features**:
+  - Single-click export
+  - Student Performance Dashboard
+  - Complete student data
+  - Quarter-by-quarter breakdown
+  - Performance metrics and engagement data
+
+### Creating Effective Reports
+
+#### 1. **Student Performance Dashboard**
+- **Content**: Comprehensive student data
+- **Includes**:
+  - Student personal information
+  - Performance summary (completion rates, average scores)
+  - Quarter-specific statistics
+  - Subject-wise performance
+  - Engagement metrics
+  - Progress tracking data
+
+#### 2. **Quarter-Specific Reports**
+- **Q1, Q2, Q3, Q4 Data**: Separate sheets for each quarter
+- **Resources**: What content was covered
+- **Assessments**: What was assessed
+- **Submissions**: Student performance data
+
+#### 3. **Class-Based Reports**
+- **Filter by Class**: Focus on specific class performance
+- **CSV Export**: Easy data manipulation
+- **Performance Metrics**: Class-wide statistics
+
+### New Reporting Features (2025)
+
+#### 1. **Combined Quarter Report**
+- **Purpose**: Generate Q1+Q2 combined performance reports
+- **Access**: Teacher Portal → Reports Hub → Combined Quarter Report
+- **Features**: 
+  - Completion percentages and average scores
+  - Final totals: (completion % ÷ 100) × average score
+  - Students sorted by highest performance
+  - Class and subject filtering
+- **Best for**: End-of-semester reports, parent meetings
+
+#### 2. **Multi-Quarter Access Management**
+- **Purpose**: Allow students to access past quarter assessments for catch-up work
+- **Access**: Teacher Portal → Multi-Quarter Access
+- **Features**:
+  - Enable/disable access per class
+  - Set catch-up deadlines
+  - Subject-specific access control
+- **Best for**: Students who missed previous quarter work
+
+#### 3. **Enhanced Assessment Due Date Manager**
+- **Purpose**: Manage due dates for both Q1 and Q2 assessments
+- **Access**: Teacher Portal → Assessment Due Date Manager
+- **Features**:
+  - Shows assessments from all quarters
+  - Batch due date extensions
+  - Status filtering (overdue, no due date, etc.)
+- **Best for**: Managing deadlines across quarters
+
+#### 4. **Centralized Reports Hub**
+- **Purpose**: Single access point for all reporting tools
+- **Access**: Teacher Portal → Reports Hub
+- **Features**:
+  - Organized by report type
+  - Quick access to most-used reports
+  - New features highlighted
+- **Best for**: Efficient navigation to reporting tools
+
+### Best Practices for Reporting
+
+#### 1. **Regular Data Export**
+- Export data weekly or monthly
+- Keep backups of important reports
+- Use quarter-based organization
+
+#### 2. **Parent Communication**
+- Use Student Performance Dashboard for parent reports
+- Use Combined Quarter Report for semester summaries
+- Include quarter-by-quarter progress
+- Highlight key achievements and areas for improvement
+
+#### 3. **Administrative Reporting**
+- Use comprehensive export for administrative reports
+- Include engagement metrics and usage statistics
+- Provide detailed performance breakdowns
+
+#### 4. **Catch-Up Work Management**
+- Enable multi-quarter access for students who need it
+- Set reasonable catch-up deadlines (1-2 weeks)
+- Monitor progress during catch-up periods
+- Use Assessment Due Date Manager to extend deadlines as needed
+
 ---
 
 This guide will be updated regularly with new features and best practices. Your feedback and suggestions are welcome to help improve the platform. 

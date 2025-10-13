@@ -37,6 +37,7 @@ model User {
   parent                  User?                    @relation("ParentChild", fields: [parentId], references: [id])
   children                User[]                   @relation("ParentChild")
   sessions                UserSession[]
+  multiQuarterAccess      MultiQuarterAccess[]
 }
 
 model CoreSubject {
@@ -64,6 +65,7 @@ model Subject {
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
   studentCourses  StudentCourse[]
+  multiQuarterAccess MultiQuarterAccess[]
   studentProgress StudentProgress[]
   coreSubject     CoreSubject       @relation(fields: [coreSubjectId], references: [id])
   teachers        SubjectTeacher[]
@@ -212,20 +214,22 @@ model MediaFile {
 }
 
 model StudentProgress {
-  id          String   @id @default(uuid())
-  studentId   String
-  subjectId   String
-  topicId     String
-  status      String
-  score       Float?
-  lastUpdated DateTime @default(now())
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  topic       Topic    @relation(fields: [topicId], references: [id])
-  subject     Subject  @relation(fields: [subjectId], references: [id])
-  student     User     @relation(fields: [studentId], references: [id])
+  id            String   @id @default(uuid())
+  studentId     String
+  subjectId     String
+  topicId       String?  // Made optional for backward compatibility
+  skillCategory String?  // New field for skill-based tracking
+  status        String
+  score         Float?
+  lastUpdated   DateTime @default(now())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  topic         Topic?   @relation(fields: [topicId], references: [id])
+  subject       Subject  @relation(fields: [subjectId], references: [id])
+  student       User     @relation(fields: [studentId], references: [id])
 
   @@unique([studentId, subjectId, topicId])
+  @@unique([studentId, subjectId, skillCategory])
 }
 
 model WeeklySchedule {
@@ -332,4 +336,22 @@ model TeacherApprovalRequest {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   approvedBy   User?     @relation(fields: [reviewedBy], references: [id])
+}
+
+model MultiQuarterAccess {
+  id          String    @id @default(uuid())
+  subjectId   String
+  className   String
+  isEnabled   Boolean   @default(false)
+  enabledBy   String
+  enabledAt   DateTime  @default(now())
+  deadline    DateTime?
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  subject     Subject   @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  enabledByUser User    @relation(fields: [enabledBy], references: [id])
+
+  @@unique([subjectId, className])
 }
